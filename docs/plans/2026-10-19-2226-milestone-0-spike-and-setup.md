@@ -80,7 +80,9 @@ no guesswork.
 
 Cancellation semantics, which the tests pin down: cancelling a `Ctx` while
 `QueryCtx` is executing makes modernc call `sqlite3_interrupt`, and the
-call fails with an "interrupted" error. Cancelling after rows came back
+call fails promptly with `context canceled` (verified; the driver's own
+"interrupted" text may surface instead, so callers check `.Canceled`
+rather than the message). Cancelling after rows came back
 makes `database/sql` close the rows; `.Next` returns false and `.Err`
 reports the context error.
 
@@ -358,21 +360,22 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
 - Modify: `sql/shim/shim.go`, `sql/lgx.edn`, `sql/README.md`, `README.md`, `.github/workflows/test.yml`
 - Create: `sqlite/test/sqlite/core_test.lg`
 
-- [ ] **Step 1: Branch.** `git -C /home/agent/Projects/letgo-packages switch -c sql-context` from an up-to-date `master`.
-- [ ] **Step 2: Move the shim in-tree.** In `sql/lgx.edn` set the shim coord to `{:go/local "shim"}` and rewrite its comment the way `wails/lgx.edn` words it (ships inside the `sql-vX.Y.Z` package tag; `sql/shim/v0.1.0` stays as history).
-- [ ] **Step 3: Implement the shim additions** listed in the Design (exact signatures there). Register `QueryCtx`, `ExecCtx`, `Conn`, `ColumnTypeNames` and `NewCtx` in the `sql.shim` namespace next to the existing three. Update the package comment: the Connectable bullet now says it covers `*sql.DB`, `*sql.Tx` and `*sql.Conn`, and a new bullet explains why `Ctx` exists (let-go cannot build a `context.Context`).
-- [ ] **Step 4: Write `sqlite/test/sqlite/core_test.lg`.** Each test opens a temp-file database (`os/getenv "TMPDIR"` or `/tmp`, unique name via `random-uuid`) with `sqlite.core/open` and closes it. Tests:
+- [x] **Step 1: Branch.** `git -C /home/agent/Projects/letgo-packages switch -c sql-context` from an up-to-date `master`.
+- [x] **Step 2: Move the shim in-tree.** In `sql/lgx.edn` set the shim coord to `{:go/local "shim"}` and rewrite its comment the way `wails/lgx.edn` words it (ships inside the `sql-vX.Y.Z` package tag; `sql/shim/v0.1.0` stays as history).
+- [x] **Step 3: Implement the shim additions** listed in the Design (exact signatures there). Register `QueryCtx`, `ExecCtx`, `Conn`, `ColumnTypeNames` and `NewCtx` in the `sql.shim` namespace next to the existing three. Update the package comment: the Connectable bullet now says it covers `*sql.DB`, `*sql.Tx` and `*sql.Conn`, and a new bullet explains why `Ctx` exists (let-go cannot build a `context.Context`).
+- [x] **Step 4: Write `sqlite/test/sqlite/core_test.lg`.** Each test opens a temp-file database (`os/getenv "TMPDIR"` or `/tmp`, unique name via `random-uuid`) with `sqlite.core/open` and closes it. Tests:
   - `execute!` round-trip still works (create, insert, select) - the Connectable change is backward compatible.
   - Session: `(shim/Conn handle)`; `create temp table t (x)` and `insert` through `shim/ExecCtx` on it; a `shim/QueryCtx` select on the same Conn sees the row; `sql.core/execute!` with `{:sql/handle conn}` sees it too; the pool (`execute!` on the db) does not (`no such table`). Close the Conn.
   - `ColumnTypeNames` on `create table t (a integer, b text)` / `select a, b from t` is `["INTEGER" "TEXT"]`.
   - Cancel before the first row: run the runaway query (Design) with `QueryCtx` in a `future`; `sleep` 200 ms; `(.Cancel ctx)`; `deref` the future with a 5000 ms timeout. The future must have finished, with an exception whose message contains `interrupt`. `(.Canceled ctx)` is true.
   - Cancel mid-read: `QueryCtx` a recursive CTE yielding 1,000,000 rows; read one row; `(.Cancel ctx)`; `.Next` eventually returns false and `.Err` is non-nil.
   - `(.Cancel ctx)` twice does not throw.
-- [ ] **Step 5: Run the tests.**
+- [x] **Step 5: Run the tests.**
+  > Deviation: `sqlite/lgx.edn` gained `:lg-runtime :built` / `:lg-version "1.13.0"` (it had no tests before, so `lgx test` refused to run). The cancel-before-first-row error is `context canceled`, not "interrupted"; the test accepts either and the Design paragraph now says so.
   Run: `cd /home/agent/Projects/letgo-packages/sqlite && lgx test`
   Expected: all pass. The first run rebuilds the runtime (minutes). If a cancel test proves a semantic in the Design wrong (e.g. the error text), fix the Design paragraph in this plan and the README wording to match what the driver does - the test records reality, not a guess.
-- [ ] **Step 6: Also run** `cd ../sql && lgx test` and `cd ../ragtime && lgx test`. Expected: pass.
-- [ ] **Step 7: Docs.** `sql/README.md`: a "Sessions and cancellation" section (the `Ctx` lifecycle, `QueryCtx`/`ExecCtx`, `Conn`, the two cancel behaviours, `ColumnTypeNames`, `execute!` over a `*sql.Conn`, `with-transaction` not supported on one). Root `README.md` "Releasing": `sql` joins livekit, wails and nrepl as an in-tree shim; the Go-module-tag steps now apply to `duckdb` only. Update the CI comment in `.github/workflows/test.yml` to match.
+- [x] **Step 6: Also run** `cd ../sql && lgx test` and `cd ../ragtime && lgx test`. Expected: pass.
+- [x] **Step 7: Docs.** `sql/README.md`: a "Sessions and cancellation" section (the `Ctx` lifecycle, `QueryCtx`/`ExecCtx`, `Conn`, the two cancel behaviours, `ColumnTypeNames`, `execute!` over a `*sql.Conn`, `with-transaction` not supported on one). Root `README.md` "Releasing": `sql` joins livekit, wails and nrepl as an in-tree shim; the Go-module-tag steps now apply to `duckdb` only. Update the CI comment in `.github/workflows/test.yml` to match.
 - [ ] **Step 8: Commit, push, open PR 1.** `git commit -m "sql: context-aware queries, sessions and column types; ship the shim in-tree"`, `git push -u origin sql-context`, `gh pr create` with a body summarising the API and the release plan (sql-v0.3.0, then the four dependents). Wait for CI (`gh pr checks --watch`). Expected: green.
 
 ### Task 2: Release `sql-v0.3.0` and its dependents (letgo-packages)
