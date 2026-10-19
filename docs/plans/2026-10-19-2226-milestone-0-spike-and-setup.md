@@ -1,5 +1,7 @@
 # Milestone 0: Project Setup and SQLite Spike Implementation Plan
 
+> **Status: complete except Task 12** (the manual macOS pass), 2026-10-19.
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Scaffold the Quel repository on the let-go + Wails + Vite/React stack and prove the whole path end to end against SQLite: a page calls let-go handlers, runs a query on a dedicated session, shows the first page of rows, and cancels a runaway query. Land and release the `sql` context support it needs.
@@ -429,25 +431,27 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
 
 **Files:** Create `src/quel/cells.lg`; Test `test/quel/cells_test.lg`
 
-- [ ] **Step 1: Write the tests**: `nil`, `true`, `1.5`, `"x"` pass through; `9007199254740991` and `-9007199254740991` stay integers; `9007199254740992` and `-9007199254740992` become `"9007199254740992"` / `"-9007199254740992"`; an opaque value (e.g. a boxed Go value or a keyword) becomes its `str`; `encode-row` maps over a vector and returns a vector.
-- [ ] **Step 2: Run them; expect failures** (`CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`).
-- [ ] **Step 3: Implement** `encode` and `encode-row` per the Design.
-- [ ] **Step 4: Run; expect pass. Commit** `"Add cell encoding for the bridge"`.
+- [x] **Step 1: Write the tests**: `nil`, `true`, `1.5`, `"x"` pass through; `9007199254740991` and `-9007199254740991` stay integers; `9007199254740992` and `-9007199254740992` become `"9007199254740992"` / `"-9007199254740992"`; an opaque value (e.g. a boxed Go value or a keyword) becomes its `str`; `encode-row` maps over a vector and returns a vector.
+- [x] **Step 2: Run them; expect failures** (`CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`).
+- [x] **Step 3: Implement** `encode` and `encode-row` per the Design.
+- [x] **Step 4: Run; expect pass. Commit** `"Add cell encoding for the bridge"`.
 
 ### Task 6: `quel.conn`
 
 **Files:** Create `src/quel/conn.lg`; Modify `src/quel/system.lg`; Test `test/quel/conn_test.lg`
 
-- [ ] **Step 1: Write the tests** (temp-file databases, cleaned up): `open!` returns a `conn-id` and the path; a blank path throws; `session!` returns the same Conn on two calls; a temp table created on the session is visible on the session; `close!` removes the entry and a later `session!` throws `No open database`; `close!` of an unknown id is a no-op; `ig/halt-key!` closes every entry.
-- [ ] **Step 2: Run; expect failures.**
-- [ ] **Step 3: Implement** per the Design; `init-key` returns `(atom {})`. Enable `:quel.conn/registry` in `quel.system/config`.
-- [ ] **Step 4: Run; expect pass. Commit** `"Add the connection registry with one session per database"`.
+- [x] **Step 1: Write the tests** (temp-file databases, cleaned up): `open!` returns a `conn-id` and the path; a blank path throws; `session!` returns the same Conn on two calls; a temp table created on the session is visible on the session; `close!` removes the entry and a later `session!` throws `No open database`; `close!` of an unknown id is a no-op; `ig/halt-key!` closes every entry.
+- [x] **Step 2: Run; expect failures.**
+- [x] **Step 3: Implement** per the Design; `init-key` returns `(atom {})`. Enable `:quel.conn/registry` in `quel.system/config`.
+- [x] **Step 4: Run; expect pass. Commit** `"Add the connection registry with one session per database"`.
+
+> Deviation: `(str (random-uuid))` is `#uuid "..."` on let-go 1.13.0; `quel.conn/new-id` extracts the bare UUID (found by the smoke test; backlogged upstream). `quel.conn` excludes `clojure.core/close!`.
 
 ### Task 7: `quel.exec`
 
 **Files:** Create `src/quel/exec.lg`; Modify `src/quel/system.lg`; Test `test/quel/exec_test.lg`
 
-- [ ] **Step 1: Write the tests** over a real conn registry and a temp database:
+- [x] **Step 1: Write the tests** over a real conn registry and a temp database:
   - `select 1 as id, 2 as id` returns two columns named `id`, in order, and rows `[[1 2]]`.
   - Column types come through for a table (`INTEGER`, `TEXT`).
   - A 1,200-row table with `page-size` 500 returns 500 rows and `:has-more true`; a 3-row table returns `:has-more false`.
@@ -459,47 +463,55 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
   - A duplicate `query-id` throws.
   - Halting the registry cancels a running query.
   - Shutdown order: `ig/init` the two registry keys from `quel.system/config` (`select-keys`), start the runaway query in a `future` on a session, then `ig/halt!` the pair. The halt returns within 5 s and the future throws `"Query canceled."`. This is the regression test for the exec -> conn ref.
-- [ ] **Step 2: Run; expect failures.**
-- [ ] **Step 3: Implement** per the Design. Keep the read loop in its own fn (`read-page`) so milestone 1's `fetch-page` can reuse it.
-- [ ] **Step 4: Run; expect pass. Commit** `"Add query execution with paging and cancellation"`.
+- [x] **Step 2: Run; expect failures.**
+- [x] **Step 3: Implement** per the Design. Keep the read loop in its own fn (`read-page`) so milestone 1's `fetch-page` can reuse it.
+- [x] **Step 4: Run; expect pass. Commit** `"Add query execution with paging and cancellation"`.
+
+> Deviation: codex found `sql.core/returns-rows?` misroutes `PRAGMA` (rows) and writing `WITH` statements (update count); `quel.exec/rows?` corrects both, classifying a `WITH` by its outer operation at parenthesis depth 0 with whole SQLite identifiers. The shutdown-order test passes with or without the exec -> conn ref (integrant happens to init `conn` before `exec`), so it guards the behaviour, not the ref; the ref stays to make the order explicit.
 
 ### Task 8: Handlers
 
 **Files:** Modify `src/quel/api.lg`, `src/quel/system.lg`; Test `test/quel/api_test.lg`
 
-- [ ] **Step 1: Write the tests** calling the handler fns directly with `{:conns (atom {}) :execs (atom {})}`: `open-db` / `run` / `close-db` round-trip, `run` result keys exactly `:columns :rows :has-more :update-count :elapsed-ms`, `cancel` of an unknown id is `{:canceled false}`.
-- [ ] **Step 2: Implement** `open-db`, `close-db`, `run`, `cancel` as thin wrappers over `quel.conn` and `quel.exec`; add them to `handlers`. Wire `:quel.api/handlers` to both registries in `quel.system/config` (now the full config from the Design).
-- [ ] **Step 3: Run; expect pass. Commit** `"Expose open-db, close-db, run and cancel to the frontend"`.
+- [x] **Step 1: Write the tests** calling the handler fns directly with `{:conns (atom {}) :execs (atom {})}`: `open-db` / `run` / `close-db` round-trip, `run` result keys exactly `:columns :rows :has-more :update-count :elapsed-ms`, `cancel` of an unknown id is `{:canceled false}`.
+- [x] **Step 2: Implement** `open-db`, `close-db`, `run`, `cancel` as thin wrappers over `quel.conn` and `quel.exec`; add them to `handlers`. Wire `:quel.api/handlers` to both registries in `quel.system/config` (now the full config from the Design).
+- [x] **Step 3: Run; expect pass. Commit** `"Expose open-db, close-db, run and cancel to the frontend"`.
+
+> Deviation: `quel.cells` sends infinite and NaN floats as `"Infinity"`, `"-Infinity"`, `"NaN"` (codex: Go's JSON encoder rejects them; `select 1e999` produces one). `quel.app` exits 1 with the error when `w/run!` fails to start (codex: a busy port exited 0 silently).
 
 ### Task 9: Frontend scaffold
 
 **Files:** Create everything under `frontend/` listed in File Structure.
 
-- [ ] **Step 1: Create the Vite project**: `npm create vite@latest frontend -- --template react-ts`, then remove the template's demo assets and CSS.
-- [ ] **Step 2: Tailwind v4 and shadcn.** `npm i -D tailwindcss @tailwindcss/vite @types/node`; add the plugin and the `@` alias to `vite.config.ts` and the `paths` to the tsconfigs, per shadcn's current Vite guide; `npx shadcn@latest init`, then `npx shadcn@latest add button input textarea table`. Follow /shadcn.
-- [ ] **Step 3: Vite build output and scripts.** `vite.config.ts`: `build.outDir: "../resources/public"`, `emptyOutDir: true`, `base: "/"`. `package.json` scripts: `build` (`tsc -b && vite build`), `watch` (`vite build --watch`), `test` (`vitest run`). Do not add a `dev` script: it would suggest a dev server that cannot reach the bridge.
-- [ ] **Step 4: Runtime.** `npm i -E @wailsio/runtime@3.0.0-beta.30`; `npm i -D vitest`.
-- [ ] **Step 5: `src/lib/bridge.ts`, `src/lib/types.ts`** per the Design.
-- [ ] **Step 6: `src/lib/bridge.test.ts`**: mock `@wailsio/runtime` with `vi.mock`; `call("run", "c", "q", "select 1")` invokes `Call.ByName` with `BRIDGE, "run", ["c", "q", "select 1"]` and resolves to its value; `onEvent` returns the unsubscribe fn from `Events.On`.
-- [ ] **Step 7: Run** `npm --prefix frontend test` (expect pass) and `lgx fe-build` (expect `resources/public/index.html` and hashed assets).
-- [ ] **Step 8: Commit** `"Scaffold the frontend: Vite, React, Tailwind, shadcn and the bridge"`.
+- [x] **Step 1: Create the Vite project**: `npm create vite@latest frontend -- --template react-ts`, then remove the template's demo assets and CSS.
+- [x] **Step 2: Tailwind v4 and shadcn.** `npm i -D tailwindcss @tailwindcss/vite @types/node`; add the plugin and the `@` alias to `vite.config.ts` and the `paths` to the tsconfigs, per shadcn's current Vite guide; `npx shadcn@latest init`, then `npx shadcn@latest add button input textarea table`. Follow /shadcn.
+- [x] **Step 3: Vite build output and scripts.** `vite.config.ts`: `build.outDir: "../resources/public"`, `emptyOutDir: true`, `base: "/"`. `package.json` scripts: `build` (`tsc -b && vite build`), `watch` (`vite build --watch`), `test` (`vitest run`). Do not add a `dev` script: it would suggest a dev server that cannot reach the bridge.
+- [x] **Step 4: Runtime.** `npm i -E @wailsio/runtime@3.0.0-beta.30`; `npm i -D vitest`.
+- [x] **Step 5: `src/lib/bridge.ts`, `src/lib/types.ts`** per the Design.
+- [x] **Step 6: `src/lib/bridge.test.ts`**: mock `@wailsio/runtime` with `vi.mock`; `call("run", "c", "q", "select 1")` invokes `Call.ByName` with `BRIDGE, "run", ["c", "q", "select 1"]` and resolves to its value; `onEvent` returns the unsubscribe fn from `Events.On`.
+- [x] **Step 7: Run** `npm --prefix frontend test` (expect pass) and `lgx fe-build` (expect `resources/public/index.html` and hashed assets).
+- [x] **Step 8: Commit** `"Scaffold the frontend: Vite, React, Tailwind, shadcn and the bridge"`.
 
 ### Task 10: Spike screen
 
 **Files:** Modify `frontend/src/App.tsx`; possibly create small components under `frontend/src/components/`.
 
-- [ ] **Step 1: Build the screen** described in the Design. Keep state in `useState`; no state library yet. Errors from a rejected `call` show in the status line. Run and the `menu:run` listener share one `runQuery` fn; unsubscribe the listener on unmount.
-- [ ] **Step 2: Build and check in server mode.** `lgx fe-build`, then `CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT=8090 lgx run`. Drive it in headless Chromium (the /run skill's browser-driven pattern, or a throwaway Playwright script under `.tmp/`): the ping status shows ok; open a temp `.db` path; run `create table t (id integer, name text)`, an insert, `select * from t` (rows shown), `select 1 as id, 2 as id` (two `id` columns); run the runaway query, click Cancel, see "Query canceled." within a few seconds; Run is disabled while running. Take a screenshot of the result grid for the summary.
-- [ ] **Step 3: Commit** `"Add the spike screen: open, run, cancel"`.
+- [x] **Step 1: Build the screen** described in the Design. Keep state in `useState`; no state library yet. Errors from a rejected `call` show in the status line. Run and the `menu:run` listener share one `runQuery` fn; unsubscribe the listener on unmount.
+- [x] **Step 2: Build and check in server mode.** `lgx fe-build`, then `CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT=8090 lgx run`. Drive it in headless Chromium (the /run skill's browser-driven pattern, or a throwaway Playwright script under `.tmp/`): the ping status shows ok; open a temp `.db` path; run `create table t (id integer, name text)`, an insert, `select * from t` (rows shown), `select 1 as id, 2 as id` (two `id` columns); run the runaway query, click Cancel, see "Query canceled." within a few seconds; Run is disabled while running. Take a screenshot of the result grid for the summary.
+- [x] **Step 3: Commit** `"Add the spike screen: open, run, cancel"`.
+
+> Deviation: shadcn init needed `-t vite -b radix -p nova` to run non-interactively (TypeScript 7 template, Geist font). The ref updates live in an effect (oxlint `react(refs)`).
 
 ### Task 11: Smoke test and CI
 
 **Files:** Create `scripts/smoke.sh`, `.github/workflows/ci.yml`
 
-- [ ] **Step 1: `scripts/smoke.sh`**, adapted from wails-tasks' `smoke.sh` (same process-group cleanup, port pick, wait loop, `call` helper and bridge name). It runs `lgx fe-build` first if `resources/public/index.html` is missing, then checks: `/` returns 200; `ping` contains `"ok":true`; `open-db` on a temp path returns a `conn-id` (extract with `python3 -c 'import json,sys; ...'`); `run` of `select 1 as id, 2 as id` contains `"rows":[[1,2]]`; the runaway query started in the background with a fixed query-id, `cancel` with that id returns `"canceled":true`, and the background call's response contains `Query canceled.` within 10 s; finally the nREPL redefinition of `quel.api/ping` (via `alter-var-root` from the client, as wails-tasks does - this is test code, not app code) changes the next `ping`. If `NREPL_CLIENT` does not exist, print `smoke: nREPL step skipped` and skip only that step.
-- [ ] **Step 2: Run** `lgx smoke` with the server-mode env. Expected: `smoke: ok`.
-- [ ] **Step 3: `.github/workflows/ci.yml`**: on push to `main` and pull requests; `actions/checkout@v4`, `jdx/mise-action@v3`, cache `~/.cache/go-build`, `~/go/pkg/mod`, `~/.lgx/runtimes` and `~/.npm` keyed on `lgx.edn` and `frontend/package-lock.json`; then `lgx fe-install`, `npm --prefix frontend test`, `lgx fe-build`, `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`, and `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke`. Lint it with `actionlint`.
-- [ ] **Step 4: Commit** `"Add the server-mode smoke test and CI"`. The repo has no remote yet; CI runs once it is pushed to GitHub (not part of this plan).
+- [x] **Step 1: `scripts/smoke.sh`**, adapted from wails-tasks' `smoke.sh` (same process-group cleanup, port pick, wait loop, `call` helper and bridge name). It runs `lgx fe-build` first if `resources/public/index.html` is missing, then checks: `/` returns 200; `ping` contains `"ok":true`; `open-db` on a temp path returns a `conn-id` (extract with `python3 -c 'import json,sys; ...'`); `run` of `select 1 as id, 2 as id` contains `"rows":[[1,2]]`; the runaway query started in the background with a fixed query-id, `cancel` with that id returns `"canceled":true`, and the background call's response contains `Query canceled.` within 10 s; finally the nREPL redefinition of `quel.api/ping` (via `alter-var-root` from the client, as wails-tasks does - this is test code, not app code) changes the next `ping`. If `NREPL_CLIENT` does not exist, print `smoke: nREPL step skipped` and skip only that step.
+- [x] **Step 2: Run** `lgx smoke` with the server-mode env. Expected: `smoke: ok`.
+- [x] **Step 3: `.github/workflows/ci.yml`**: on push to `main` and pull requests; `actions/checkout@v4`, `jdx/mise-action@v3`, cache `~/.cache/go-build`, `~/go/pkg/mod`, `~/.lgx/runtimes` and `~/.npm` keyed on `lgx.edn` and `frontend/package-lock.json`; then `lgx fe-install`, `npm --prefix frontend test`, `lgx fe-build`, `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`, and `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke`. Lint it with `actionlint`.
+- [x] **Step 4: Commit** `"Add the server-mode smoke test and CI"`. The repo has no remote yet; CI runs once it is pushed to GitHub (not part of this plan).
+
+> Deviation: codex found overlapping Open requests could leak a connection; opening and closing are now one serialized `switchDb` with the buttons disabled meanwhile. The browser check used a throwaway Playwright script in `.tmp/e2e/`.
 
 ### Task 12: macOS verification (by hand, on a Mac)
 
@@ -518,11 +530,52 @@ The executor on Linux stops here and hands this checklist to the user. Record ea
 
 **Files:** Modify `docs/DESIGN.md`; Create entries under `docs/backlog/`
 
-- [ ] **Step 1: Update `docs/DESIGN.md`**:
+- [x] **Step 1: Update `docs/DESIGN.md`**:
   - Milestones: milestone 0 is the SQLite spike plus project setup, done (date); milestone 1 starts with the Redshift checks the spike skipped (pgx connects and queries, a cancel reaches the cluster, the catalog sources).
   - Unverified: move the settled items to a short "Settled by milestone 0" list with dates and results - the bridge from a Vite-built page, `@wailsio/runtime` 3.0.0-beta.30 matching the shim, column types (via `sql.shim/ColumnTypeNames`), context cancel on SQLite, and the macOS items according to Task 12's results. The Redshift items stay.
   - Namespaces: replace `quel.app`'s component role with `quel.shell` and explain why (the entry script is required by nothing); integrant keys `:quel.shell/app`, `:quel.shell/window`.
   - Dev loop: `vite build --watch` plus window reload; dev-server HMR waits on the wails-package change.
   - Upstream work: the `sql` context and `ColumnTypes` rows are done in `sql-v0.3.0`; the wails row reflects Task 12.
-- [ ] **Step 2: Backlog** with /backlog: (a) Vite dev-server HMR - the wails package's asset handler should proxy `FRONTEND_DEVSERVER_URL` (upstream, letgo-packages/wails); (b) add `:go/build-tags ["production"]` to `:targets :bin` once an lgx release carries it; (c) any failures from Task 12 not fixed in this milestone.
-- [ ] **Step 3: Commit** `"Record the milestone 0 outcome"`.
+- [x] **Step 2: Backlog** with /backlog: (a) Vite dev-server HMR - the wails package's asset handler should proxy `FRONTEND_DEVSERVER_URL` (upstream, letgo-packages/wails); (b) add `:go/build-tags ["production"]` to `:targets :bin` once an lgx release carries it; (c) any failures from Task 12 not fixed in this milestone.
+- [x] **Step 3: Commit** `"Record the milestone 0 outcome"`.
+
+## Completion summary
+
+Implemented on branch `milestone-0`, Tasks 1-11 and 13. Task 12, the
+macOS pass, is the user's: it needs a Mac and is unchecked above.
+
+- **Upstream:** letgo-packages #9 (the `sql` shim: `NewCtx`, `QueryCtx`,
+  `ExecCtx`, `Conn`, `ColumnTypeNames`, in-tree shim, first sqlite tests)
+  and #10 (dependents pinned). Tags published: `sql-v0.3.0`,
+  `sqlite-v0.3.0`, `postgres-v0.3.0`, `duckdb-v0.3.0`, `ragtime-v0.3.0`.
+- **Quel:** the integrant system, shell, menu (with Open Database… and
+  Run), dev loop, `conn`, `exec`, `cells`, `api`; the Vite/React/Tailwind/
+  shadcn frontend with the bridge and the spike screen; `scripts/smoke.sh`;
+  CI; `docs/DESIGN.md` updated; three backlog entries.
+- **Verified:** 36 backend tests, 2 frontend tests, `lgx smoke` (including
+  the cancel and the nREPL redefinition), headless Chromium driving the
+  screen (cancel lands in under 100 ms, the session stays usable), and a
+  server-mode `bin/quel` started from `/` serving the embedded frontend.
+  CI has not run: the repo has no remote yet.
+
+Deviations, in one place:
+
+- The cancel error on SQLite is `context canceled`, not "interrupted".
+- `sqlite/lgx.edn` gained `:lg-runtime :built` for its first tests.
+- Quel used `:local/root` coords until the release, then the tags.
+- Port 8090 is taken on this machine; checks pick a free port.
+- `quel.exec/rows?` corrects `returns-rows?` for `PRAGMA` and writing
+  `WITH` statements (three codex rounds refined it).
+- Non-finite floats cross as strings; a failed `w/run!` exits 1.
+- `(str (random-uuid))` is tagged on let-go; `quel.conn/new-id` works
+  around it (backlogged).
+- Opening and closing databases in the UI is serialized.
+- `quel.menu`, `quel.exec` and `quel.conn` exclude the `clojure.core`
+  names they redefine (`run!`, `close!`).
+- The shutdown-order test cannot detect a missing exec -> conn ref.
+
+**What the plan could have specified better:** statement routing. It
+leaned on `sql.core/returns-rows?` without checking it against SQLite's
+`PRAGMA` and CTE writes, which cost three review rounds. It also assumed
+port 8090 was free and that `str` of a UUID matches Clojure: a plan should
+not hard-code ports, and should verify the let-go behaviour it relies on.
