@@ -1,17 +1,36 @@
 (ns quel.api
   (:require [integrant.core :as ig]
+            [quel.conn :as conn]
+            [quel.exec :as exec]
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
-;; env first, then the plain values JavaScript sends.
+;; env, {:conns :execs}, first, then the plain values JavaScript sends.
+;; A throw rejects the frontend's promise with the message.
 
 (defn ping [_env] {:ok true})
+
+(defn open-db [{:keys [conns]} path]
+  (conn/open! conns path))
+
+(defn close-db [{:keys [conns]} conn-id]
+  (conn/close! conns conn-id))
+
+(defn run [{:keys [conns execs]} conn-id query-id sql]
+  (exec/run! execs conns {:conn-id conn-id :query-id query-id :sql sql}))
+
+(defn cancel [{:keys [execs]} query-id]
+  {:canceled (exec/cancel! execs query-id)})
 
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
 (def handlers
-  {"ping" #'ping})
+  {"ping" #'ping
+   "open-db" #'open-db
+   "close-db" #'close-db
+   "run" #'run
+   "cancel" #'cancel})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

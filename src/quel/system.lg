@@ -28,7 +28,8 @@
    ;; The ref orders the halt: queries are cancelled before their sessions
    ;; close.
    :quel.exec/registry {:conns (ig/ref :quel.conn/registry)}
-   :quel.api/handlers {}
+   :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
+                       :execs (ig/ref :quel.exec/registry)}
    :quel.shell/app {:name "Quel"
                     :description "A database client"
                     :assets "public"

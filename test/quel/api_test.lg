@@ -1,12 +1,42 @@
 (ns quel.api-test
-  (:require [quel.api :as api]
+  (:require [integrant.core :as ig]
+            [quel.api :as api]
+            [quel.conn-test :refer [temp-path]]
             [clojure.test :refer [deftest is]]))
 
 ;; The handlers as plain fns: what the frontend calls, minus the bridge
 ;; (the wails package's own tests cover that).
 
+(defn- with-env [f]
+  (let [conns (ig/init-key :quel.conn/registry {})
+        execs (ig/init-key :quel.exec/registry {:conns conns})
+        path (temp-path)]
+    (try
+      (f {:conns conns :execs execs} path)
+      (finally
+        (ig/halt-key! :quel.exec/registry execs)
+        (ig/halt-key! :quel.conn/registry conns)
+        (os/sh "rm" "-f" path)))))
+
 (deftest ping-answers
   (is (= {:ok true} (api/ping {}))))
 
 (deftest every-handler-is-a-var
+  (is (= #{"ping" "open-db" "close-db" "run" "cancel"} (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
+
+(deftest open-run-close
+  (with-env
+    (fn [env path]
+      (let [{:keys [conn-id] :as opened} (api/open-db env path)]
+        (is (= path (:path opened)))
+        (let [r (api/run env conn-id "q1" "select 1 as id, 'a' as name")]
+          (is (= #{:columns :rows :has-more :update-count :elapsed-ms} (set (keys r))))
+          (is (= [[1 "a"]] (:rows r))))
+        (is (nil? (api/close-db env conn-id)))
+        (is (empty? @(:conns env)))))))
+
+(deftest cancel-of-an-unknown-query
+  (with-env
+    (fn [env _]
+      (is (= {:canceled false} (api/cancel env "nope"))))))
