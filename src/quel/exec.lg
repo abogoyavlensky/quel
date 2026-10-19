@@ -36,6 +36,30 @@
       (some #(= conn-id (:conn-id %)) (vals old))
       (throw (ex-info "A query is already running on this connection." {:conn-id conn-id})))))
 
+;; Words of a statement, lower-cased, past string literals, quoted
+;; identifiers and comments: those alternatives are tried first, so a word
+;; inside them never surfaces on its own.
+(def ^:private token-re
+  #"(?is)'(?:[^']|'')*'|\"[^\"]*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?\*/|\b[a-z_]+\b")
+
+(defn- words [q]
+  (->> (re-seq token-re q)
+       (remove #(contains? #{\' \" \` \[ \- \/} (first %)))
+       (mapv str/lower-case)))
+
+(defn rows?
+  "Does the statement produce a result set? sql.core/returns-rows? is a
+   heuristic that misses two SQLite cases: PRAGMA returns rows, and a WITH
+   whose body writes does not (unless it has RETURNING)."
+  [q]
+  (let [ws (words q)
+        head (first ws)]
+    (cond
+      (= "pragma" head) true
+      (some #{"returning"} ws) true
+      (= "with" head) (not (some #{"insert" "update" "delete" "replace"} ws))
+      :else (sql/returns-rows? q))))
+
 (defn- fail-on-err!
   "(.Next rows) is false both at the end and on a failed read, so the
    cursor's error decides which it was."
@@ -90,7 +114,7 @@
     (try
       (let [session (conn/session! conns conn-id)
             t0 (System/nanoTime)
-            result (if (sql/returns-rows? sql)
+            result (if (rows? sql)
                      (run-rows session ctx sql page-size)
                      (run-exec session ctx sql))]
         (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))

@@ -89,6 +89,26 @@
         (is (= [] (:columns r)))
         (is (= [] (:rows r)))))))
 
+(deftest rows-or-update-count
+  (is (true? (exec/rows? "select 1")))
+  (is (true? (exec/rows? "PRAGMA database_list")))
+  (is (true? (exec/rows? "pragma user_version = 3")))
+  (is (true? (exec/rows? "with c(x) as (values (1)) select x from c")))
+  (is (false? (exec/rows? "WITH c(x) AS (VALUES (1)) INSERT INTO t SELECT x FROM c")))
+  (is (true? (exec/rows? "with c(x) as (values (1)) insert into t select x from c returning x")))
+  (is (true? (exec/rows? "with c(x) as (select 'insert into') select x from c")))
+  (is (false? (exec/rows? "insert into t values (1)")))
+  (is (true? (exec/rows? "insert into t values (1) returning *"))))
+
+(deftest pragmas-and-writing-ctes-run-the-right-way
+  (with-env
+    (fn [execs conns id]
+      (is (= ["seq" "name" "file"]
+             (mapv :name (:columns (run execs conns id "PRAGMA database_list")))))
+      (run execs conns id "create table t (x integer)")
+      (is (= 2 (:update-count (run execs conns id "WITH c(x) AS (VALUES (1), (2)) INSERT INTO t SELECT x FROM c"))))
+      (is (= [[3]] (:rows (run execs conns id "with c(x) as (values (3)) insert into t select x from c returning x")))))))
+
 (deftest session-state-carries-across-runs
   (with-env
     (fn [execs conns id]
