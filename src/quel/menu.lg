@@ -1,0 +1,57 @@
+(ns quel.menu
+  (:refer-clojure :exclude [run!])
+  (:require [integrant.core :as ig]
+            [wails.core :as w]))
+
+;; The application menu, as data. The menu component's value, {:app ...},
+;; is what the click handlers and `spec` take. Every :on-click goes through
+;; a var, so a redefinition takes effect on the next click; after editing
+;; `spec`, rebuild the menu bar in place:
+;;
+;;   (quel.menu/install! (:quel.menu/menu @quel.system/system*))
+;;
+;; The items emit events; the frontend does the work.
+
+(def ^:private db-filters
+  [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
+
+(defn- reporting
+  "Run f; show an error dialog instead of letting a failure vanish into
+   stderr, which is where an unawaited menu click's exception goes."
+  [app what f]
+  (try
+    (f)
+    (catch e
+      (w/message! app :error (str what " failed") (ex-message e)))))
+
+(defn open-db! [{:keys [app]}]
+  (reporting app "Open Database"
+    (fn []
+      (when-let [path (w/open-file app {:title "Open Database"
+                                        :filters db-filters})]
+        (w/emit! app "menu:open-db" {:path path})))))
+
+(defn run! [{:keys [app]}]
+  (reporting app "Run"
+    (fn [] (w/emit! app "menu:run" {}))))
+
+(defn spec [env]
+  [{:role :app-menu}
+   {:label "File"
+    :items [{:label "Open Database…" :accelerator "CmdOrCtrl+O"
+             :on-click (partial #'open-db! env)}
+            {:label "Run" :accelerator "CmdOrCtrl+Enter"
+             :on-click (partial #'run! env)}
+            {:separator true}
+            {:role :quit}]}
+   {:role :edit-menu}
+   {:role :window-menu}])
+
+(defn install!
+  "Install (or rebuild) the application menu. Returns env."
+  [{:keys [app] :as env}]
+  (w/set-menu! app (spec env))
+  env)
+
+(defmethod ig/init-key ::menu [_ env]
+  (install! env))

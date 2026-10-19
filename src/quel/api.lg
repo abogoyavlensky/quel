@@ -1,0 +1,22 @@
+(ns quel.api
+  (:require [integrant.core :as ig]
+            [wails.core :as w]))
+
+;; What the frontend calls, one fn per call. Each takes the component's
+;; env first, then the plain values JavaScript sends.
+
+(defn ping [_env] {:ok true})
+
+;; By var, not by fn value: a var reads its current definition on every
+;; call, so redefining any of these from the nREPL changes what the next
+;; frontend call runs, with no restart and no re-registration.
+(def handlers
+  {"ping" #'ping})
+
+;; Registers every handler over the env. (partial #'f env) keeps the var,
+;; so it stays hot. Wails has no way to unregister; a halted system leaves
+;; the handlers in place, and the process ends right after anyway.
+(defmethod ig/init-key ::handlers [_ env]
+  (doseq [[name v] handlers]
+    (w/handler! name (partial v env)))
+  (set (keys handlers)))

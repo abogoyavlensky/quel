@@ -1,0 +1,23 @@
+;; Quel's entry point: start the system, block in the Wails event loop,
+;; halt the system at exit. Nothing requires this namespace - the guard at
+;; the bottom would start the app - so the components live elsewhere
+;; (quel.shell, quel.conn, ...) and quel.system wires them.
+(ns quel.app
+  (:require [quel.system :as system]
+            [wails.core :as w]))
+
+(defn -main []
+  (let [system (system/start!)]
+    ;; Blocks on the event loop; must run on the main thread, which is why
+    ;; it is here and not in a component.
+    (try
+      (w/run! (:quel.shell/app system))
+      ;; The system halts at exit from two places, and stop! makes the
+      ;; second a no-op: here, once w/run! returns (the only one in server
+      ;; mode), and in the app's :on-shutdown, for a platform that exits
+      ;; the process without returning from w/run!.
+      (finally (system/stop!)))))
+
+;; lg -b runs top-level forms at compile time, so without this guard
+;; `lgx build` would start the event loop while bundling.
+(when-not *compiling-aot* (-main))

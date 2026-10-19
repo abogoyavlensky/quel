@@ -1,0 +1,12 @@
+(ns quel.api-test
+  (:require [quel.api :as api]
+            [clojure.test :refer [deftest is]]))
+
+;; The handlers as plain fns: what the frontend calls, minus the bridge
+;; (the wails package's own tests cover that).
+
+(deftest ping-answers
+  (is (= {:ok true} (api/ping {}))))
+
+(deftest every-handler-is-a-var
+  (is (every? var? (vals api/handlers))))
