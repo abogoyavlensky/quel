@@ -1,6 +1,7 @@
 (ns quel.system
   (:require [integrant.core :as ig]
             [quel.api]
+            [quel.conn]
             [quel.dev]
             [quel.menu]
             [quel.shell]))
@@ -22,7 +23,8 @@
 (declare stop!)
 
 (defn config []
-  {:quel.api/handlers {}
+  {:quel.conn/registry {}
+   :quel.api/handlers {}
    :quel.shell/app {:name "Quel"
                     :description "A database client"
                     :assets "public"
