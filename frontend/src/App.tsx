@@ -66,6 +66,10 @@ export default function App() {
   const connRef = useRef(conn);
   const sqlRef = useRef(sql);
   const queryIdRef = useRef<string | null>(null);
+  // Opening and closing are serialized: a second request while one is in
+  // flight is ignored, so connections never leak or arrive out of order.
+  const [switching, setSwitching] = useState(false);
+  const switchingRef = useRef(false);
   useEffect(() => {
     connRef.current = conn;
     sqlRef.current = sql;
@@ -77,28 +81,40 @@ export default function App() {
       .catch((e) => setBackend(`unreachable: ${message(e)}`));
   }, []);
 
-  const openDb = useCallback(async (p: string) => {
+  // Close the current database, then open `next` (or nothing), as one
+  // serialized change. connRef is updated here as well as in the effect, so
+  // the next change sees this one's result without waiting for a render.
+  const switchDb = useCallback(async (next: string | null) => {
+    if (switchingRef.current || queryIdRef.current) return;
+    switchingRef.current = true;
+    setSwitching(true);
     try {
-      if (connRef.current) await call("close-db", connRef.current["conn-id"]);
-      const opened = await call<OpenResult>("open-db", p);
-      setConn(opened);
+      const current = connRef.current;
+      if (current) {
+        connRef.current = null;
+        setConn(null);
+        await call("close-db", current["conn-id"]);
+      }
+      if (next !== null) {
+        const opened = await call<OpenResult>("open-db", next);
+        connRef.current = opened;
+        setConn(opened);
+      }
       setStatus({ kind: "idle" });
     } catch (e) {
-      setConn(null);
       setStatus({ kind: "error", message: message(e) });
+    } finally {
+      switchingRef.current = false;
+      setSwitching(false);
     }
   }, []);
 
-  const closeDb = useCallback(async () => {
-    if (!connRef.current) return;
-    await call("close-db", connRef.current["conn-id"]);
-    setConn(null);
-    setStatus({ kind: "idle" });
-  }, []);
+  const openDb = useCallback((p: string) => switchDb(p), [switchDb]);
+  const closeDb = useCallback(() => switchDb(null), [switchDb]);
 
   const runQuery = useCallback(async () => {
     const c = connRef.current;
-    if (!c || queryIdRef.current) return;
+    if (!c || queryIdRef.current || switchingRef.current) return;
     const queryId = crypto.randomUUID();
     queryIdRef.current = queryId;
     setStatus({ kind: "running" });
@@ -154,10 +170,10 @@ export default function App() {
           value={path}
           onChange={(e) => setPath(e.target.value)}
         />
-        <Button type="submit" disabled={running}>
+        <Button type="submit" disabled={running || switching}>
           Open
         </Button>
-        <Button type="button" variant="outline" disabled={!conn || running} onClick={() => void closeDb()}>
+        <Button type="button" variant="outline" disabled={!conn || running || switching} onClick={() => void closeDb()}>
           Close
         </Button>
       </form>
@@ -179,7 +195,7 @@ export default function App() {
       />
 
       <div className="flex items-center gap-2">
-        <Button disabled={!conn || running} onClick={() => void runQuery()}>
+        <Button disabled={!conn || running || switching} onClick={() => void runQuery()}>
           Run
         </Button>
         <Button variant="outline" disabled={!running} onClick={cancelQuery}>
