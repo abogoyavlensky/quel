@@ -27,7 +27,7 @@
   (with-registry
     (fn [registry path]
       (let [{:keys [conn-id] :as r} (conn/open! registry path)]
-        (is (string? conn-id))
+        (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" conn-id))
         (is (= path (:path r)))
         (is (contains? @registry conn-id))))))
 
