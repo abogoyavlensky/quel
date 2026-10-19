@@ -1,0 +1,30 @@
+(ns quel.cells-test
+  (:require [quel.cells :as cells]
+            [clojure.test :refer [deftest is]]))
+
+(deftest plain-values-pass-through
+  (is (nil? (cells/encode nil)))
+  (is (true? (cells/encode true)))
+  (is (false? (cells/encode false)))
+  (is (= 1.5 (cells/encode 1.5)))
+  (is (= "x" (cells/encode "x")))
+  (is (= 42 (cells/encode 42))))
+
+(deftest safe-integers-stay-numbers
+  (is (= 9007199254740991 (cells/encode 9007199254740991)))
+  (is (= -9007199254740991 (cells/encode -9007199254740991))))
+
+;; JavaScript numbers are doubles: past 2^53 - 1 they round.
+(deftest unsafe-integers-become-strings
+  (is (= "9007199254740992" (cells/encode 9007199254740992)))
+  (is (= "-9007199254740992" (cells/encode -9007199254740992)))
+  (is (= "9223372036854775807" (cells/encode 9223372036854775807))))
+
+(deftest anything-else-is-its-string-form
+  (is (= ":k" (cells/encode :k)))
+  (is (= "(1 2)" (cells/encode '(1 2)))))
+
+(deftest encode-row-maps-over-a-row
+  (let [row (cells/encode-row [1 nil 9007199254740992 "a"])]
+    (is (vector? row))
+    (is (= [1 nil "9007199254740992" "a"] row))))
