@@ -101,6 +101,8 @@
   (is (true? (exec/rows? "with recursive a(x) as (select 1), b as (select x from a) select * from b")))
   (is (false? (exec/rows? "with a(x) as (select 1) update t set x = (select x from a)")))
   (is (false? (exec/rows? "with a(x) as (select 1) delete from t where x in (select x from a)")))
+  (is (false? (exec/rows? "WITH select$ AS (SELECT 1) UPDATE t SET x = 2")))
+  (is (false? (exec/rows? "with values1 as (select 1) delete from t")))
   (is (false? (exec/rows? "insert into t values (1)")))
   (is (true? (exec/rows? "insert into t values (1) returning *"))))
 

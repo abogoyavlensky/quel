@@ -40,7 +40,7 @@
 ;; string literals, quoted identifiers and comments: those alternatives are
 ;; tried first, so a word inside them never surfaces on its own.
 (def ^:private token-re
-  #"(?is)'(?:[^']|'')*'|\"[^\"]*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?\*/|[()]|\b[a-z_]+\b")
+  #"(?is)'(?:[^']|'')*'|\"[^\"]*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?\*/|[()]|\b[a-z_][a-z0-9_$]*")
 
 (defn- tokens [q]
   (->> (re-seq token-re q)
