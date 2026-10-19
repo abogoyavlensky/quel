@@ -1,0 +1,172 @@
+(ns quel.exec-test
+  (:require [integrant.core :as ig]
+            [quel.conn :as conn]
+            [quel.conn-test :refer [temp-path]]
+            [quel.exec :as exec]
+            [quel.system :as system]
+            [sql.core :as sql]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+;; Runs for minutes on sqlite, so a cancel is the only way it ends in time.
+(def runaway
+  (str "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c"
+       " WHERE x < 1000000000) SELECT count(*) FROM c"))
+
+(defn- with-env
+  "Run (f execs conns conn-id) over fresh registries and a throwaway
+   database, halting both afterwards in the system's order."
+  [f]
+  (let [conns (ig/init-key :quel.conn/registry {})
+        execs (ig/init-key :quel.exec/registry {:conns conns})
+        path (temp-path)]
+    (try
+      (f execs conns (:conn-id (conn/open! conns path)))
+      (finally
+        (ig/halt-key! :quel.exec/registry execs)
+        (ig/halt-key! :quel.conn/registry conns)
+        (os/sh "rm" "-f" path)))))
+
+(defn- run [execs conns conn-id q & {:as opts}]
+  (exec/run! execs conns (merge {:conn-id conn-id :query-id (str (random-uuid)) :sql q}
+                                opts)))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(defn- until
+  "Poll pred every 10 ms for up to 5 s; its last value."
+  [pred]
+  (loop [n 0]
+    (let [v (pred)]
+      (if (or v (>= n 500)) v (do (sleep 10) (recur (inc n)))))))
+
+(defn- fill! [conns conn-id n]
+  (let [db (conn/db conns conn-id)]
+    (sql/execute! db ["create table t (id integer, name text)"])
+    (sql/execute! db [(str "insert into t (id, name)"
+                           " with recursive c(x) as (select 1 union all select x + 1 from c where x < " n ")"
+                           " select x, 'n' || x from c")])))
+
+(deftest duplicate-columns-keep-their-order
+  (with-env
+    (fn [execs conns id]
+      (let [r (run execs conns id "select 1 as id, 2 as id")]
+        (is (= ["id" "id"] (mapv :name (:columns r))))
+        (is (= [[1 2]] (:rows r)))
+        (is (false? (:has-more r)))
+        (is (nil? (:update-count r)))
+        (is (int? (:elapsed-ms r)))))))
+
+(deftest column-types-come-through
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1)
+      (is (= [{:name "id" :type "INTEGER"} {:name "name" :type "TEXT"}]
+             (:columns (run execs conns id "select id, name from t")))))))
+
+(deftest the-first-page-and-has-more
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (let [r (run execs conns id "select id from t order by id" :page-size 500)]
+        (is (= 500 (count (:rows r))))
+        (is (= [1] (first (:rows r))))
+        (is (true? (:has-more r))))
+      (let [r (run execs conns id "select id from t where id <= 3")]
+        (is (= [[1] [2] [3]] (:rows r)))
+        (is (false? (:has-more r))))
+      (let [r (run execs conns id "select id from t where id <= 500" :page-size 500)]
+        (is (= 500 (count (:rows r))))
+        (is (false? (:has-more r)))))))
+
+(deftest a-write-returns-its-update-count
+  (with-env
+    (fn [execs conns id]
+      (run execs conns id "create table w (x integer)")
+      (let [r (run execs conns id "insert into w (x) values (1), (2)")]
+        (is (= 2 (:update-count r)))
+        (is (= [] (:columns r)))
+        (is (= [] (:rows r)))))))
+
+(deftest session-state-carries-across-runs
+  (with-env
+    (fn [execs conns id]
+      (run execs conns id "create temp table tmp (x integer)")
+      (run execs conns id "insert into tmp (x) values (5)")
+      (is (= [[5]] (:rows (run execs conns id "select x from tmp")))))))
+
+(deftest a-failing-statement-keeps-the-drivers-message
+  (with-env
+    (fn [execs conns id]
+      (is (str/includes? (str (message-of #(run execs conns id "selec 1"))) "syntax error"))
+      (is (= {} @execs)))))
+
+(deftest cancel-a-runaway-query
+  (with-env
+    (fn [execs conns id]
+      (let [qid "runaway-1"
+            started (System/nanoTime)
+            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id qid :sql runaway})))]
+        (is (until #(contains? @execs qid)))
+        (sleep 100)
+        (is (true? (exec/cancel! execs qid)))
+        (is (= "Query canceled." (deref result 5000 :timeout)))
+        (is (< (quot (- (System/nanoTime) started) 1000000) 5000))
+        (is (= {} @execs))))))
+
+(deftest cancelling-an-unknown-query-is-false
+  (with-env
+    (fn [execs _ _]
+      (is (false? (exec/cancel! execs "nope"))))))
+
+(deftest one-query-per-connection
+  (with-env
+    (fn [execs conns id]
+      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "a" :sql runaway})))]
+        (is (until #(contains? @execs "a")))
+        (is (str/includes? (str (message-of #(run execs conns id "select 1")))
+                           "already running on this connection"))
+        (exec/cancel! execs "a")
+        (is (= "Query canceled." (deref result 5000 :timeout)))))))
+
+(deftest a-query-id-is-used-once-at-a-time
+  (with-env
+    (fn [execs conns id]
+      (let [p2 (temp-path)
+            id2 (:conn-id (conn/open! conns p2))
+            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "same" :sql runaway})))]
+        (try
+          (is (until #(contains? @execs "same")))
+          (is (str/includes? (str (message-of #(exec/run! execs conns {:conn-id id2 :query-id "same" :sql "select 1"})))
+                             "already running"))
+          (exec/cancel! execs "same")
+          (is (= "Query canceled." (deref result 5000 :timeout)))
+          (finally (os/sh "rm" "-f" p2)))))))
+
+(deftest halting-cancels-running-queries
+  (with-env
+    (fn [execs conns id]
+      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "h" :sql runaway})))]
+        (is (until #(contains? @execs "h")))
+        (ig/halt-key! :quel.exec/registry execs)
+        (is (= "Query canceled." (deref result 5000 :timeout)))
+        (is (= {} @execs))))))
+
+;; The regression test for the exec -> conn ref in the system config:
+;; halting the two registries together cancels the query before its
+;; session closes, so the halt does not wait out the runaway query.
+(deftest the-system-halts-queries-before-connections
+  (let [sys (ig/init (system/config) [:quel.conn/registry :quel.exec/registry])
+        conns (:quel.conn/registry sys)
+        execs (:quel.exec/registry sys)
+        path (temp-path)]
+    (try
+      (let [id (:conn-id (conn/open! conns path))
+            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "s" :sql runaway})))]
+        (is (until #(contains? @execs "s")))
+        (let [t0 (System/nanoTime)]
+          (ig/halt! sys)
+          (is (< (quot (- (System/nanoTime) t0) 1000000) 5000)))
+        (is (= "Query canceled." (deref result 5000 :timeout))))
+      (finally (os/sh "rm" "-f" path)))))

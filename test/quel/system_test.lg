@@ -7,7 +7,7 @@
 ;; check the config's shape.
 
 (deftest the-config-names-every-component
-  (is (= #{:quel.conn/registry :quel.api/handlers :quel.shell/app :quel.shell/window
+  (is (= #{:quel.conn/registry :quel.exec/registry :quel.api/handlers :quel.shell/app :quel.shell/window
            :quel.menu/menu :quel.dev/loop}
          (set (keys (system/config))))))
 
