@@ -20,6 +20,14 @@
   (is (= "-9007199254740992" (cells/encode -9007199254740992)))
   (is (= "9223372036854775807" (cells/encode 9223372036854775807))))
 
+;; Go's JSON encoder rejects these, so they cross as strings.
+(deftest non-finite-floats-become-strings
+  (let [inf (* 1e308 10.0)]
+    (is (= "Infinity" (cells/encode inf)))
+    (is (= "-Infinity" (cells/encode (- inf))))
+    (is (= "NaN" (cells/encode (- inf inf))))
+    (is (= 1.7976931348623157e308 (cells/encode 1.7976931348623157e308)))))
+
 (deftest anything-else-is-its-string-form
   (is (= ":k" (cells/encode :k)))
   (is (= "(1 2)" (cells/encode '(1 2)))))

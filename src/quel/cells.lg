@@ -13,6 +13,15 @@
 ;; The largest integer a JavaScript number holds exactly: 2^53 - 1.
 (def ^:private max-safe-int 9007199254740991)
 
+(defn- non-finite
+  "The JSON-safe name of an infinite or NaN float, or nil for a finite
+   one. Go's JSON encoder rejects them, and SQLite returns them for valid
+   queries (`select 1e999`)."
+  [x]
+  (cond
+    (NaN? x) "NaN"
+    (infinite? x) (if (pos? x) "Infinity" "-Infinity")))
+
 (defn encode
   "One driver value as a bridge-safe cell."
   [v]
@@ -21,7 +30,7 @@
     (boolean? v) v
     (string? v) v
     (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))
-    (number? v) v
+    (number? v) (or (non-finite v) v)
     :else (str v)))
 
 (defn encode-row
