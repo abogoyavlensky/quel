@@ -97,6 +97,10 @@
   (is (false? (exec/rows? "WITH c(x) AS (VALUES (1)) INSERT INTO t SELECT x FROM c")))
   (is (true? (exec/rows? "with c(x) as (values (1)) insert into t select x from c returning x")))
   (is (true? (exec/rows? "with c(x) as (select 'insert into') select x from c")))
+  (is (true? (exec/rows? "WITH c(x) AS (VALUES ('abc')) SELECT replace(x, 'a', 'z') FROM c")))
+  (is (true? (exec/rows? "with recursive a(x) as (select 1), b as (select x from a) select * from b")))
+  (is (false? (exec/rows? "with a(x) as (select 1) update t set x = (select x from a)")))
+  (is (false? (exec/rows? "with a(x) as (select 1) delete from t where x in (select x from a)")))
   (is (false? (exec/rows? "insert into t values (1)")))
   (is (true? (exec/rows? "insert into t values (1) returning *"))))
 
