@@ -376,23 +376,23 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
   Expected: all pass. The first run rebuilds the runtime (minutes). If a cancel test proves a semantic in the Design wrong (e.g. the error text), fix the Design paragraph in this plan and the README wording to match what the driver does - the test records reality, not a guess.
 - [x] **Step 6: Also run** `cd ../sql && lgx test` and `cd ../ragtime && lgx test`. Expected: pass.
 - [x] **Step 7: Docs.** `sql/README.md`: a "Sessions and cancellation" section (the `Ctx` lifecycle, `QueryCtx`/`ExecCtx`, `Conn`, the two cancel behaviours, `ColumnTypeNames`, `execute!` over a `*sql.Conn`, `with-transaction` not supported on one). Root `README.md` "Releasing": `sql` joins livekit, wails and nrepl as an in-tree shim; the Go-module-tag steps now apply to `duckdb` only. Update the CI comment in `.github/workflows/test.yml` to match.
-- [ ] **Step 8: Commit, push, open PR 1.** `git commit -m "sql: context-aware queries, sessions and column types; ship the shim in-tree"`, `git push -u origin sql-context`, `gh pr create` with a body summarising the API and the release plan (sql-v0.3.0, then the four dependents). Wait for CI (`gh pr checks --watch`). Expected: green.
+- [x] **Step 8: Commit, push, open PR 1.** `git commit -m "sql: context-aware queries, sessions and column types; ship the shim in-tree"`, `git push -u origin sql-context`, `gh pr create` with a body summarising the API and the release plan (sql-v0.3.0, then the four dependents). Wait for CI (`gh pr checks --watch`). Expected: green.
 
 ### Task 2: Release `sql-v0.3.0` and its dependents (letgo-packages)
 
-- [ ] **Step 1: Merge PR 1** with a squash merge (the repo's history style), then `git switch master && git pull`.
-- [ ] **Step 2: Tag and push** `sql-v0.3.0` on the merge commit: `git tag sql-v0.3.0 && git push origin sql-v0.3.0`. Wait for the tag's CI run to pass.
-- [ ] **Step 3: PR 2.** Branch `sql-v0.3.0-dependents`; set the `abogoyavlensky/letgo-sql` coord in `sqlite/lgx.edn`, `postgres/lgx.edn`, `duckdb/lgx.edn` and `ragtime/lgx.edn` to `:git/tag "sql-v0.3.0"` (byte-identical in all four). Find README coord snippets with `grep -rnE '(sql|sqlite|postgres|duckdb|ragtime)-v0\.[0-9]+\.[0-9]+' */README.md README.md` and bump the ones that show a consumer what to depend on to `v0.3.0` (the root README's example currently shows `sqlite-v0.1.0`); leave historical mentions alone. Commit `"Pin letgo-sql sql-v0.3.0"`, push, `gh pr create`, wait for CI, squash-merge, pull `master`.
-- [ ] **Step 4: Tag and push** `sqlite-v0.3.0`, `postgres-v0.3.0`, `duckdb-v0.3.0`, `ragtime-v0.3.0` on PR 2's merge commit (`git push origin <tag>` each). Wait for each tag's CI run.
-- [ ] **Step 5: Verify a clean consumer resolves it:** in a scratch dir with an `lgx.edn` depending only on `sqlite-v0.3.0` and a `main.lg` that calls `(sql.shim/NewCtx)`, `lgx run` prints no `already resolved` warning and succeeds. Delete the scratch dir.
+- [x] **Step 1: Merge PR 1** with a squash merge (the repo's history style), then `git switch master && git pull`.
+- [x] **Step 2: Tag and push** `sql-v0.3.0` on the merge commit: `git tag sql-v0.3.0 && git push origin sql-v0.3.0`. Wait for the tag's CI run to pass.
+- [x] **Step 3: PR 2.** Branch `sql-v0.3.0-dependents`; set the `abogoyavlensky/letgo-sql` coord in `sqlite/lgx.edn`, `postgres/lgx.edn`, `duckdb/lgx.edn` and `ragtime/lgx.edn` to `:git/tag "sql-v0.3.0"` (byte-identical in all four). Find README coord snippets with `grep -rnE '(sql|sqlite|postgres|duckdb|ragtime)-v0\.[0-9]+\.[0-9]+' */README.md README.md` and bump the ones that show a consumer what to depend on to `v0.3.0` (the root README's example currently shows `sqlite-v0.1.0`); leave historical mentions alone. Commit `"Pin letgo-sql sql-v0.3.0"`, push, `gh pr create`, wait for CI, squash-merge, pull `master`.
+- [x] **Step 4: Tag and push** `sqlite-v0.3.0`, `postgres-v0.3.0`, `duckdb-v0.3.0`, `ragtime-v0.3.0` on PR 2's merge commit (`git push origin <tag>` each). Wait for each tag's CI run.
+- [x] **Step 5: Verify a clean consumer resolves it:** in a scratch dir with an `lgx.edn` depending only on `sqlite-v0.3.0` and a `main.lg` that calls `(sql.shim/NewCtx)`, `lgx run` prints no `already resolved` warning and succeeds. Delete the scratch dir.
 
 ### Task 3: Quel repository scaffold
 
 **Files:** Create `.gitignore`, `.mise.toml`, `lgx.edn`, `README.md`, `AGENTS.md`, `CLAUDE.md`
 
-- [ ] **Step 1: `.mise.toml`** with `lg = "1.13.0"`, `lgx = "0.5.0"`, `go = "1.27"`, `node = "24"`, the same `[tool_alias]` entries and `github_attestations = false` setting (with its comment) as `/home/agent/Projects/letgo-packages/.mise.toml`. Run `mise install`; `lgx --version` prints 0.5.0.
-- [ ] **Step 2: `.gitignore`** with the entries in File Structure.
-- [ ] **Step 3: `lgx.edn`**, modelled on wails-tasks' (keep its explanatory comments where they apply):
+- [x] **Step 1: `.mise.toml`** with `lg = "1.13.0"`, `lgx = "0.5.0"`, `go = "1.27"`, `node = "24"`, the same `[tool_alias]` entries and `github_attestations = false` setting (with its comment) as `/home/agent/Projects/letgo-packages/.mise.toml`. Run `mise install`; `lgx --version` prints 0.5.0.
+- [x] **Step 2: `.gitignore`** with the entries in File Structure.
+- [x] **Step 3: `lgx.edn`**, modelled on wails-tasks' (keep its explanatory comments where they apply):
   - `:paths ["src"]`, `:resource-paths ["resources"]`, `:main "src/quel/app.lg"`, `:lg-runtime :built`, `:lg-version "1.13.0"`;
   - `:targets {:bin {:out "bin/quel"}}`, with a comment that the `production` build tag waits on an lgx release with `:go/build-tags`;
   - `:deps`: `wails-v0.2.0`, `nrepl-v0.1.0`, `sqlite-v0.3.0` (all `:deps/root` coords on `https://github.com/abogoyavlensky/letgo-packages`), `dev.weavejester/dependency` and `dev.weavejester/integrant` at `1.0.1` (with wails-tasks' comment on why both are listed);
@@ -402,9 +402,11 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
     - `fe-watch` - `{:sh "npm --prefix frontend run watch"}`
     - `build` (overrides the built-in) - `[{:task fe-build} {:task lgx:build}]`
     - `smoke` - `{:sh "bash scripts/smoke.sh"}`
-- [ ] **Step 4: `README.md`**: one paragraph on Quel and a link to `docs/DESIGN.md`; prerequisites (mise tools; Xcode CLT on macOS; `libgtk-4-dev libwebkitgtk-6.0-dev` on Linux); develop (`lgx fe-install`, then `lgx fe-watch` in one terminal and `lgx run` in another; the nREPL port in `.nrepl-port`); server mode without a desktop (`CGO_ENABLED=0 GOFLAGS=-tags=server lgx run`, open `http://localhost:8080`); test (`lgx test`, `npm --prefix frontend test`, `lgx smoke`, each with the server-mode env on Linux without the webview headers); build (`lgx build && ./bin/quel`). Use /writing-clearly.
-- [ ] **Step 5: `AGENTS.md`**: the stack in three lines, where the design and plans live, the commands above, and the rules that bite: all app code is let-go (gaps go upstream to letgo-packages); handlers and menu clicks registered by var; `quel.app` is required by nothing; no `with-redefs`/`alter-var-root` in app code; no runtime data from resources; `os/getenv` returns `""` for unset vars. `CLAUDE.md` contains the single line `@AGENTS.md`.
-- [ ] **Step 6: Commit** `git add -A && git commit -m "Scaffold the Quel project"` (this also commits `docs/DESIGN.md` and this plan if they are still untracked).
+- [x] **Step 4: `README.md`**: one paragraph on Quel and a link to `docs/DESIGN.md`; prerequisites (mise tools; Xcode CLT on macOS; `libgtk-4-dev libwebkitgtk-6.0-dev` on Linux); develop (`lgx fe-install`, then `lgx fe-watch` in one terminal and `lgx run` in another; the nREPL port in `.nrepl-port`); server mode without a desktop (`CGO_ENABLED=0 GOFLAGS=-tags=server lgx run`, open `http://localhost:8080`); test (`lgx test`, `npm --prefix frontend test`, `lgx smoke`, each with the server-mode env on Linux without the webview headers); build (`lgx build && ./bin/quel`). Use /writing-clearly.
+- [x] **Step 5: `AGENTS.md`**: the stack in three lines, where the design and plans live, the commands above, and the rules that bite: all app code is let-go (gaps go upstream to letgo-packages); handlers and menu clicks registered by var; `quel.app` is required by nothing; no `with-redefs`/`alter-var-root` in app code; no runtime data from resources; `os/getenv` returns `""` for unset vars. `CLAUDE.md` contains the single line `@AGENTS.md`.
+- [x] **Step 6: Commit** `git add -A && git commit -m "Scaffold the Quel project"` (this also commits `docs/DESIGN.md` and this plan if they are still untracked).
+
+> Deviation: Task 3 committed `lgx.edn` with `:local/root` coords for `sql`/`sqlite` while the release was in flight, then switched to `sqlite-v0.3.0` in a follow-up commit once Task 2 published it.
 
 ### Task 4: Backend skeleton - system, shell, menu, dev loop, ping
 
@@ -412,14 +414,16 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
 - Create: `src/quel/app.lg`, `src/quel/system.lg`, `src/quel/shell.lg`, `src/quel/menu.lg`, `src/quel/dev.lg`, `src/quel/api.lg`
 - Test: `test/quel/system_test.lg`, `test/quel/menu_test.lg`, `test/quel/api_test.lg`
 
-- [ ] **Step 1: `quel.shell`, `quel.dev`, `quel.app`** - port `tasks.app`, `tasks.dev` and `main.lg` from wails-tasks, renamed. `quel.app` starts with `(ns quel.app ...)` and ends with `(when-not *compiling-aot* (-main))`.
-- [ ] **Step 2: `quel.menu`**: `spec` returns `[{:role :app-menu} {:label "File" :items [{:label "Open Database…" :accelerator "CmdOrCtrl+O" :on-click (partial #'open-db! env)} {:label "Run" :accelerator "CmdOrCtrl+Enter" :on-click (partial #'run! env)} {:separator true} {:role :quit}]} {:role :edit-menu} {:role :window-menu}]`. `run!` emits `menu:run` with `{}`; `open-db!` calls `w/open-file` (title "Open Database", filters `[["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]]`) and, unless cancelled, emits `menu:open-db` with `{:path path}`. Wrap both in the `reporting` helper from `tasks.menu`. `install!` and the component as in `tasks.menu`.
-- [ ] **Step 3: `quel.api`** with `ping` only for now, the `handlers` map of vars, and the `:quel.api/handlers` component registering `(partial v env)` for each (env is the component's opts map).
-- [ ] **Step 4: `quel.system`**: the config from the Design (with the conn and exec registry keys commented out until Tasks 6-7 add their components, and `:quel.api/handlers` taking `{}` for now), `system*`, `halted*`, `start!`, `stop!` ported from `tasks.system`.
-- [ ] **Step 5: Tests.** `system_test`: `config` has the expected keys and refs (no `ig/init`: starting needs a window). `menu_test`: `(w/check-menu (menu/spec {:app nil}))` is true. `api_test`: `(api/ping {})` is `{:ok true}`; every value in `api/handlers` is a var. Port any helper patterns from wails-tasks' tests.
-- [ ] **Step 6: Run.** `cd /home/agent/Projects/quel && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: pass (the first run builds the runtime, minutes).
-- [ ] **Step 7: Run the app in server mode** with a placeholder `resources/public/index.html` (`<h1>Quel</h1>`, not committed - it is gitignored): `CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT=8090 lgx run`, then `curl -fs localhost:8090/` returns the page and `.nrepl-port` exists. Stop it.
-- [ ] **Step 8: Commit** `"Add the integrant system, window, menu and dev loop"`.
+- [x] **Step 1: `quel.shell`, `quel.dev`, `quel.app`** - port `tasks.app`, `tasks.dev` and `main.lg` from wails-tasks, renamed. `quel.app` starts with `(ns quel.app ...)` and ends with `(when-not *compiling-aot* (-main))`.
+- [x] **Step 2: `quel.menu`**: `spec` returns `[{:role :app-menu} {:label "File" :items [{:label "Open Database…" :accelerator "CmdOrCtrl+O" :on-click (partial #'open-db! env)} {:label "Run" :accelerator "CmdOrCtrl+Enter" :on-click (partial #'run! env)} {:separator true} {:role :quit}]} {:role :edit-menu} {:role :window-menu}]`. `run!` emits `menu:run` with `{}`; `open-db!` calls `w/open-file` (title "Open Database", filters `[["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]]`) and, unless cancelled, emits `menu:open-db` with `{:path path}`. Wrap both in the `reporting` helper from `tasks.menu`. `install!` and the component as in `tasks.menu`.
+- [x] **Step 3: `quel.api`** with `ping` only for now, the `handlers` map of vars, and the `:quel.api/handlers` component registering `(partial v env)` for each (env is the component's opts map).
+- [x] **Step 4: `quel.system`**: the config from the Design (with the conn and exec registry keys commented out until Tasks 6-7 add their components, and `:quel.api/handlers` taking `{}` for now), `system*`, `halted*`, `start!`, `stop!` ported from `tasks.system`.
+- [x] **Step 5: Tests.** `system_test`: `config` has the expected keys and refs (no `ig/init`: starting needs a window). `menu_test`: `(w/check-menu (menu/spec {:app nil}))` is true. `api_test`: `(api/ping {})` is `{:ok true}`; every value in `api/handlers` is a var. Port any helper patterns from wails-tasks' tests.
+- [x] **Step 6: Run.** `cd /home/agent/Projects/quel && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: pass (the first run builds the runtime, minutes).
+- [x] **Step 7: Run the app in server mode** with a placeholder `resources/public/index.html` (`<h1>Quel</h1>`, not committed - it is gitignored): `CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT=8090 lgx run`, then `curl -fs localhost:8090/` returns the page and `.nrepl-port` exists. Stop it.
+- [x] **Step 8: Commit** `"Add the integrant system, window, menu and dev loop"`.
+
+> Deviation: port 8090 is taken on this machine by an unrelated process; server-mode checks use a free port picked at run time. `quel.menu` excludes `clojure.core/run!` (it defines its own `run!`).
 
 ### Task 5: `quel.cells`
 

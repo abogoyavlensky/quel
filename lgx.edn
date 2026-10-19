@@ -31,9 +31,11 @@
 
         ;; SQLite over Go's database/sql; brings the sql layer (sessions,
         ;; cancellation) and the modernc.org/sqlite driver in transitively.
-        ;; TEMPORARY: the local checkout until sqlite-v0.3.0 is released.
-        abogoyavlensky/letgo-sql {:local/root "../letgo-packages/sql"}
-        abogoyavlensky/letgo-sqlite {:local/root "../letgo-packages/sqlite"}
+        ;; sqlite-v0.3.0 is the first with sql-v0.3.0's context support.
+        abogoyavlensky/letgo-sqlite
+        {:git/url "https://github.com/abogoyavlensky/letgo-packages"
+         :git/tag "sqlite-v0.3.0"
+         :deps/root "sqlite"}
 
         ;; integrant wires the registries, the handlers, the window, the
         ;; menu and the dev loop together. It depends on
