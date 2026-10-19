@@ -1,4 +1,5 @@
 (ns quel.conn
+  (:refer-clojure :exclude [close!])
   (:require [integrant.core :as ig]
             [sql.shim :as shim]
             [sqlite.core :as sqlite]
