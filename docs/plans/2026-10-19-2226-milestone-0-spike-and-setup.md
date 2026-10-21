@@ -517,9 +517,10 @@ committed `lgx.edn` names the released `sqlite-v0.3.0`.
 
 The executor on Linux stops here and hands this checklist to the user. Record each result (pass, or what failed and the error) in the summary for Task 13.
 
-- [ ] **Step 1: Set up.** Clone the repo, `mise install`, `lgx fe-install`, `lgx fe-build`.
-- [ ] **Step 2: `lgx run`** (first run builds the runtime with the Cocoa layer; minutes). A native window opens and the ping status shows ok.
-- [ ] **Step 3: The bridge.** Open a `.db` file, run a create/insert/select, see rows; `select 1 as id, 2 as id` shows two columns.
+- [x] **Step 1: Set up.** Clone the repo, `mise install`, `lgx fe-install`, `lgx fe-build`.
+- [x] **Step 2: `lgx run`** (first run builds the runtime with the Cocoa layer; minutes). A native window opens and the ping status shows ok.
+- [x] **Step 3: The bridge.** Open a `.db` file, run a create/insert/select, see rows; `select 1 as id, 2 as id` shows two columns.
+  - *macOS 26.7.1, arm64: steps 1-3 confirmed. The first `lgx run` came before `lgx fe-build` and died with integrant's bare "Error on key :quel.dev/loop" (no resources/public); 06c2c10 makes that error name the missing build and halt the half-started system. After building the frontend, a native window opened and a table in a local SQLite file selected fine.*
 - [ ] **Step 4: Cancel.** The runaway query; Cancel ends it within a few seconds; the app stays responsive while it runs.
 - [ ] **Step 5: Menus and dialogs.** The Quel app menu, Edit (Cmd+C/V/A work in the textarea), Window; File > Run and Cmd+Enter run the query. File > Open Database… (and Cmd+O) shows the native open dialog; picking a `.db` file opens it in the screen; Cancel in the dialog does nothing.
 - [ ] **Step 6: Dev loop.** With `lgx fe-watch` running, edit a string in `App.tsx`: the window reloads with it. Connect an editor (or `nreplctl`) to `.nrepl-port`, redefine `quel.api/ping` to return `{:ok false}`, reload the window: the status changes.
