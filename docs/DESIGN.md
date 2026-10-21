@@ -404,7 +404,6 @@ package feature, not app glue.
 | new `letgo-packages/keyring` | Keychain access, e.g. over `zalando/go-keyring` | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` / let-go | Resource embedding and per-target build tags for `:target :native` | the native build |
-| `letgo-packages/wails` | Verify the native macOS window with v0.2.0 (menus, dialogs) - the milestone 0 Mac pass | milestone 0 |
 
 ## Milestones
 
@@ -412,8 +411,9 @@ package feature, not app glue.
    Vite + React page that calls let-go handlers through
    `@wailsio/runtime`: open a SQLite file, run a query on a session,
    cancel a runaway one. Land the `sql` context support. The spike ran
-   against SQLite rather than Redshift to stay local. Automated parts done
-   2026-10-19 (server mode); the native macOS pass is pending.
+   against SQLite rather than Redshift to stay local. Done 2026-10-21:
+   automated checks in server mode on 2026-10-19, the native macOS pass
+   on 2026-10-21.
 1. **Workhorse core - Redshift and SQLite.** Starts with the Redshift
    checks the spike skipped (see [Unverified](#unverified)): pgx connects
    and queries, a cancel reaches the cluster, the catalog sources behave.
@@ -443,11 +443,8 @@ settles them; update this section when it does.
 - The Redshift catalog sources in the introspection table behave as
   described, including `SHOW TABLE` and `svv_all_*` permissions for
   non-superusers.
-- The wails package's v0.2.0 window, menus and dialogs work in a native
-  macOS window, and so do the built binary and a Finder launch (only server
-  mode has been run). The milestone 0 Mac pass settles this.
 
-### Settled by milestone 0 (2026-10-19)
+### Settled by milestone 0 (2026-10-19 and 2026-10-21)
 
 - The bridge works from a Vite-built page served by the wails package,
   with `@wailsio/runtime` 3.0.0-beta.30 from npm (the version the package
@@ -463,6 +460,12 @@ settles them; update this section when it does.
   `quel.exec/rows?` handles both; `quel.classify` will build on it.
 - let-go 1.13.0's `(str (random-uuid))` is the tagged `#uuid "..."` form,
   unlike Clojure's; `quel.conn` extracts the bare UUID.
+- The native macOS window (macOS 26.7.1, arm64; 2026-10-21): the wails
+  package's v0.2.0 window, menus (app, File, Edit, Window), the open-file
+  dialog and accelerators work; cancel ends the runaway query with the
+  window responsive; `fe-watch` reloads the window and an nREPL
+  redefinition takes effect on the next call; `lgx build && ./bin/quel`
+  and `open bin/quel` show the embedded page; `Cmd+Q` exits cleanly.
 
 ## Open questions
 

@@ -520,12 +520,12 @@ The executor on Linux stops here and hands this checklist to the user. Record ea
 - [x] **Step 1: Set up.** Clone the repo, `mise install`, `lgx fe-install`, `lgx fe-build`.
 - [x] **Step 2: `lgx run`** (first run builds the runtime with the Cocoa layer; minutes). A native window opens and the ping status shows ok.
 - [x] **Step 3: The bridge.** Open a `.db` file, run a create/insert/select, see rows; `select 1 as id, 2 as id` shows two columns.
-  - *macOS 26.7.1, arm64: steps 1-3 confirmed. The first `lgx run` came before `lgx fe-build` and died with integrant's bare "Error on key :quel.dev/loop" (no resources/public); 06c2c10 makes that error name the missing build and halt the half-started system. After building the frontend, a native window opened and a table in a local SQLite file selected fine.*
-- [ ] **Step 4: Cancel.** The runaway query; Cancel ends it within a few seconds; the app stays responsive while it runs.
-- [ ] **Step 5: Menus and dialogs.** The Quel app menu, Edit (Cmd+C/V/A work in the textarea), Window; File > Run and Cmd+Enter run the query. File > Open Database… (and Cmd+O) shows the native open dialog; picking a `.db` file opens it in the screen; Cancel in the dialog does nothing.
-- [ ] **Step 6: Dev loop.** With `lgx fe-watch` running, edit a string in `App.tsx`: the window reloads with it. Connect an editor (or `nreplctl`) to `.nrepl-port`, redefine `quel.api/ping` to return `{:ok false}`, reload the window: the status changes.
-- [ ] **Step 7: Built binary.** `lgx build && ./bin/quel` opens the window with the embedded frontend; launching it from Finder (after wrapping or via `open bin/quel`) shows the page, not a blank window.
-- [ ] **Step 8: Quit** with Cmd+Q: the process exits cleanly (no hang, no panic on stderr).
+  - *macOS 26.7.1, arm64, 2026-10-21: all eight steps passed. The first `lgx run` came before `lgx fe-build` and died with integrant's bare "Error on key :quel.dev/loop" (no resources/public); 06c2c10 makes that error name the missing build and halt the half-started system. After building the frontend, a native window opened and a table in a local SQLite file selected fine.*
+- [x] **Step 4: Cancel.** The runaway query; Cancel ends it within a few seconds; the app stays responsive while it runs.
+- [x] **Step 5: Menus and dialogs.** The Quel app menu, Edit (Cmd+C/V/A work in the textarea), Window; File > Run and Cmd+Enter run the query. File > Open Database… (and Cmd+O) shows the native open dialog; picking a `.db` file opens it in the screen; Cancel in the dialog does nothing.
+- [x] **Step 6: Dev loop.** With `lgx fe-watch` running, edit a string in `App.tsx`: the window reloads with it. Connect an editor (or `nreplctl`) to `.nrepl-port`, redefine `quel.api/ping` to return `{:ok false}`, reload the window: the status changes.
+- [x] **Step 7: Built binary.** `lgx build && ./bin/quel` opens the window with the embedded frontend; launching it from Finder (after wrapping or via `open bin/quel`) shows the page, not a blank window.
+- [x] **Step 8: Quit** with Cmd+Q: the process exits cleanly (no hang, no panic on stderr).
 
 ### Task 13: Record the outcome
 
@@ -542,8 +542,9 @@ The executor on Linux stops here and hands this checklist to the user. Record ea
 
 ## Completion summary
 
-Implemented on branch `milestone-0`, Tasks 1-11 and 13. Task 12, the
-macOS pass, is the user's: it needs a Mac and is unchecked above.
+Implemented on branch `milestone-0`, all tasks. Task 12, the macOS pass,
+was run by the user on 2026-10-21 and passed; its one failure (a bare
+integrant error when the frontend was not built yet) was fixed in 06c2c10.
 
 - **Upstream:** letgo-packages #9 (the `sql` shim: `NewCtx`, `QueryCtx`,
   `ExecCtx`, `Conn`, `ColumnTypeNames`, in-tree shim, first sqlite tests)
@@ -574,6 +575,8 @@ Deviations, in one place:
 - `quel.menu`, `quel.exec` and `quel.conn` exclude the `clojure.core`
   names they redefine (`run!`, `close!`).
 - The shutdown-order test cannot detect a missing exec -> conn ref.
+- A failed start halts what it built and prints the cause chain; the dev
+  loop names a missing `resources/public` (found on the Mac pass).
 
 **What the plan could have specified better:** statement routing. It
 leaned on `sql.core/returns-rows?` without checking it against SQLite's
