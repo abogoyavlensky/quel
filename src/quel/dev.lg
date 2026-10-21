@@ -18,6 +18,12 @@
 ;; asset watcher.
 (defmethod ig/init-key ::loop [_ {:keys [window]}]
   (when (dev?)
+    ;; resources/public is gitignored: a fresh checkout has none until the
+    ;; frontend is built, and the window would have nothing to show.
+    (when-not (:dir? (os/stat "resources/public"))
+      (throw (ex-info (str "resources/public is missing: build the frontend"
+                           " first (lgx fe-install && lgx fe-build).")
+                      {})))
     ;; Port 0 picks a free one; editors find it in .nrepl-port.
     (let [port (nrepl/start!)
           stop-watch (w/watch-assets! window "resources/public")]

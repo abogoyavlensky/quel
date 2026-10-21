@@ -31,6 +31,9 @@ lgx fe-watch       # terminal 1: rebuild the frontend on every change
 lgx run            # terminal 2: the app, with an nREPL inside it
 ```
 
+Start `lgx run` once `fe-watch` has finished its first build: the app
+refuses to start while `resources/public` is missing.
+
 Saving a frontend file rebuilds it into `resources/public`, and the window
 reloads. The nREPL port is in `.nrepl-port`; handlers are registered by
 var, so redefining one from your editor changes what the next call runs.

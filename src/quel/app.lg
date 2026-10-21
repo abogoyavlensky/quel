@@ -4,10 +4,24 @@
 ;; (quel.shell, quel.conn, ...) and quel.system wires them.
 (ns quel.app
   (:require [quel.system :as system]
+            [string :as str]
             [wails.core :as w]))
 
+(defn- messages
+  "The messages of e and its causes, outermost first: integrant wraps a
+   component's error in its own \"Error on key ...\"."
+  [e]
+  (->> (iterate ex-cause e) (take-while some?) (map ex-message)))
+
+(defn- fail! [msg]
+  (write! *err* (str "quel: " msg "\n"))
+  (os/exit 1))
+
 (defn -main []
-  (let [system (system/start!)
+  (let [system (try
+                 (system/start!)
+                 (catch e
+                   (fail! (str/join "\n  caused by: " (messages e)))))
         ;; Blocks on the event loop; must run on the main thread, which is
         ;; why it is here and not in a component. It returns a failure (a
         ;; port in use in server mode, say) as a value, not a throw.
@@ -20,8 +34,7 @@
               ;; w/run!.
               (finally (system/stop!)))]
     (when err
-      (write! *err* (str "quel: " (.Error err) "\n"))
-      (os/exit 1))))
+      (fail! (.Error err)))))
 
 ;; lg -b runs top-level forms at compile time, so without this guard
 ;; `lgx build` would start the event loop while bundling.

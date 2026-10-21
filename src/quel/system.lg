@@ -48,7 +48,15 @@
    (when @system*
      (throw (ex-info "The system is already running." {})))
    (reset! halted* (promise))
-   (reset! system* (ig/init config))))
+   (try
+     (reset! system* (ig/init config))
+     (catch e
+       ;; A key that fails to init leaves the ones before it running (the
+       ;; nREPL, open handles): halt them before passing the error on.
+       (when-let [built (:system (ex-data e))]
+         (ig/halt! built))
+       (deliver @halted* true)
+       (throw e)))))
 
 (defn stop!
   "Halt the running system, and return once it has halted. The two places

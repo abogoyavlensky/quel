@@ -19,3 +19,19 @@
 
 (deftest stop-with-nothing-running-returns
   (is (nil? (system/stop!))))
+
+;; Throwaway keys for a start that fails partway.
+(def ^:private halted (atom []))
+(defmethod ig/init-key ::fine [k _] k)
+(defmethod ig/halt-key! ::fine [k _] (swap! halted conj k))
+(defmethod ig/init-key ::broken [_ _] (throw (ex-info "broken on purpose" {})))
+
+(deftest a-failed-start-halts-what-it-built
+  (reset! halted [])
+  (let [e (try (system/start! {::fine {} ::broken {:after (ig/ref ::fine)}})
+               nil
+               (catch e e))]
+    (is (= "broken on purpose" (ex-message (ex-cause e))))
+    (is (= [::fine] @halted))
+    ;; Nothing is left running, so the next start is allowed.
+    (is (nil? (system/stop!)))))
