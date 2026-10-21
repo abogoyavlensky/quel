@@ -1,0 +1,71 @@
+(ns quel.system
+  (:require [integrant.core :as ig]
+            [quel.api]
+            [quel.conn]
+            [quel.dev]
+            [quel.exec]
+            [quel.menu]
+            [quel.shell]))
+
+;; One config map describes the app; integrant starts the components in
+;; dependency order and halts them in reverse when the app ends.
+;;
+;; The running system is the one piece of live state, kept in a defonce
+;; so reloading this namespace from the nREPL keeps it:
+;;
+;;   (keys @quel.system/system*)
+
+(defonce system* (atom nil))
+
+;; Delivered once the last started system has halted. Starts delivered, so
+;; stop! with nothing running returns at once.
+(defonce ^:private halted* (atom (doto (promise) (deliver true))))
+
+(declare stop!)
+
+(defn config []
+  {:quel.conn/registry {}
+   ;; The ref orders the halt: queries are cancelled before their sessions
+   ;; close.
+   :quel.exec/registry {:conns (ig/ref :quel.conn/registry)}
+   :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
+                       :execs (ig/ref :quel.exec/registry)}
+   :quel.shell/app {:name "Quel"
+                    :description "A database client"
+                    :assets "public"
+                    :quit-on-last-window-closed true
+                    :on-shutdown (fn [] (stop!))}
+   :quel.shell/window {:app (ig/ref :quel.shell/app)
+                       :title "Quel" :width 1200 :height 800
+                       :min-width 720 :min-height 480}
+   :quel.menu/menu {:app (ig/ref :quel.shell/app)}
+   :quel.dev/loop {:window (ig/ref :quel.shell/window)}})
+
+(defn start!
+  "Start the system and return it. Throws if one is already running."
+  ([] (start! (config)))
+  ([config]
+   (when @system*
+     (throw (ex-info "The system is already running." {})))
+   (reset! halted* (promise))
+   (try
+     (reset! system* (ig/init config))
+     (catch e
+       ;; A key that fails to init leaves the ones before it running (the
+       ;; nREPL, open handles): halt them before passing the error on.
+       (when-let [built (:system (ex-data e))]
+         (ig/halt! built))
+       (deliver @halted* true)
+       (throw e)))))
+
+(defn stop!
+  "Halt the running system, and return once it has halted. The two places
+   that call it at exit (quel.app and the app's :on-shutdown) can race: one
+   halts, the other waits for it, so the process cannot end mid-halt."
+  []
+  (let [halted @halted*
+        [system _] (swap-vals! system* (constantly nil))]
+    (if system
+      (try (ig/halt! system) (finally (deliver halted true)))
+      (deref halted 10000 nil))
+    nil))

@@ -1,0 +1,75 @@
+(ns quel.conn-test
+  (:require [integrant.core :as ig]
+            [quel.conn :as conn]
+            [sql.core :as sql]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+(defn temp-path []
+  (str "/tmp/quel-test-" (random-uuid) ".db"))
+
+(defn with-registry
+  "Run (f registry path) over a fresh registry and a throwaway file path,
+   closing everything afterwards."
+  [f]
+  (let [registry (ig/init-key :quel.conn/registry {})
+        path (temp-path)]
+    (try
+      (f registry path)
+      (finally
+        (ig/halt-key! :quel.conn/registry registry)
+        (os/sh "rm" "-f" path)))))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(deftest open-returns-an-id-and-the-path
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id] :as r} (conn/open! registry path)]
+        (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" conn-id))
+        (is (= path (:path r)))
+        (is (contains? @registry conn-id))))))
+
+(deftest a-blank-path-is-refused
+  (with-registry
+    (fn [registry _]
+      (is (str/includes? (message-of #(conn/open! registry "  ")) "path is required")))))
+
+(deftest the-session-is-taken-once-and-keeps-state
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)
+            s1 (conn/session! registry conn-id)
+            s2 (conn/session! registry conn-id)]
+        (is (identical? s1 s2))
+        (sql/execute! {:sql/handle s1} ["create temp table t (x integer)"])
+        (sql/execute! {:sql/handle s2} ["insert into t (x) values (1)"])
+        (is (= [{:x 1}] (sql/execute! {:sql/handle s1} ["select x from t"])))))))
+
+(deftest close-removes-the-entry
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)]
+        (conn/session! registry conn-id)
+        (is (nil? (conn/close! registry conn-id)))
+        (is (not (contains? @registry conn-id)))
+        (is (str/includes? (message-of #(conn/session! registry conn-id))
+                           "No open database"))))))
+
+(deftest closing-an-unknown-id-is-a-no-op
+  (with-registry
+    (fn [registry _]
+      (is (nil? (conn/close! registry "nope"))))))
+
+(deftest halting-closes-everything
+  (let [registry (ig/init-key :quel.conn/registry {})
+        p1 (temp-path)
+        p2 (temp-path)]
+    (try
+      (conn/open! registry p1)
+      (let [{:keys [conn-id]} (conn/open! registry p2)]
+        (conn/session! registry conn-id))
+      (ig/halt-key! :quel.conn/registry registry)
+      (is (= {} @registry))
+      (finally (os/sh "rm" "-f" p1 p2)))))

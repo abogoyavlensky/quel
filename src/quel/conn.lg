@@ -1,0 +1,82 @@
+(ns quel.conn
+  (:refer-clojure :exclude [close!])
+  (:require [integrant.core :as ig]
+            [sql.shim :as shim]
+            [sqlite.core :as sqlite]
+            [string :as str]))
+
+;; Open databases, keyed by a conn-id the frontend holds. Each entry is
+;; {:db <sqlite connectable> :path <string> :session <*sql.Conn or nil>}.
+;;
+;; The pool (:db) is for work that can take any connection; statements the
+;; user runs go to the session, a dedicated connection taken on first use,
+;; so session state (BEGIN ... COMMIT, temp tables) behaves as in a shell.
+;; Milestone 0 keeps one session per database; milestone 1 makes it one
+;; per editor tab.
+;;
+;; The registry is an atom; the component's value is the atom.
+
+(defn- new-id
+  "A random UUID as its bare 36-character string. let-go 1.13.0's (str
+   (random-uuid)) is the tagged #uuid \"...\" form, which Clojure's is not;
+   taking the UUID out of it works either way."
+  []
+  (let [s (str (random-uuid))]
+    (or (re-find #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" s) s)))
+
+(defn open!
+  "Open the SQLite database at path. Returns {:conn-id :path}."
+  [registry path]
+  (when (str/blank? path)
+    (throw (ex-info "A database path is required." {})))
+  (let [id (new-id)]
+    (swap! registry assoc id {:db (sqlite/open path) :path path :session nil})
+    {:conn-id id :path path}))
+
+(defn- entry [registry conn-id]
+  (or (get @registry conn-id)
+      (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))
+
+(defn db
+  "The pool of an open database, as a sql.core connectable."
+  [registry conn-id]
+  (:db (entry registry conn-id)))
+
+(defn session!
+  "The database's session, taken from the pool on first use."
+  [registry conn-id]
+  (or (:session (entry registry conn-id))
+      (let [fresh (shim/Conn (:sql/handle (db registry conn-id)))
+            [_ now] (swap-vals! registry
+                                (fn [m]
+                                  (if (and (contains? m conn-id)
+                                           (nil? (get-in m [conn-id :session])))
+                                    (assoc-in m [conn-id :session] fresh)
+                                    m)))
+            winner (get-in now [conn-id :session])]
+        ;; Lost a race with another caller, or the database was closed
+        ;; meanwhile: give the extra connection back.
+        (when-not (identical? winner fresh)
+          (.Close fresh))
+        (or winner
+            (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))
+
+(defn- close-entry! [{:keys [db session]}]
+  (when session (.Close session))
+  (sqlite/close! db))
+
+(defn close!
+  "Close the database's session, then the database. Unknown ids are a
+   no-op."
+  [registry conn-id]
+  (let [[old _] (swap-vals! registry dissoc conn-id)]
+    (when-let [e (get old conn-id)]
+      (close-entry! e))
+    nil))
+
+(defmethod ig/init-key ::registry [_ _]
+  (atom {}))
+
+(defmethod ig/halt-key! ::registry [_ registry]
+  (doseq [id (keys @registry)]
+    (close! registry id)))

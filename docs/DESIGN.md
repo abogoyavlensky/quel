@@ -120,7 +120,8 @@ waiting on the network inside Go, not in bytecode.
 
 | Namespace | Responsibility |
 |---|---|
-| `quel.app` | Entry point: starts the system, runs the Wails loop. Not `main` - see [Builds](#builds). |
+| `quel.app` | Entry point: starts the system, runs the Wails loop. Not `main` - see [Builds](#builds). Required by nothing: it ends in `(-main)`, so loading it starts the app. |
+| `quel.shell` | The Wails app and window components. |
 | `quel.system` | The integrant config and the running system (`defonce`). |
 | `quel.store` | App database: connection profiles, query history, saved workspace. Migrations in `quel.migrations`. |
 | `quel.secrets` | Passwords in the macOS Keychain, keyed by profile id. Never in the app database. |
@@ -133,13 +134,14 @@ waiting on the network inside Go, not in bytecode.
 | `quel.export` | Writing DDL and results to files. |
 | `quel.api` | The handlers the frontend calls, registered by var so the nREPL can redefine them. |
 | `quel.menu` | The application menu as data; items emit events the frontend acts on. |
-| `quel.dev` | nREPL and the Vite dev wiring, under `lgx run` only. |
+| `quel.dev` | nREPL and the window reload on frontend rebuilds, under `lgx run` only. |
 
 Integrant components: `:quel.store/db`, `:quel.conn/registry`,
-`:quel.exec/registry`, `:quel.api/handlers`, `:quel.app/app`,
-`:quel.app/window`, `:quel.menu/menu`, `:quel.dev/loop`. Halting the system
+`:quel.exec/registry`, `:quel.api/handlers`, `:quel.shell/app`,
+`:quel.shell/window`, `:quel.menu/menu`, `:quel.dev/loop`. Halting the system
 cancels running queries, closes open cursors, closes every pool, then the
-app database.
+app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
+order: closing a session that is still running a query waits for it.
 
 ## Connections and sessions
 
@@ -186,9 +188,9 @@ before its first row arrives:
    dialog (it calls `classify` first).
 2. A cancellable context is created and stored under `query-id`.
 3. The statement runs on the tab's session. Row-returning statements open
-   a cursor; others return an update count. The `sql` layer's
-   `returns-rows?` heuristic decides, with an explicit override where it
-   guesses wrong.
+   a cursor; others return an update count. `quel.exec/rows?` decides:
+   the `sql` layer's `returns-rows?` heuristic, corrected for the cases it
+   misses (SQLite `PRAGMA`, a `WITH` whose outer statement writes).
 4. The first page (default 500 rows) and the column metadata come back in
    the reply, with `:has-more`.
 
@@ -349,14 +351,24 @@ away from.
 
 ### Dev loop
 
-`lgx run` starts the app with an nREPL inside it (as in wails-tasks) and
-points the window at the Vite dev server, so frontend edits hot-reload and
-backend handlers are redefined from the editor without a restart.
+`lgx run` starts the app with an nREPL inside it (as in wails-tasks), so
+backend handlers are redefined from the editor without a restart. On the
+frontend side, `lgx fe-watch` runs `vite build --watch` into
+`resources/public`, and the running app reloads the window when it
+changes - about a second per edit.
+
+Pointing the window at the Vite dev server (real HMR) does not work yet:
+the wails package serves assets through its own handler, which ignores
+Wails' `FRONTEND_DEVSERVER_URL` proxy, and a page served from Vite's origin
+cannot reach the bridge. That is an upstream change to the wails package,
+tracked in the backlog.
 
 ### Builds
 
 `lgx build` bundles the app (`lg -b`) with `resources/public` embedded
-and the `production` build tag. Packaging into a `.app`, icons, a dmg,
+and the `production` build tag (once an lgx release carries
+`:go/build-tags`; lgx 0.5.0 does not, so builds keep Wails' devtools for
+now). Packaging into a `.app`, icons, a dmg,
 signing and notarization is the `wails3` CLI's job on the built binary.
 
 `:target :native` is a later goal, not on the critical path. It cannot
@@ -387,20 +399,25 @@ package feature, not app glue.
 
 | Where | Change | Needed by |
 |---|---|---|
-| `letgo-packages/sql` | Context-aware `Query`/`Exec` that return a cancel fn, and a `Connectable` that covers `*sql.Conn` (it only has the `...Context` methods) | cancellation, per-tab sessions - milestone 1 |
-| `letgo-packages/sql` | Expose `ColumnTypes` (likely already in the generated `database/sql` bindings; verify) | column types in results |
+| `letgo-packages/sql` | Done in `sql-v0.3.0`: `NewCtx`/`QueryCtx`/`ExecCtx` (cancellable queries), `Conn` (sessions), a `Connectable` covering `*sql.Conn`, `ColumnTypeNames`; the shim ships in-tree | cancellation, per-tab sessions, column types |
+| `letgo-packages/wails` | Proxy `FRONTEND_DEVSERVER_URL` in the asset handler | Vite HMR in the dev loop |
 | new `letgo-packages/keyring` | Keychain access, e.g. over `zalando/go-keyring` | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` / let-go | Resource embedding and per-target build tags for `:target :native` | the native build |
-| `letgo-packages/wails` | Verify the native macOS window with v0.2.0 (menus, dialogs) | milestone 0 |
 
 ## Milestones
 
-0. **Spike.** A Wails window on macOS loading a Vite + React page that
-   calls one let-go handler through `@wailsio/runtime`. Connect to
-   Redshift through pgx, run a query, cancel a long one. Land the `sql`
-   context support. Settle every item in [Unverified](#unverified).
-1. **Workhorse core - Redshift and SQLite.** Profiles and Keychain;
+0. **Spike and project setup - SQLite.** The project skeleton, and a
+   Vite + React page that calls let-go handlers through
+   `@wailsio/runtime`: open a SQLite file, run a query on a session,
+   cancel a runaway one. Land the `sql` context support. The spike ran
+   against SQLite rather than Redshift to stay local. Done 2026-10-21:
+   automated checks in server mode on 2026-10-19, the native macOS pass
+   on 2026-10-21.
+1. **Workhorse core - Redshift and SQLite.** Starts with the Redshift
+   checks the spike skipped (see [Unverified](#unverified)): pgx connects
+   and queries, a cancel reaches the cluster, the catalog sources behave.
+   Then profiles and Keychain;
    structure tree (schemas, tables, views, columns); editor with
    highlighting and completion; run statement, selection or script; paged
    grid with cancel; result tabs with pinning; errors; history; workspace
@@ -426,11 +443,29 @@ settles them; update this section when it does.
 - The Redshift catalog sources in the introspection table behave as
   described, including `SHOW TABLE` and `svv_all_*` permissions for
   non-superusers.
-- The wails bridge works from a page served by the Vite dev server, and
-  `@wailsio/runtime` from npm matches the Wails version the package pins.
-- The wails package's v0.2.0 menus and dialogs work in a native macOS
-  window (only server mode has been run).
-- `ColumnTypes().DatabaseTypeName` is reachable from let-go.
+
+### Settled by milestone 0 (2026-10-19 and 2026-10-21)
+
+- The bridge works from a Vite-built page served by the wails package,
+  with `@wailsio/runtime` 3.0.0-beta.30 from npm (the version the package
+  pins): handlers answer, events arrive, a thrown error rejects the
+  promise with its message. Checked in server mode with headless Chromium.
+  The Vite dev server is not used; see [Dev loop](#dev-loop).
+- Column types: `sql.shim/ColumnTypeNames` returns them as strings.
+- Cancelling a context stops a running SQLite query promptly (modernc
+  calls `sqlite3_interrupt`; the error is `context canceled`), and a
+  cancel can arrive before the first row. The session stays usable.
+- `sql.core/returns-rows?` misroutes two SQLite cases: `PRAGMA` returns
+  rows, and a `WITH` whose outer statement writes does not.
+  `quel.exec/rows?` handles both; `quel.classify` will build on it.
+- let-go 1.13.0's `(str (random-uuid))` is the tagged `#uuid "..."` form,
+  unlike Clojure's; `quel.conn` extracts the bare UUID.
+- The native macOS window (macOS 26.7.1, arm64; 2026-10-21): the wails
+  package's v0.2.0 window, menus (app, File, Edit, Window), the open-file
+  dialog and accelerators work; cancel ends the runaway query with the
+  window responsive; `fe-watch` reloads the window and an nREPL
+  redefinition takes effect on the next call; `lgx build && ./bin/quel`
+  and `open bin/quel` show the embedded page; `Cmd+Q` exits cleanly.
 
 ## Open questions
 

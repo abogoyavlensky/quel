@@ -1,0 +1,37 @@
+(ns quel.dev
+  (:require [integrant.core :as ig]
+            [nrepl.core :as nrepl]
+            [string :as str]
+            [wails.core :as w]))
+
+;; The dev loop, on only under `lgx run` (which sets LGX_RUN; a built
+;; binary does not): an nREPL inside the app, and a window reload whenever
+;; the built frontend changes (`lgx fe-watch` rebuilds it on every edit).
+
+(defn dev?
+  "True under `lgx run`. os/getenv returns \"\" (truthy) for an unset
+   variable, so the check has to be for a non-blank value."
+  []
+  (not (str/blank? (os/getenv "LGX_RUN"))))
+
+;; nil outside dev; otherwise the nREPL port and the fn that stops the
+;; asset watcher.
+(defmethod ig/init-key ::loop [_ {:keys [window]}]
+  (when (dev?)
+    ;; resources/public is gitignored: a fresh checkout has none until the
+    ;; frontend is built, and the window would have nothing to show.
+    (when-not (:dir? (os/stat "resources/public"))
+      (throw (ex-info (str "resources/public is missing: build the frontend"
+                           " first (lgx fe-install && lgx fe-build).")
+                      {})))
+    ;; Port 0 picks a free one; editors find it in .nrepl-port.
+    (let [port (nrepl/start!)
+          stop-watch (w/watch-assets! window "resources/public")]
+      (println "dev: reloading the window when resources/public changes")
+      {:port port :stop-watch stop-watch})))
+
+;; Stopping the nREPL removes .nrepl-port.
+(defmethod ig/halt-key! ::loop [_ dev]
+  (when dev
+    ((:stop-watch dev))
+    (nrepl/stop!)))

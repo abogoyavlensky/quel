@@ -1,0 +1,54 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The runner has no GTK4/WebKitGTK, so the app runs in Wails' cgo-free
+      # server mode: an HTTP server instead of a window. Both vars are needed
+      # - a few Wails packages gate on `linux && cgo` without a `!server`
+      # guard.
+      CGO_ENABLED: "0"
+      GOFLAGS: -tags=server
+    steps:
+      - uses: actions/checkout@v4
+
+      # lg, lgx, go and node, at the versions in .mise.toml.
+      - uses: jdx/mise-action@v3
+
+      # The custom lg runtime (Wails, sqlite) is cached by its inputs, so a
+      # run with an unchanged lgx.edn reuses it.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/.lgx/runtimes
+            ~/.npm
+          key: deps-${{ runner.os }}-${{ hashFiles('lgx.edn', 'frontend/package-lock.json') }}
+          restore-keys: deps-${{ runner.os }}-
+
+      - name: Frontend tests
+        run: |
+          lgx fe-install
+          npm --prefix frontend test
+
+      - name: Frontend build
+        run: lgx fe-build
+
+      - name: Backend tests
+        run: lgx test
+
+      # The nREPL step is skipped: its client lives in a letgo-packages
+      # checkout, which CI does not have.
+      - name: Smoke test
+        run: lgx smoke

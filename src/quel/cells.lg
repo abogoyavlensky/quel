@@ -1,0 +1,39 @@
+(ns quel.cells)
+
+;; Driver values to cells the grid can render. Every value crosses the
+;; bridge as JSON, so whatever JavaScript would mangle is converted here,
+;; and nothing is allowed to fail: an unknown value falls back to its
+;; string form.
+;;
+;; Milestone 0 handles what SQLite produces. modernc returns TEXT and BLOB
+;; as []byte, and the sql shim's boxing already surfaces both as strings.
+;; Exact decimals, dates and the large-text cap arrive with the engines
+;; that produce them.
+
+;; The largest integer a JavaScript number holds exactly: 2^53 - 1.
+(def ^:private max-safe-int 9007199254740991)
+
+(defn- non-finite
+  "The JSON-safe name of an infinite or NaN float, or nil for a finite
+   one. Go's JSON encoder rejects them, and SQLite returns them for valid
+   queries (`select 1e999`)."
+  [x]
+  (cond
+    (NaN? x) "NaN"
+    (infinite? x) (if (pos? x) "Infinity" "-Infinity")))
+
+(defn encode
+  "One driver value as a bridge-safe cell."
+  [v]
+  (cond
+    (nil? v) nil
+    (boolean? v) v
+    (string? v) v
+    (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))
+    (number? v) (or (non-finite v) v)
+    :else (str v)))
+
+(defn encode-row
+  "A row of driver values, in column order, as a vector of cells."
+  [row]
+  (mapv encode row))

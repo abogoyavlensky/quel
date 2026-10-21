@@ -1,0 +1,37 @@
+(ns quel.system-test
+  (:require [integrant.core :as ig]
+            [quel.system :as system]
+            [clojure.test :refer [deftest is]]))
+
+;; The wiring, without a window: starting the system needs one, so these
+;; check the config's shape.
+
+(deftest the-config-names-every-component
+  (is (= #{:quel.conn/registry :quel.exec/registry :quel.api/handlers :quel.shell/app :quel.shell/window
+           :quel.menu/menu :quel.dev/loop}
+         (set (keys (system/config))))))
+
+(deftest the-window-menu-and-dev-loop-hang-off-the-app
+  (let [c (system/config)]
+    (is (= (ig/ref :quel.shell/app) (get-in c [:quel.shell/window :app])))
+    (is (= (ig/ref :quel.shell/app) (get-in c [:quel.menu/menu :app])))
+    (is (= (ig/ref :quel.shell/window) (get-in c [:quel.dev/loop :window])))))
+
+(deftest stop-with-nothing-running-returns
+  (is (nil? (system/stop!))))
+
+;; Throwaway keys for a start that fails partway.
+(def ^:private halted (atom []))
+(defmethod ig/init-key ::fine [k _] k)
+(defmethod ig/halt-key! ::fine [k _] (swap! halted conj k))
+(defmethod ig/init-key ::broken [_ _] (throw (ex-info "broken on purpose" {})))
+
+(deftest a-failed-start-halts-what-it-built
+  (reset! halted [])
+  (let [e (try (system/start! {::fine {} ::broken {:after (ig/ref ::fine)}})
+               nil
+               (catch e e))]
+    (is (= "broken on purpose" (ex-message (ex-cause e))))
+    (is (= [::fine] @halted))
+    ;; Nothing is left running, so the next start is allowed.
+    (is (nil? (system/stop!)))))
