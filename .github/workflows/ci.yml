@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
 
 concurrency:
@@ -45,10 +45,12 @@ jobs:
       - name: Frontend build
         run: lgx fe-build
 
+      # With a throwaway Postgres in Docker (the runner has Docker), so the
+      # Postgres tests run too.
       - name: Backend tests
-        run: lgx test
+        run: lgx test-pg
 
       # The nREPL step is skipped: its client lives in a letgo-packages
       # checkout, which CI does not have.
       - name: Smoke test
-        run: lgx smoke
+        run: lgx smoke-pg

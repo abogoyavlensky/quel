@@ -23,18 +23,19 @@
 (defn- message-of [f]
   (try (f) nil (catch e (ex-message e))))
 
-(deftest open-returns-an-id-and-the-path
+(deftest open-returns-an-id-the-engine-and-a-label
   (with-registry
     (fn [registry path]
       (let [{:keys [conn-id] :as r} (conn/open! registry path)]
         (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" conn-id))
-        (is (= path (:path r)))
+        (is (= :sqlite (:engine r)))
+        (is (= path (:label r)))
         (is (contains? @registry conn-id))))))
 
 (deftest a-blank-path-is-refused
   (with-registry
     (fn [registry _]
-      (is (str/includes? (message-of #(conn/open! registry "  ")) "path is required")))))
+      (is (str/includes? (message-of #(conn/open! registry "  ")) "is required")))))
 
 (deftest the-session-is-taken-once-and-keeps-state
   (with-registry
@@ -73,3 +74,45 @@
       (ig/halt-key! :quel.conn/registry registry)
       (is (= {} @registry))
       (finally (os/sh "rm" "-f" p1 p2)))))
+
+(deftest target-tells-paths-from-urls
+  (is (= {:engine :sqlite :path "/tmp/a.db"} (conn/target " /tmp/a.db ")))
+  (is (= {:engine :sqlite :path "relative.sqlite"} (conn/target "relative.sqlite")))
+  (is (= {:engine :postgres :url "postgres://u:p@localhost:5432/db"}
+         (conn/target "postgres://u:p@localhost:5432/db")))
+  (is (= {:engine :postgres :url "postgres://localhost/db"}
+         (conn/target "postgresql://localhost/db")))
+  (is (= {:engine :postgres :url "postgres://localhost/db"}
+         (conn/target "POSTGRES://localhost/db"))))
+
+(deftest target-recognises-redshift
+  (is (= {:engine :redshift :url "postgres://u:p@localhost:5439/dev"}
+         (conn/target "redshift://u:p@localhost:5439/dev")))
+  (is (= :redshift (:engine (conn/target "postgres://u:p@c1.abc123.us-east-1.redshift.amazonaws.com:5439/dev"))))
+  (is (= :redshift (:engine (conn/target "postgres://u@wg.123456789012.eu-west-1.redshift-serverless.amazonaws.com:5439/dev"))))
+  (is (= :postgres (:engine (conn/target "postgres://redshift.amazonaws.com.example.org/db")))
+      "only a host that ends in a Redshift domain counts"))
+
+(deftest the-label-masks-a-password
+  (is (= "postgres://u:***@h:5432/db" (conn/label (conn/target "postgres://u:secret@h:5432/db"))))
+  (is (= "postgres://u@h/db" (conn/label (conn/target "postgres://u@h/db"))))
+  (is (= "postgres://h/db"
+         (conn/label (conn/target "postgres://h/db?user=u&password=s3&sslmode=require"))))
+  (is (= "postgres://h/db" (conn/label (conn/target "postgres://h/db?pass%77ord=s3")))
+      "the query string is dropped whole, however a name is encoded")
+  (is (= "/tmp/a.db" (conn/label (conn/target "/tmp/a.db")))))
+
+(deftest connection-errors-hide-passwords
+  (with-registry
+    (fn [registry _]
+      (let [msg (message-of #(conn/open! registry "postgres://localhost/db?password=supersecret&sslmode=invalid"))]
+        (is (some? msg))
+        (is (not (str/includes? (str msg) "supersecret")) (str "got " msg)))
+      (let [msg (message-of #(conn/open! registry "postgres://u:supersecret@localhost:notaport/db"))]
+        (is (some? msg))
+        (is (not (str/includes? (str msg) "supersecret")) (str "got " msg))))))
+
+(deftest redact-masks-what-looks-like-a-password
+  (let [t (conn/target "postgres://u:s3@h/db?password=s4")]
+    (is (= "cannot parse `postgres://u:***@h/db`" (conn/redact t "cannot parse `postgres://u:s3@h/db?password=s4`")))
+    (is (= "host=h password=*** x" (conn/redact t "host=h password='a b' x")))))

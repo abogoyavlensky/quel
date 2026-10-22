@@ -36,3 +36,16 @@
   (let [row (cells/encode-row [1 nil 9007199254740992 "a"])]
     (is (vector? row))
     (is (= [1 nil "9007199254740992" "a"] row))))
+
+(deftest typed-strings-pass-through
+  ;; SQLite stores dates as text, whatever the declared type.
+  (is (= "2026-10-21" (cells/encode "DATE" "2026-10-21")))
+  (is (= "2026-10-21 10:00:00" (cells/encode "TIMESTAMP" "2026-10-21 10:00:00")))
+  (is (= "1.50" (cells/encode "NUMERIC" "1.50"))))
+
+(deftest binary-columns-show-a-placeholder
+  (is (= "(binary)" (cells/encode "BYTEA" "Þ�")))
+  (is (nil? (cells/encode "BYTEA" nil)) "NULL stays NULL"))
+
+(deftest typed-rows-line-up-with-their-types
+  (is (= [1 "(binary)" nil] (cells/encode-row ["INT4" "BYTEA" "TEXT"] [1 "x" nil]))))

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Smoke-test the app headless, in Wails' server mode: the frontend is
 # served, the handlers answer over the real bridge, a runaway query is
-# cancelled, and redefining a handler over the in-app nREPL changes the
-# running app with no restart.
+# cancelled (on Postgres too, when QUEL_PG_URL is set), and redefining a
+# handler over the in-app nREPL changes the running app with no restart.
 #
-#   lgx smoke    # or: bash scripts/smoke.sh
+#   lgx smoke       # or: bash scripts/smoke.sh
+#   lgx smoke-pg    # the same, with a throwaway Postgres in Docker
 #
 # Needs the Go toolchain, Node (to build the frontend if it is missing),
 # curl and python3. LGX picks the lgx binary (default: lgx on PATH);
@@ -93,6 +94,32 @@ kill -0 "$runaway_pid" 2>/dev/null && fail "the cancelled query did not return w
 [[ "$(cat "$tmp/runaway")" == *'Query canceled.'* ]] || fail "runaway reply: $(cat "$tmp/runaway")"
 
 call close-db "[\"$conn\"]" >/dev/null
+
+# Postgres, when one is configured (lgx smoke-pg, or CI): open the URL,
+# run, cancel, and run again on the same session.
+if [[ -n "${QUEL_PG_URL:-}" ]]; then
+    pg_opened="$(call open-db "[\"$QUEL_PG_URL\"]")"
+    pg="$(json "$pg_opened" "['conn-id']")" || fail "open-db (postgres): $pg_opened"
+    [[ "$pg_opened" == *'"engine":"postgres"'* ]] || fail "engine: $pg_opened"
+    [[ "$pg_opened" != *"$QUEL_PG_URL"* ]] || fail "the label shows the password: $pg_opened"
+    call run "[\"$pg\",\"pg-temp\",\"create temp table kept (x int)\"]" >/dev/null
+    call run "[\"$pg\",\"pg-sleep\",\"select pg_sleep(30)\"]" >"$tmp/pg-sleep" &
+    pg_pid=$!
+    pg_canceled=""
+    for _ in $(seq 1 50); do
+        sleep 0.1
+        pg_canceled="$(call cancel '["pg-sleep"]')"
+        [[ "$pg_canceled" == *'"canceled":true'* ]] && break
+    done
+    [[ "$pg_canceled" == *'"canceled":true'* ]] || fail "postgres cancel did not find the query: $pg_canceled"
+    wait "$pg_pid" || true
+    [[ "$(cat "$tmp/pg-sleep")" == *'Query canceled.'* ]] || fail "postgres cancel reply: $(cat "$tmp/pg-sleep")"
+    after="$(call run "[\"$pg\",\"pg-after\",\"select count(*) from kept\"]")"
+    [[ "$after" == *'"rows":[[0]]'* ]] || fail "the postgres session did not survive the cancel: $after"
+    call close-db "[\"$pg\"]" >/dev/null
+else
+    echo "smoke: postgres step skipped (QUEL_PG_URL is unset; lgx smoke-pg sets it)"
+fi
 
 # Redefine a handler in the running app. It is registered by var, so the
 # next call runs the new definition. (alter-var-root is fine here: this is

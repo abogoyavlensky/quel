@@ -52,13 +52,15 @@ Menus and file dialogs do nothing there.
 ## Test
 
 ```sh
-lgx test                    # backend
+lgx test                    # backend (the Postgres tests skip)
+lgx test-pg                 # backend, with a throwaway Postgres in Docker
 npm --prefix frontend test  # frontend
 lgx smoke                   # the app in server mode, driven over HTTP
+lgx smoke-pg                # the same, plus Postgres in Docker
 ```
 
-Without the webview headers, prefix `lgx test` and `lgx smoke` with
-`CGO_ENABLED=0 GOFLAGS=-tags=server`.
+The `-pg` tasks need Docker. Without the webview headers, prefix the test
+and smoke tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
 
 ## Build
 
