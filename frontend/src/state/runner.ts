@@ -68,10 +68,18 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       if (!current) return;
       if (i > 0 && (current.stopping || store.getState().conn?.connId !== conn.connId)) break;
       const queryId = i === 0 ? firstId : newId();
-      updateTab(tabId, (t) => ({ ...t, runningQueryId: queryId }));
+      // This run closes the session's open cursor on the backend: an
+      // earlier statement's result in this script has no more rows to give.
+      updateTab(tabId, (t) => ({
+        ...t,
+        runningQueryId: queryId,
+        results: t.results.map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
+      }));
       try {
         const r = await api.run(conn.connId, tabId, queryId, stmt.text);
         if (!findTab(tabId)) return;
+        // The database closed or changed while this ran: its cursor is gone.
+        const live = store.getState().conn?.connId === conn.connId;
         if (r.columns.length > 0) {
           lastResult = queryId;
           updateTab(tabId, (t) => ({
@@ -83,7 +91,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
                 sql: stmt.text,
                 columns: r.columns,
                 rows: r.rows,
-                cursor: r["has-more"] ? "open" : "done",
+                cursor: !r["has-more"] ? "done" : live ? "open" : "closed",
                 fetching: false,
                 pinned: false,
                 elapsedMs: r["elapsed-ms"],
@@ -124,7 +132,8 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
         ...t,
         runningQueryId: null,
         stopping: false,
-        active: failed || !lastResult ? MESSAGES : lastResult,
+        // The last result may have been closed while the script ran on.
+        active: !failed && lastResult && t.results.some((r) => r.id === lastResult) ? lastResult : MESSAGES,
       }));
     }
   }
@@ -149,25 +158,29 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
     return;
   }
 
+  const connId = store.getState().conn?.connId;
   updateResult(tabId, resultId, (r) => ({ ...r, fetching: true }));
   updateTab(tabId, (t) => ({ ...t, runningQueryId: resultId }));
   try {
     const p = await api.fetchPage(resultId);
     if (!findTab(tabId)) return;
+    const live = store.getState().conn?.connId === connId;
     updateResult(tabId, resultId, (r) => {
+      // Closed meanwhile (the database changed, the result was replaced).
+      if (r.cursor !== "open") return r;
       const rows = r.rows.concat(p.rows);
-      if (p.closed) return { ...r, rows, cursor: "closed" };
-      if (!p["has-more"]) return { ...r, rows, cursor: "done" };
-      if (rows.length >= maxRows) {
-        void api.closeResult(resultId).catch(() => {});
+      if (rows.length >= maxRows && (p["has-more"] || rows.length > maxRows)) {
+        if (p["has-more"] && !p.closed && live) void api.closeResult(resultId).catch(() => {});
         return { ...r, rows: rows.slice(0, maxRows), cursor: "capped" };
       }
+      if (p.closed || !live) return { ...r, rows, cursor: p["has-more"] || p.closed ? "closed" : "done" };
+      if (!p["has-more"]) return { ...r, rows, cursor: "done" };
       return { ...r, rows };
     });
   } catch (e) {
     if (!findTab(tabId)) return;
     const text = errorText(e);
-    updateResult(tabId, resultId, (r) => ({ ...r, cursor: "closed" }));
+    updateResult(tabId, resultId, (r) => (r.cursor === "open" ? { ...r, cursor: "closed" } : r));
     addMessage(tabId, {
       sql: result.sql,
       kind: text.startsWith("Query canceled.") ? "canceled" : "error",

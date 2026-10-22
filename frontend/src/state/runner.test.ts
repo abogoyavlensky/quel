@@ -162,6 +162,34 @@ describe("runStatements", () => {
     expect(api.run).not.toHaveBeenCalled();
   });
 
+  it("closes an earlier result's cursor when the script runs on", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(500, true)).mockResolvedValueOnce(update(1));
+    await runner.runStatements(tabId(), stmts("select 1; delete from t"));
+    expect(tab().results[0].cursor).toBe("closed");
+  });
+
+  it("does not open a cursor for a database that closed meanwhile", async () => {
+    const first = deferred<RunResult>();
+    api.run.mockReturnValueOnce(first.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    await runner.closeDb();
+    first.resolve(rowsResult(500, true));
+    await running;
+    expect(tab().results[0].cursor).toBe("closed");
+  });
+
+  it("does not activate a result closed while the script ran on", async () => {
+    const second = deferred<RunResult>();
+    api.run.mockResolvedValueOnce(rowsResult(1, false)).mockReturnValueOnce(second.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1; update t set x = 1"));
+    await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
+    runner.closeResult(tabId(), tab().results[0].id);
+    second.resolve(update(1));
+    await running;
+    expect(tab().results).toHaveLength(0);
+    expect(tab().active).toBe(MESSAGES);
+  });
+
   it("caps the messages log", async () => {
     api.run.mockResolvedValue(update(0));
     for (let i = 0; i < 510; i++) await runner.runStatements(tabId(), stmts("delete from t"));
@@ -221,6 +249,26 @@ describe("fetchMore", () => {
     expect(r.rows).toHaveLength(800);
     expect(r.cursor).toBe("capped");
     expect(api.closeResult).toHaveBeenCalledWith(id);
+  });
+
+  it("caps a final page too", async () => {
+    const id = await openResult();
+    api.fetchPage.mockResolvedValue({ ...page(400, false) });
+    await runner.fetchMore(tabId(), id, 800);
+    const r = tab().results[0];
+    expect(r.rows).toHaveLength(800);
+    expect(r.cursor).toBe("capped");
+  });
+
+  it("does not reopen a result whose database closed during the fetch", async () => {
+    const id = await openResult();
+    const p = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    const fetching = runner.fetchMore(tabId(), id);
+    await runner.closeDb();
+    p.resolve(page(500, true));
+    await fetching;
+    expect(tab().results[0].cursor).toBe("closed");
   });
 
   it("reads one page at a time", async () => {
