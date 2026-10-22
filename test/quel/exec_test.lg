@@ -109,6 +109,19 @@
   (is (false? (exec/rows? "insert into t values (1)")))
   (is (true? (exec/rows? "insert into t values (1) returning *"))))
 
+(deftest only-row-writes-report-a-count
+  (is (true? (exec/counts-rows? "insert into t values (1)")))
+  (is (true? (exec/counts-rows? "UPDATE t SET x = 1")))
+  (is (true? (exec/counts-rows? "with c(x) as (select 1) delete from t where x in (select x from c)")))
+  (is (false? (exec/counts-rows? "create temp table t (x int)")))
+  (is (false? (exec/counts-rows? "begin")))
+  (with-env
+    (fn [execs conns id]
+      (run execs conns id "create table w (x integer)")
+      (run execs conns id "insert into w (x) values (1)")
+      (is (nil? (:update-count (run execs conns id "create table w2 (x integer)")))
+          "not the previous insert's count"))))
+
 (deftest pragmas-and-writing-ctes-run-the-right-way
   (with-env
     (fn [execs conns id]

@@ -197,11 +197,25 @@
         (.Close rows)
         (throw e)))))
 
+(def ^:private row-writes #{"insert" "update" "delete" "replace" "merge"})
+
+(defn counts-rows?
+  "Does the statement's update count mean anything? Only for statements
+   that write rows: SQLite leaves its change counter alone for DDL (a
+   CREATE reports the previous INSERT's count), and Postgres answers 0."
+  [q]
+  (let [ts (tokens q)
+        head (first ts)]
+    (boolean (or (contains? row-writes head)
+                 (and (= "with" head)
+                      (contains? row-writes (outer-operation (rest ts))))))))
+
 (defn- run-exec [session ctx q]
-  {:columns []
-   :rows []
-   :has-more false
-   :update-count (.RowsAffected (shim/ExecCtx session ctx q []))})
+  (let [result (shim/ExecCtx session ctx q [])]
+    {:columns []
+     :rows []
+     :has-more false
+     :update-count (when (counts-rows? q) (.RowsAffected result))}))
 
 (def ^:private probe-timeout-ms 5000)
 
