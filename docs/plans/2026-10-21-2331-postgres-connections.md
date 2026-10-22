@@ -338,5 +338,57 @@ Quel (branch `postgres-connections`):
 
 ### Task 10: Review, PR
 
-- [ ] **Step 1:** Codex review of the branch against master in the background (as in Task 3). Fold real findings; re-run `lgx test-pg`, frontend tests, smoke.
-- [ ] **Step 2:** Push the branch, open a PR against `master`, link it, wait for CI green. Do not merge without the user.
+- [x] **Step 1:** Codex review of the branch against master in the background (as in Task 3). Fold real findings; re-run `lgx test-pg`, frontend tests, smoke.
+- [x] **Step 2:** Push the branch, open a PR against `master`, link it, wait for CI green. Do not merge without the user.
+
+> Deviation: the branch review found that a config error (`sslmode=invalid` with a `password=` parameter) quoted the URL, password included, back to the UI. `quel.conn/redact` now cleans connection errors the way `label` cleans the URL (fd9abab).
+
+## Completion summary
+
+Implemented, all tasks, 2026-10-22.
+
+- **Upstream:** letgo-packages #11 (merged): `postgres` gains an in-tree
+  shim, `postgres.shim/Open`, and `postgres.core/open` takes
+  `{:postgres/cancel :request}` so a cancel keeps the connection; a 10 s
+  connect timeout applies unless one is set; the package's first tests run
+  against a service container in CI. Tagged `postgres-v0.4.0` (still on
+  `sql-v0.3.0`) and verified from a throwaway project.
+- **Quel** (branch `postgres-connections`): `open-db` takes a file path or
+  a `postgres://` / `postgresql://` / `redshift://` URL (`quel.conn/target`,
+  engine `:redshift` for `redshift://` or a Redshift host); pools open
+  with the cancel-request mode and are pinged at open; the label hides the
+  password and the query string, and connection errors are redacted; a
+  failed run probes its session and resets a dead one; `rows?` adds
+  `fetch` and `call`; cells format dates and timestamps by column type and
+  show `bytea` as `(binary)`. `scripts/with-postgres.sh` with
+  `lgx test-pg` and `lgx smoke-pg`; CI runs both and triggers on `master`.
+  DESIGN, README, AGENTS updated; backlog `bytea-preview.md`.
+- **Verified:** `lgx test-pg` (52 tests, 165 assertions; the timestamptz
+  test also under `TZ` Asia/Kolkata, America/St_Johns, Asia/Tokyo),
+  frontend tests, lint and build, `lgx smoke-pg`, and headless Chromium
+  driving the screen against Postgres: open (label masked), a typed row,
+  cancel of `pg_sleep(30)` in 226 ms, then the session's temp table still
+  there. Not run: a real Redshift cluster (out of scope by decision), and
+  the macOS window (no change to the shell).
+
+Deviations, in one place:
+
+- Task 1's work landed in Task 2's commit.
+- The connect-timeout default applies only when no source sets
+  `connect_timeout` (explicit 0 kept; the DSN parsed with libpq quoting
+  and ASCII whitespace); an explicit 0 in a service file is not seen.
+- `with-postgres.sh` waits for a real `select 1`, not `pg_isready`.
+- The label drops the URL's query string rather than masking a
+  `password=` parameter; the frontend's label change moved to Task 5.
+- `encode` / `encode-row` keep one-argument arities; the timestamptz test
+  checks the instant, not a fixed offset.
+- The by-hand Postgres check became `smoke.sh`'s Postgres step and
+  `lgx smoke-pg`, run in CI.
+- Connection errors are redacted (`quel.conn/redact`).
+
+**What the plan could have specified better:** secrets in errors and
+time zones. It masked the password in the label but not in the errors
+that quote the same URL, and it pinned a UTC offset in a test whose
+result depends on the machine's zone. A plan that handles a secret should
+follow it into every message, and a plan that formats times should say
+which zone the tests run in.
