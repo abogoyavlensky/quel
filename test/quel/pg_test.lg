@@ -1,0 +1,51 @@
+(ns quel.pg-test
+  (:require [integrant.core :as ig]
+            [quel.conn :as conn]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+;; Against a real Postgres: `lgx test-pg` runs these with a throwaway one in
+;; Docker (scripts/with-postgres.sh sets QUEL_PG_URL). Plain `lgx test`
+;; skips them.
+
+(def pg-url (os/getenv "QUEL_PG_URL"))
+(def enabled? (not (str/blank? pg-url)))
+
+(when-not enabled?
+  (println "quel.pg-test: QUEL_PG_URL is unset, skipping (lgx test-pg runs them)"))
+
+(defmacro with-pg
+  "Run body only when a Postgres is configured."
+  [& body]
+  `(when enabled? ~@body))
+
+(defn with-registry
+  "Run (f registry) over a fresh registry, halting it afterwards."
+  [f]
+  (let [registry (ig/init-key :quel.conn/registry {})]
+    (try (f registry)
+         (finally (ig/halt-key! :quel.conn/registry registry)))))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(deftest open-a-postgres-url
+  (with-pg
+    (with-registry
+      (fn [registry]
+        (let [{:keys [conn-id engine label]} (conn/open! registry pg-url)]
+          (is (string? conn-id))
+          (is (= :postgres engine))
+          (is (str/includes? label ":***@"))
+          (is (not (str/includes? label "quel@")) "the password is masked")
+          (is (nil? (conn/close! registry conn-id)))
+          (is (= {} @registry)))))))
+
+(deftest a-wrong-password-fails-at-open
+  (with-pg
+    (with-registry
+      (fn [registry]
+        (let [bad (str/replace pg-url #":quel@" ":wrong@")
+              msg (message-of #(conn/open! registry bad))]
+          (is (str/includes? (str msg) "password authentication failed") (str "got " (pr-str msg)))
+          (is (= {} @registry) "nothing is left registered"))))))

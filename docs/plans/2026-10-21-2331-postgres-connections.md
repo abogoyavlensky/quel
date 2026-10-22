@@ -281,11 +281,11 @@ Quel (branch `postgres-connections`):
 - Modify: `src/quel/conn.lg`, `src/quel/api.lg`
 - Test: `test/quel/conn_test.lg`, `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Tests.** `conn_test`: `target` for a path, `postgres://`, `postgresql://`, `redshift://` (rewritten, engine redshift), a provisioned and a serverless Redshift host, and the label masking a password (`postgres://u:secret@h/db` → `postgres://u:***@h/db`; no password → unchanged). `pg_test` (gated on `QUEL_PG_URL`): `open!` returns `{:conn-id :engine :postgres :label}`; a wrong password throws at open with the server's message and leaves no registry entry; `close!` closes.
-- [ ] **Step 2:** Run `lgx test-pg` to see them fail.
-- [ ] **Step 3: Implement** `target`, the engine branch in `open!` (ping, close on failure), `:label`, and `reset-session!` (dissoc the session and close it, ignoring the close error). `close-entry!` closes by engine. Update the namespace comment.
-- [ ] **Step 4:** Run `lgx test-pg`: all pass. Update existing tests that read `:path` from the reply.
-- [ ] **Step 5: Commit** `"Open Postgres and Redshift URLs"`.
+- [x] **Step 1: Tests.** `conn_test`: `target` for a path, `postgres://`, `postgresql://`, `redshift://` (rewritten, engine redshift), a provisioned and a serverless Redshift host, and the label masking a password (`postgres://u:secret@h/db` → `postgres://u:***@h/db`; no password → unchanged). `pg_test` (gated on `QUEL_PG_URL`): `open!` returns `{:conn-id :engine :postgres :label}`; a wrong password throws at open with the server's message and leaves no registry entry; `close!` closes.
+- [x] **Step 2:** Run `lgx test-pg` to see them fail.
+- [x] **Step 3: Implement** `target`, the engine branch in `open!` (ping, close on failure), `:label`, and `reset-session!` (dissoc the session and close it, ignoring the close error). `close-entry!` closes by engine. Update the namespace comment.
+- [x] **Step 4:** Run `lgx test-pg`: all pass. Update existing tests that read `:path` from the reply.
+- [x] **Step 5: Commit** `"Open Postgres and Redshift URLs"`.
 
 ### Task 6: Running and cancelling on Postgres
 

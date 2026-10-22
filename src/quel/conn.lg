@@ -1,17 +1,25 @@
 (ns quel.conn
   (:refer-clojure :exclude [close!])
   (:require [integrant.core :as ig]
+            [postgres.core :as pg]
             [sql.shim :as shim]
             [sqlite.core :as sqlite]
             [string :as str]))
 
 ;; Open databases, keyed by a conn-id the frontend holds. Each entry is
-;; {:db <sqlite connectable> :path <string> :session <*sql.Conn or nil>}.
+;; {:db <connectable> :engine <:sqlite :postgres :redshift> :label <string>
+;;  :session <*sql.Conn or nil>}.
+;;
+;; What to open arrives as one string: a SQLite file path, or a
+;; postgres:// / postgresql:// / redshift:// URL. Postgres and Redshift
+;; share the pgx driver; the engine is kept for what differs later (the
+;; catalog queries). A password in the URL is a stopgap until connection
+;; profiles keep it in the Keychain.
 ;;
 ;; The pool (:db) is for work that can take any connection; statements the
 ;; user runs go to the session, a dedicated connection taken on first use,
 ;; so session state (BEGIN ... COMMIT, temp tables) behaves as in a shell.
-;; Milestone 0 keeps one session per database; milestone 1 makes it one
+;; For now there is one session per database; later in milestone 1, one
 ;; per editor tab.
 ;;
 ;; The registry is an atom; the component's value is the atom.
@@ -24,14 +32,62 @@
   (let [s (str (random-uuid))]
     (or (re-find #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" s) s)))
 
+(def ^:private url-re #"(?i)^(postgres|postgresql|redshift)://")
+
+;; The host of a URL: after the scheme and any user:password@, up to the
+;; port, path or query. An IPv6 literal's brackets are dropped.
+(def ^:private host-re #"(?i)^[a-z]+://(?:[^/?#]*@)?\[?([^/?#:\]]+)")
+
+(def ^:private redshift-hosts [".redshift.amazonaws.com" ".redshift-serverless.amazonaws.com"])
+
+(defn target
+  "What `s` names: {:engine :sqlite :path p} for a file path, or
+   {:engine :postgres|:redshift :url u} for a URL. A redshift:// URL is
+   rewritten to postgres:// for pgx; it, or a Redshift host, makes the
+   engine :redshift."
+  [s]
+  (let [s (str/trim (str s))]
+    (when (str/blank? s)
+      (throw (ex-info "A file path or postgres:// URL is required." {})))
+    (if-let [[_ scheme] (re-find url-re s)]
+      (let [host (str/lower-case (or (second (re-find host-re s)) ""))
+            redshift? (or (= "redshift" (str/lower-case scheme))
+                          (some #(str/ends-with? host %) redshift-hosts))]
+        {:engine (if redshift? :redshift :postgres)
+         :url (str/replace s url-re "postgres://")})
+      {:engine :sqlite :path s})))
+
+(defn label
+  "How the UI shows a target: the path, or the URL with any password
+   (user:password@, or a password= parameter) replaced by ***."
+  [{:keys [path url]}]
+  (if url
+    (-> url
+        (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@")
+        (str/replace #"([?&]password=)[^&#]*" "$1***"))
+    path))
+
+(defn- connect
+  "A connectable for target. Postgres pools keep a session across a
+   cancelled query (:postgres/cancel :request), and are pinged so a wrong
+   password or host fails here, not at the first run."
+  [{:keys [engine path url]}]
+  (if (= :sqlite engine)
+    (sqlite/open path)
+    (let [db (pg/open url {:postgres/cancel :request})]
+      (when-let [err (.Ping (:sql/handle db))]
+        (pg/close! db)
+        (throw (ex-info (.Error err) {})))
+      db)))
+
 (defn open!
-  "Open the SQLite database at path. Returns {:conn-id :path}."
-  [registry path]
-  (when (str/blank? path)
-    (throw (ex-info "A database path is required." {})))
-  (let [id (new-id)]
-    (swap! registry assoc id {:db (sqlite/open path) :path path :session nil})
-    {:conn-id id :path path}))
+  "Open what `s` names (see `target`). Returns {:conn-id :engine :label}."
+  [registry s]
+  (let [t (target s)
+        id (new-id)
+        e {:db (connect t) :engine (:engine t) :label (label t) :session nil}]
+    (swap! registry assoc id e)
+    {:conn-id id :engine (:engine e) :label (:label e)}))
 
 (defn- entry [registry conn-id]
   (or (get @registry conn-id)
@@ -61,9 +117,25 @@
         (or winner
             (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))
 
-(defn- close-entry! [{:keys [db session]}]
+(defn reset-session!
+  "Drop the database's session, so the next session! takes a fresh
+   connection. For a session whose connection died; closing it is best
+   effort."
+  [registry conn-id]
+  (let [[old _] (swap-vals! registry
+                            (fn [m]
+                              (if (contains? m conn-id)
+                                (assoc-in m [conn-id :session] nil)
+                                m)))]
+    (when-let [session (get-in old [conn-id :session])]
+      (.Close session))
+    nil))
+
+(defn- close-entry! [{:keys [db engine session]}]
   (when session (.Close session))
-  (sqlite/close! db))
+  (if (= :sqlite engine)
+    (sqlite/close! db)
+    (pg/close! db)))
 
 (defn close!
   "Close the database's session, then the database. Unknown ids are a
