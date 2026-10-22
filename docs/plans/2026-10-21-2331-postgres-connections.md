@@ -318,10 +318,12 @@ Quel (branch `postgres-connections`):
 **Files:**
 - Modify: `frontend/src/App.tsx`, `frontend/src/lib/types.ts`, `scripts/smoke.sh` (only if it reads `:path`)
 
-- [ ] **Step 1:** `OpenResult` becomes `{"conn-id", engine, label}`; the input's placeholder and aria-label and the "Open:" line as in the design.
-- [ ] **Step 2:** `npm --prefix frontend test`, `npm --prefix frontend run lint`, `lgx fe-build`, and `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke` all pass.
-- [ ] **Step 3:** By hand in server mode with a Postgres container (`scripts/with-postgres.sh` with a command that prints `$QUEL_PG_URL` and sleeps, or a manual container): open the URL in the page through headless Chromium or curl on the bridge, run a query, cancel `select pg_sleep(30)`, run again. Expected: rows, "Query canceled.", then rows.
-- [ ] **Step 4: Commit** `"Open a Postgres URL from the spike screen"`.
+- [x] **Step 1:** `OpenResult` becomes `{"conn-id", engine, label}`; the input's placeholder and aria-label and the "Open:" line as in the design.
+- [x] **Step 2:** `npm --prefix frontend test`, `npm --prefix frontend run lint`, `lgx fe-build`, and `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke` all pass.
+- [x] **Step 3:** By hand in server mode with a Postgres container (`scripts/with-postgres.sh` with a command that prints `$QUEL_PG_URL` and sleeps, or a manual container): open the URL in the page through headless Chromium or curl on the bridge, run a query, cancel `select pg_sleep(30)`, run again. Expected: rows, "Query canceled.", then rows.
+- [x] **Step 4: Commit** `"Open a Postgres URL from the spike screen"`.
+
+> Deviation: Step 3's by-hand Postgres pass became permanent: `smoke.sh` drives Postgres over the bridge when `QUEL_PG_URL` is set (open, masked label, cancel `pg_sleep`, the session's temp table still there), new task `lgx smoke-pg` wraps it in `with-postgres.sh`, and CI runs `smoke-pg`.
 
 ### Task 9: Docs and backlog
 

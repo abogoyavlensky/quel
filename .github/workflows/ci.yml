@@ -53,4 +53,4 @@ jobs:
       # The nREPL step is skipped: its client lives in a letgo-packages
       # checkout, which CI does not have.
       - name: Smoke test
-        run: lgx smoke
+        run: lgx smoke-pg
