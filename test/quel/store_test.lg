@@ -71,3 +71,16 @@
     (ig/halt-key! :quel.store/db db)
     (is (= :threw (try (sql/execute! db ["select 1"]) :ran (catch e :threw))))
     (os/sh "rm" "-rf" dir)))
+
+;; The path goes to the driver as a URI: characters that mean something in
+;; one stay part of the file name.
+(deftest odd-characters-in-the-path
+  (let [base (temp-dir)
+        dir (str base "/data?copy #1 100%")
+        db (ig/init-key :quel.store/db {:dir dir})]
+    (try
+      (is (false? (:dir? (os/stat (str dir "/quel.db")))))
+      (is (nil? (os/stat (str base "/data"))))
+      (finally
+        (ig/halt-key! :quel.store/db db)
+        (os/sh "rm" "-rf" base)))))
