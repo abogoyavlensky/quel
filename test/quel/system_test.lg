@@ -7,8 +7,8 @@
 ;; check the config's shape.
 
 (deftest the-config-names-every-component
-  (is (= #{:quel.conn/registry :quel.exec/registry :quel.api/handlers :quel.shell/app :quel.shell/window
-           :quel.menu/menu :quel.dev/loop}
+  (is (= #{:quel.conn/registry :quel.exec/registry :quel.exec/sweeper :quel.api/handlers
+           :quel.shell/app :quel.shell/window :quel.menu/menu :quel.dev/loop}
          (set (keys (system/config))))))
 
 (deftest the-window-menu-and-dev-loop-hang-off-the-app

@@ -60,7 +60,8 @@ size.
 | App storage | SQLite in the per-user data dir, migrated with ragtime |
 | Frontend build | Vite, TypeScript, React |
 | UI components | shadcn/ui (Tailwind) |
-| Data and grid | TanStack Query, TanStack Table, TanStack Virtual |
+| Grid | TanStack Virtual (rows and columns), a hand-written column model |
+| App state | zustand; TanStack Query for metadata reads (from the structure browser on) |
 | SQL editor | CodeMirror 6 with `@codemirror/lang-sql` |
 | Diagrams | React Flow (`@xyflow/react`) with elkjs for layout |
 
@@ -156,10 +157,25 @@ it:
 - **Metadata** (the structure tree, completion, DDL) takes any pooled
   connection.
 - **Each editor tab gets its own session**: a dedicated `*sql.Conn` taken
-  from the pool on first run and held while the tab is open. Session
-  state (`BEGIN` ... `COMMIT`, `SET search_path`, temp tables) therefore
-  behaves the way it does in `psql`. The editor shows when a tab's session
-  is inside an open transaction, and closing such a tab asks first.
+  on the tab's first run and held while the tab is open; the tab's id is
+  its session-id. Session state (`BEGIN` ... `COMMIT`, `SET search_path`,
+  temp tables) therefore behaves the way it does in `psql`. The editor is
+  to show when a tab's session is inside an open transaction, and closing
+  such a tab is to ask first; that needs the driver's transaction state
+  through a shim (backlog: `open-transaction-indicator.md`).
+
+Sessions come from a second pool per connection that keeps no idle
+connections (`SetMaxIdleConns 0`). Closing a session then closes its
+connection rather than parking it, so a closed tab's settings, temp tables
+or (on SQLite) open transaction never reach whoever takes that connection
+next. pgx alone discards a connection returned inside a transaction, but
+not one with changed settings, and modernc discards neither.
+
+A closed tab's session-id is retired, and the backend refuses it from then
+on. Bridge calls run concurrently, so a run the frontend sent just before
+closing the tab can arrive after the close; without the tombstone it would
+open a session nothing owns. Closing a session goes in this order: retire
+the id, close its query or cursor, then close the connection.
 
 Statements run in autocommit unless the user opens a transaction.
 
@@ -180,8 +196,8 @@ of single statements.
 
 ### Running
 
-`run` takes a frontend-generated `query-id`, so the query can be cancelled
-before its first row arrives:
+`run` takes the tab's session-id and a frontend-generated `query-id`, so
+the query can be cancelled before its first row arrives:
 
 1. `quel.classify` checks the statement. On a read-only profile a write is
    refused; with confirmation on, the frontend has already shown the
@@ -212,20 +228,47 @@ the user still has to `ROLLBACK`.
 
 ### Cursor lifetime
 
-An open cursor holds a connection and, on Redshift, cluster resources. A
-cursor is closed when it is fully read, when the user cancels, when its
-result tab is closed or replaced, or after five idle minutes. A result
-whose cursor closed early stays visible and says "showing N rows - run
-again for more". Cancelling before close matters: draining an unread
-million-row result just to close it would be slow.
+An open cursor holds its session's connection, cluster resources on
+Redshift, and a read lock on SQLite. The latter means a write from another
+tab gets `SQLITE_BUSY` until the cursor is gone. A result with more rows
+than its first page keeps its cursor open under its query-id, and
+`fetch-page` reads on from it. A session has one cursor at most, since a
+connection with open rows cannot run another statement. The cursor closes
+when:
+
+- it is read to the end;
+- the session runs another statement, so a script's earlier results keep
+  the rows they have;
+- its result tab is closed or replaced (`close-result`), or its tab closes;
+- the database closes;
+- it sits unread for five minutes (a sweeper checks every 30 s).
+
+A result whose cursor closed early stays visible and says "Showing N rows:
+run again for more".
+
+Closing a cursor differs by engine. SQLite resets the statement, which is
+instant. pgx's `Rows.Close` reads and discards the rest of the result. A
+cancel would be faster, but inside an explicit transaction it aborts the
+transaction, and a script of `begin; select <big>; insert ...` must not
+fail because the insert closed the select's cursor. So Quel drains first
+and cancels only if draining takes more than a second. A cursor with a lot
+left unread is then cancelled after all. Inside a transaction the user
+then sees "current transaction is aborted" on the next statement, as after
+a cancel in psql. A page that is being read when its cursor closes is
+cancelled at once.
 
 ### Results and pinning
 
-Each run of a row-returning statement produces a result tab. The newest
-unpinned tab is replaced by the next run, as in JetBrains; a **pinned**
-tab is never replaced and keeps its rows until closed. Running a script
-produces one tab per row-returning statement, and one summary for the
-update counts.
+Each row-returning statement of a run gets its own result tab. A run
+first drops the editor tab's unpinned results, so a script's results are
+replaced together. A **pinned** tab is never replaced and keeps its rows
+until closed; its cursor closes on the next run in its tab, as above.
+Every statement's outcome (rows, rows affected, or the error) goes to the
+tab's Messages log. An update count shows only for statements that write
+rows: SQLite leaves its change counter alone for DDL, and Postgres answers
+0. Others say "Done". The first error, or a cancel, stops a script. A
+result loads at most 100,000 rows; past that, its cursor is closed and the
+result says so.
 
 ### Cell encoding
 
@@ -316,15 +359,30 @@ Layout, in resizable panes (shadcn `Resizable`):
 
 ```
 ┌──────────┬───────────────────────────────────────────┐
-│ profiles │ [tab: sales.sql] [tab: scratch] [+]        │
-│ ──────── │  CodeMirror editor                         │
-│ structure│                                            │
-│ tree     ├───────────────────────────────────────────┤
-│          │ [result 1 📌] [result 2] [messages]         │
-│          │  TanStack Table + Virtual grid             │
+│ database │ [Query 1 ×] [Query 2 ×] [+]               │
+│ (profiles│  CodeMirror editor                         │
+│  later)  ├───────────────────────────────────────────┤
+│ structure│ [Messages] [select … 📌 ×] [select … ×]    │
+│ tree     │  virtualized grid                          │
 └──────────┴───────────────────────────────────────────┘
- status bar: profile · session state · rows · elapsed · cancel
+ status bar: database · tab state · rows · elapsed · cancel
 ```
+
+App state lives in a zustand store. The run flow (`state/runner.ts`) is
+plain async functions over it and the handlers, so menu events and
+keymaps call the same code and tests mock only the bridge. One statement
+or page is in flight per editor tab: a run while one is in flight is
+dropped, which also makes a shortcut that both the native menu and the
+editor see harmless. After every await, the runner checks that the tab
+still exists, and a closed tab's late reply is dropped. Each tab's
+CodeMirror `EditorState` (document, selection, undo history) is kept
+outside the store and swapped into the one editor on tab change.
+TanStack Query is for metadata reads, from the structure browser on.
+
+The frontend splits statements itself (`sql/split.ts`): quotes,
+dollar quotes, comments, Postgres arrays versus SQLite `[identifiers]`,
+and the bodies of SQLite triggers and `BEGIN ATOMIC` functions, where a
+`;` does not end the statement.
 
 - `Cmd+K` (shadcn `Command`) jumps to any table, view or function and
   opens its structure, data or DDL.
@@ -370,22 +428,21 @@ away from.
 
 `lgx run` starts the app with an nREPL inside it (as in wails-tasks), so
 backend handlers are redefined from the editor without a restart. On the
-frontend side, `lgx fe-watch` runs `vite build --watch` into
-`resources/public`, and the running app reloads the window when it
-changes - about a second per edit.
-
-Pointing the window at the Vite dev server (real HMR) does not work yet:
-the wails package serves assets through its own handler, which ignores
-Wails' `FRONTEND_DEVSERVER_URL` proxy, and a page served from Vite's origin
-cannot reach the bridge. That is an upstream change to the wails package,
-tracked in the backlog.
+frontend side, `lgx dev` runs Vite's dev server and the app with
+`FRONTEND_DEVSERVER_URL` pointing at it. The wails package (v0.3.0) then
+proxies the page's assets from Vite through Wails' own handler, so the
+page keeps Wails' origin and reaches the bridge, while Vite's HMR
+websocket goes to Vite directly (`server.ws.clientPort`). An edit applies
+in place and keeps React state. Without the dev server, `lgx fe-watch`
+rebuilds into `resources/public` and the running app reloads the window,
+about a second per edit.
 
 ### Builds
 
 `lgx build` bundles the app (`lg -b`) with `resources/public` embedded
-and the `production` build tag (once an lgx release carries
-`:go/build-tags`; lgx 0.5.0 does not, so builds keep Wails' devtools for
-now). Packaging into a `.app`, icons, a dmg,
+and the `production` build tag (`:go/build-tags`, lgx 0.5.1), which drops
+Wails' devtools and dev asset server, and makes the wails package ignore
+`FRONTEND_DEVSERVER_URL`. Packaging into a `.app`, icons, a dmg,
 signing and notarization is the `wails3` CLI's job on the built binary.
 
 `:target :native` is a later goal, not on the critical path. It cannot
@@ -411,10 +468,13 @@ code stays native-compatible so switching later is cheap:
   what Quel does over pgx (connect, query, sessions, cancel, value types);
   the Redshift-specific questions under [Unverified](#unverified) wait for
   a real cluster.
-- **Frontend**: Vitest for pure logic (the splitter, cell rendering).
+- **Frontend**: Vitest for logic: the splitter, statement targeting, cell
+  display and widths, and the runner against a mocked bridge.
 - **End to end**: `lgx smoke` drives the app in Wails' server mode over
   HTTP; `lgx smoke-pg` adds Postgres (open, cancel, the session
-  surviving). Playwright for the UI comes with the real screens.
+  surviving, paging). `lgx e2e` drives the UI with Playwright in server
+  mode: paging as the grid scrolls, scripts, pinning, cancel, and one
+  session per tab. CI runs all three.
 
 ## Upstream work
 
@@ -426,7 +486,7 @@ package feature, not app glue.
 | `letgo-packages/sql` | Done in `sql-v0.3.0`: `NewCtx`/`QueryCtx`/`ExecCtx` (cancellable queries), `Conn` (sessions), a `Connectable` covering `*sql.Conn`, `ColumnTypeNames`; the shim ships in-tree | cancellation, per-tab sessions, column types |
 | `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
 | `letgo-packages/sql` | `ScanRow` keeps binary values as bytes (today `[]byte` becomes a string) | the bytea / BLOB preview |
-| `letgo-packages/wails` | Proxy `FRONTEND_DEVSERVER_URL` in the asset handler | Vite HMR in the dev loop |
+| `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
 | new `letgo-packages/keyring` | Keychain access, e.g. over `zalando/go-keyring` | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` / let-go | Resource embedding and per-target build tags for `:target :native` | the native build |
@@ -443,12 +503,13 @@ package feature, not app glue.
 1. **Workhorse core - Redshift and SQLite.** First slice done 2026-10-22:
    Postgres and Redshift URLs open, run and cancel with the session
    surviving, tested against Postgres in Docker. The Redshift-specific
-   checks (see [Unverified](#unverified)) wait for a cluster. Then
-   profiles and Keychain;
-   structure tree (schemas, tables, views, columns); editor with
-   highlighting and completion; run statement, selection or script; paged
-   grid with cancel; result tabs with pinning; errors; history; workspace
-   restore.
+   checks (see [Unverified](#unverified)) wait for a cluster. Second
+   slice done 2026-10-22: editor tabs with a session each; CodeMirror
+   with highlighting and keyword completion; run statement, selection or
+   script; a virtualized grid paging through open cursors, with cancel;
+   result tabs with pinning; the messages log; HMR in the dev loop. Then
+   profiles and Keychain; structure tree (schemas, tables, views,
+   columns) and schema completion; history; workspace restore.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
    procedures, table info; DDL view and export; write confirmation and
    read-only profiles; `Cmd+K`.
@@ -499,8 +560,6 @@ settles them; update this section when it does.
 - **Distribution.** Signing and notarization need a paid Apple Developer
   account. Without it, the app ships unsigned and users clear the
   quarantine flag. Decide before the first public release.
-- **Frontend state outside TanStack Query** (tabs, layout): plain React
-  context or a small store such as zustand.
 - **Redshift authentication** beyond user and password: IAM
   (`GetClusterCredentials`, Serverless `GetCredentials`) or SSO - which
   ones, and when.

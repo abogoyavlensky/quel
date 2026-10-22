@@ -13,14 +13,24 @@
 (defn open-db [{:keys [conns]} path]
   (conn/open! conns path))
 
-(defn close-db [{:keys [conns]} conn-id]
-  (conn/close! conns conn-id))
+(defn close-db [{:keys [conns execs]} conn-id]
+  (exec/close-conn! execs conns conn-id))
 
-(defn run [{:keys [conns execs]} conn-id query-id sql]
-  (exec/run! execs conns {:conn-id conn-id :query-id query-id :sql sql}))
+(defn run [{:keys [conns execs]} conn-id session-id query-id sql]
+  (exec/run! execs conns {:conn-id conn-id :session-id session-id
+                          :query-id query-id :sql sql}))
+
+(defn fetch-page [{:keys [conns execs]} query-id]
+  (exec/fetch-page! execs conns query-id))
 
 (defn cancel [{:keys [execs]} query-id]
   {:canceled (exec/cancel! execs query-id)})
+
+(defn close-result [{:keys [execs]} query-id]
+  (exec/close-result! execs query-id))
+
+(defn close-session [{:keys [conns execs]} conn-id session-id]
+  (exec/close-session! execs conns conn-id session-id))
 
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
@@ -30,7 +40,10 @@
    "open-db" #'open-db
    "close-db" #'close-db
    "run" #'run
-   "cancel" #'cancel})
+   "fetch-page" #'fetch-page
+   "cancel" #'cancel
+   "close-result" #'close-result
+   "close-session" #'close-session})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

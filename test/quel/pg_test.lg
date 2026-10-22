@@ -65,7 +65,7 @@
         (ig/halt-key! :quel.conn/registry conns)))))
 
 (defn- run [execs conns conn-id q]
-  (exec/run! execs conns {:conn-id conn-id :query-id (str (random-uuid)) :sql q}))
+  (exec/run! execs conns {:conn-id conn-id :session-id "s1" :query-id (str (random-uuid)) :sql q}))
 
 (defn- first-cell [execs conns conn-id q]
   (ffirst (:rows (run execs conns conn-id q))))
@@ -88,7 +88,7 @@
         (run execs conns id "create temp table kept (x int)")
         (let [qid (str (random-uuid))
               t0 (System/nanoTime)
-              f (future (try (exec/run! execs conns {:conn-id id :query-id qid
+              f (future (try (exec/run! execs conns {:conn-id id :session-id "s1" :query-id qid
                                                      :sql "select pg_sleep(30)"})
                              (catch e (ex-message e))))]
           (sleep 300)
@@ -128,6 +128,20 @@
           (is (= pid (first-cell execs conns id "select pg_backend_pid()"))
               "the same connection throughout"))))))
 
+(deftest two-tabs-two-sessions
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [in (fn [sid q] (exec/run! execs conns {:conn-id id :session-id sid
+                                                    :query-id (str (random-uuid)) :sql q}))]
+          (in "a" "create temp table only_a (x int)")
+          (is (= [[0]] (:rows (in "a" "select count(*) from only_a"))))
+          (is (str/includes? (str (try (in "b" "select count(*) from only_a") nil
+                                       (catch e (ex-message e))))
+                             "does not exist"))
+          (is (not= (ffirst (:rows (in "a" "select pg_backend_pid()")))
+                    (ffirst (:rows (in "b" "select pg_backend_pid()"))))))))))
+
 (defn- utc-minute-of-day
   "Minutes past midnight UTC of an ISO-8601 timestamp with an offset (Z, or
    +HH:MM / -HH:MM, fractional-hour zones included), or nil if s is not
@@ -165,3 +179,74 @@
             (is (= "1.50" n))
             (is (= "9007199254740993" big))
             (is (nil? nd))))))))
+
+;; Open cursors on Postgres.
+
+(defn- until
+  "Poll pred every 10 ms for up to 5 s; its last value."
+  [pred]
+  (loop [n 0]
+    (let [v (pred)]
+      (if (or v (>= n 500)) v (do (sleep 10) (recur (inc n)))))))
+
+(defn- run-q [execs conns id qid q & {:as opts}]
+  (exec/run! execs conns (merge {:conn-id id :session-id "s1" :query-id qid :sql q} opts)))
+
+(deftest closing-a-big-cursor-is-quick-and-keeps-the-session
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept (x int)")
+        (let [r (run-q execs conns id "big" "select * from generate_series(1, 10000000)")]
+          (is (true? (:has-more r))))
+        (let [t0 (System/nanoTime)]
+          (exec/close-result! execs "big")
+          (is (< (quot (- (System/nanoTime) t0) 1000000) 3000) "drain, then cancel"))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept"))
+            "the temp table survived, so the session did")))))
+
+(deftest a-new-run-inside-a-transaction-keeps-it
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "begin")
+        (run execs conns id "create temp table tx (x int)")
+        (is (true? (:has-more (run-q execs conns id "small" "select * from generate_series(1, 20000)"))))
+        (is (= 1 (:update-count (run execs conns id "insert into tx values (1)")))
+            "closing the cursor drained it: the transaction is not aborted")
+        (run execs conns id "commit")
+        (is (= 1 (first-cell execs conns id "select count(*) from tx")))))))
+
+(deftest cancel-a-slow-page
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept2 (x int)")
+        (run-q execs conns id "slow" "select pg_sleep(0.01) from generate_series(1, 100000)"
+               :page-size 1)
+        (let [page (future (try (exec/fetch-page! execs conns "slow" 50000)
+                                (catch e (ex-message e))))]
+          (is (until #(= :fetching (get-in @execs ["slow" :state]))))
+          (sleep 200)
+          (is (true? (exec/cancel! execs "slow")))
+          (is (= "Query canceled." (deref page 5000 :timeout))))
+        (is (= {} @execs))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept2"))
+            "the session survived")))))
+
+(deftest a-run-is-cancellable-while-the-previous-cursor-drains
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept3 (x int)")
+        (is (true? (:has-more (run-q execs conns id "big" "select * from generate_series(1, 10000000)"))))
+        ;; This run first drains "big" for up to drain-ms; it is registered
+        ;; meanwhile, so the cancel finds it and it never starts.
+        (let [next-run (future (try (run-q execs conns id "next" "select pg_sleep(30)")
+                                    (catch e (ex-message e))))]
+          (is (until #(= :running (get-in @execs ["next" :state]))))
+          (is (true? (exec/cancel! execs "next")))
+          (is (= "Query canceled." (deref next-run 5000 :timeout))))
+        (is (= {} @execs))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept3"))
+            "the session survived")))))

@@ -12,15 +12,17 @@
  :lg-runtime :built
  :lg-version "1.13.0"
 
- ;; The `production` build tag (drops Wails' devtools and dev asset server
- ;; from the shipped binary) waits on an lgx release carrying
- ;; :go/build-tags; lgx 0.5.0 predates it.
- :targets {:bin {:out "bin/quel"}}
+ ;; `production` drops Wails' devtools and dev asset server from the shipped
+ ;; binary (and the wails package's dev-server proxy). It applies to `lgx
+ ;; build` only; `lgx run` keeps the dev build.
+ :targets {:bin {:out "bin/quel" :go/build-tags ["production"]}}
 
  :deps {;; The desktop shell: a Wails v3 window whose handlers are let-go fns.
+        ;; wails-v0.3.0 is the first that serves the frontend from a dev
+        ;; server (FRONTEND_DEVSERVER_URL), for HMR under `lgx dev`.
         abogoyavlensky/letgo-wails
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "wails-v0.2.0"
+         :git/tag "wails-v0.3.0"
          :deps/root "wails"}
 
         ;; An nREPL inside the running app, started only under `lgx run`.
@@ -57,7 +59,9 @@
          :git/tag "1.0.1"}}
 
  :tasks
- {fe-install {:doc "Install the frontend's npm packages"
+ {dev {:doc "Run the app with the frontend from Vite's dev server (HMR)"
+       :do {:sh "bash scripts/dev.sh"}}
+  fe-install {:doc "Install the frontend's npm packages"
               :do {:sh "npm --prefix frontend ci"}}
   fe-build {:doc "Build the frontend into resources/public"
             :do {:sh "npm --prefix frontend run build"}}
@@ -67,6 +71,8 @@
          :do [{:task fe-build} {:task lgx:build}]}
   test-pg {:doc "Run the backend tests with a throwaway Postgres in Docker"
            :do {:sh "bash scripts/with-postgres.sh lgx test"}}
+  e2e {:doc "Run the Playwright UI tests against the app in server mode"
+       :do {:sh "bash scripts/e2e.sh"}}
   smoke {:doc "Run the app in server mode and drive the bridge over HTTP"
          :do {:sh "bash scripts/smoke.sh"}}
   smoke-pg {:doc "The smoke test, plus Postgres, with a throwaway one in Docker"

@@ -1,6 +1,8 @@
 # The window cannot load from the Vite dev server, so the frontend has no HMR
 
-**Status: open**
+**Status: done**
+
+Landed in letgo-packages `wails-v0.3.0` (#12, the asset handler proxies `FRONTEND_DEVSERVER_URL` in dev builds) and Quel's `lgx dev`, by `docs/plans/2026-10-22-0833-query-loop.md`, 2026-10-22.
 
 ## Problem
 

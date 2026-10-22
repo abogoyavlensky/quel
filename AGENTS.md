@@ -14,15 +14,17 @@ built into `resources/public`.
 | | |
 |---|---|
 | `lgx fe-install` / `lgx fe-build` / `lgx fe-watch` | frontend deps, build, rebuild on change |
-| `lgx run` | the app with an nREPL inside (`.nrepl-port`) |
+| `lgx dev` | the app with its frontend from Vite's dev server (HMR) and an nREPL inside (`.nrepl-port`) |
+| `lgx run` | the app with an nREPL inside, the frontend from `resources/public` |
 | `lgx test` | backend tests (Postgres tests skip) |
 | `lgx test-pg` | backend tests with a throwaway Postgres in Docker |
 | `npm --prefix frontend test` | frontend tests |
 | `lgx smoke` / `lgx smoke-pg` | server-mode smoke test over HTTP; `-pg` adds Postgres in Docker |
+| `lgx e2e` | Playwright UI tests against the app in server mode |
 | `lgx build` | frontend + binary at `bin/quel` |
 
-On Linux without GTK4/WebKitGTK headers, prefix `lgx run` and the test
-and smoke tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`
+On Linux without GTK4/WebKitGTK headers, prefix `lgx dev`, `lgx run` and
+the test, smoke and e2e tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`
 tasks need Docker.
 
 ## Rules that bite
@@ -36,6 +38,9 @@ tasks need Docker.
 - No `with-redefs` / `alter-var-root` in application code, and no SQL or
   other runtime data loaded from resources (keeps `:target :native`
   possible).
+- React effects get braces: `useEffect(() => { el.scrollIntoView() }, ...)`.
+  Current Chromium returns a Promise from `scrollIntoView`, and an arrow
+  that returns it hands React a "cleanup" it crashes on.
 - `os/getenv` returns `""` for an unset variable, and `""` is truthy: check
   with `str/blank?`.
 
