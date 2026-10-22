@@ -287,6 +287,8 @@ Quel (branch `postgres-connections`):
 - [x] **Step 4:** Run `lgx test-pg`: all pass. Update existing tests that read `:path` from the reply.
 - [x] **Step 5: Commit** `"Open Postgres and Redshift URLs"`.
 
+> Deviation: the label drops the URL's query string instead of masking a `password=` parameter: pgx decodes parameter names (`pass%77ord=`), so masking by name could leak (codex). The frontend's `OpenResult` and "Open:" line moved here from Task 8 Step 1, so no commit shows `Open: undefined`.
+
 ### Task 6: Running and cancelling on Postgres
 
 **Files:**

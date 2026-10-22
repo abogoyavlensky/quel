@@ -58,13 +58,15 @@
       {:engine :sqlite :path s})))
 
 (defn label
-  "How the UI shows a target: the path, or the URL with any password
-   (user:password@, or a password= parameter) replaced by ***."
+  "How the UI shows a target: the path, or the URL with its password
+   replaced by *** and its query string dropped. The query can carry a
+   password too, under names pgx decodes (pass%77ord=...), so none of it
+   is shown."
   [{:keys [path url]}]
   (if url
     (-> url
-        (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@")
-        (str/replace #"([?&]password=)[^&#]*" "$1***"))
+        (str/replace #"[?#].*$" "")
+        (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@"))
     path))
 
 (defn- connect

@@ -96,6 +96,8 @@
 (deftest the-label-masks-a-password
   (is (= "postgres://u:***@h:5432/db" (conn/label (conn/target "postgres://u:secret@h:5432/db"))))
   (is (= "postgres://u@h/db" (conn/label (conn/target "postgres://u@h/db"))))
-  (is (= "postgres://h/db?user=u&password=***&sslmode=require"
+  (is (= "postgres://h/db"
          (conn/label (conn/target "postgres://h/db?user=u&password=s3&sslmode=require"))))
+  (is (= "postgres://h/db" (conn/label (conn/target "postgres://h/db?pass%77ord=s3")))
+      "the query string is dropped whole, however a name is encoded")
   (is (= "/tmp/a.db" (conn/label (conn/target "/tmp/a.db")))))

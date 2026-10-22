@@ -165,8 +165,8 @@ export default function App() {
         }}
       >
         <Input
-          aria-label="Database path"
-          placeholder="/path/to/database.db"
+          aria-label="File path or postgres:// URL"
+          placeholder="/path/to/database.db or postgres://user:password@host:5432/db"
           value={path}
           onChange={(e) => setPath(e.target.value)}
         />
@@ -178,7 +178,7 @@ export default function App() {
         </Button>
       </form>
       <p className="text-xs text-muted-foreground">
-        {conn ? `Open: ${conn.path}` : "No database open"}
+        {conn ? `Open (${conn.engine}): ${conn.label}` : "No database open"}
       </p>
 
       <Textarea

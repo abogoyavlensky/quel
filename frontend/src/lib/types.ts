@@ -16,7 +16,11 @@ export interface RunResult {
   "elapsed-ms": number;
 }
 
+export type Engine = "sqlite" | "postgres" | "redshift";
+
 export interface OpenResult {
   "conn-id": string;
-  path: string;
+  engine: Engine;
+  // The file path, or the URL without its password and query string.
+  label: string;
 }
