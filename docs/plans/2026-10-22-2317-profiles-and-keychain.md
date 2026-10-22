@@ -459,21 +459,25 @@ Quel (branch `profiles`):
 
 **Files:** everything under `letgo-packages/keyring/`, plus the root `README.md`.
 
-- [ ] **Step 1:** In `../letgo-packages`, `git switch -c keyring` from an up-to-date master. Scaffold from `nrepl/`: `lgx.edn` (copy nrepl's, with the coord `github.com/abogoyavlensky/letgo-packages/keyring/shim {:go/local "shim"}` and `:contexts {:test {:extra-paths ["test"]}}`, the same as the other packages' test context). `shim/go.mod`: module `github.com/abogoyavlensky/letgo-packages/keyring/shim`, `go 1.26`, `require github.com/nooga/let-go v0.0.0` and `github.com/zalando/go-keyring v0.2.8`, then `go mod tidy` the way the README's "v0.0.0 let-go require" note describes (a temporary `go.work` or `replace`, not committed).
-- [ ] **Step 2:** `shim/shim.go`: the four functions from the Design, a package doc comment in the house style (why a shim, the "not found" mapping, the global memory provider), and `init()` registering `keyring.shim` with `vm.NewNamespace` / `vm.MustBox` / `rt.RegisterNS`, as `nrepl/shim/shim.go` does. `Get` returns `vm.String(p)` or `vm.NIL`; `Delete` and `Get` map `keyring.ErrNotFound` with `errors.Is`. Each of the four holds the package mutex for the whole call.
-- [ ] **Step 3: Write the tests** in `test/keyring/core_test.lg` (the Testing list above), calling `(kr/use-memory!)` at the top of the namespace.
-- [ ] **Step 4:** `src/keyring/core.lg`: the veneer, with docstrings. Exclude `get` from `clojure.core` (`:refer-clojure :exclude [get set!]`) if let-go needs it for these names; if let-go rejects shadowing `set!` (a special form), name it `put!` and use that name throughout this plan.
-- [ ] **Step 5: Run** `cd keyring && lgx test`. Expected: PASS.
-- [ ] **Step 6:** `example/`: `lgx.edn` with `{:local/root ".."}` and `main.lg`, which uses `use-memory!`, sets, gets, deletes and asserts (throws on a mismatch), with a comment showing the real-Keychain usage. **Run** `cd keyring/example && lgx run`. Expected: it prints its steps and exits 0.
-- [ ] **Step 7:** `keyring/README.md`: what it is, the deps coord with `keyring-v0.1.0`, the API, platforms (macOS through `/usr/bin/security`, password on stdin; Linux Secret Service over D-Bus, which needs a running secret service; Windows Credential Manager, untested), `use-memory!` being process-wide, layout, development. Add a row to the root README's package table and `keyring` to the in-tree shim list under "Releasing".
-- [ ] **Step 8:** Check `.github/scripts/changed-packages.sh` picks up a new top-level package dir with an `lgx.edn` (read it). Change it only if it does not.
-- [ ] **Step 9: Commit** `keyring: Keychain and Secret Service access over go-keyring`.
+- [x] **Step 1:** In `../letgo-packages`, `git switch -c keyring` from an up-to-date master. Scaffold from `nrepl/`: `lgx.edn` (copy nrepl's, with the coord `github.com/abogoyavlensky/letgo-packages/keyring/shim {:go/local "shim"}` and `:contexts {:test {:extra-paths ["test"]}}`, the same as the other packages' test context). `shim/go.mod`: module `github.com/abogoyavlensky/letgo-packages/keyring/shim`, `go 1.26`, `require github.com/nooga/let-go v0.0.0` and `github.com/zalando/go-keyring v0.2.8`, then `go mod tidy` the way the README's "v0.0.0 let-go require" note describes (a temporary `go.work` or `replace`, not committed).
+- [x] **Step 2:** `shim/shim.go`: the four functions from the Design, a package doc comment in the house style (why a shim, the "not found" mapping, the global memory provider), and `init()` registering `keyring.shim` with `vm.NewNamespace` / `vm.MustBox` / `rt.RegisterNS`, as `nrepl/shim/shim.go` does. `Get` returns `vm.String(p)` or `vm.NIL`; `Delete` and `Get` map `keyring.ErrNotFound` with `errors.Is`. Each of the four holds the package mutex for the whole call.
+- [x] **Step 3: Write the tests** in `test/keyring/core_test.lg` (the Testing list above), calling `(kr/use-memory!)` at the top of the namespace.
+- [x] **Step 4:** `src/keyring/core.lg`: the veneer, with docstrings. Exclude `get` from `clojure.core` (`:refer-clojure :exclude [get set!]`) if let-go needs it for these names; if let-go rejects shadowing `set!` (a special form), name it `put!` and use that name throughout this plan.
+- [x] **Step 5: Run** `cd keyring && lgx test`. Expected: PASS.
+- [x] **Step 6:** `example/`: `lgx.edn` with `{:local/root ".."}` and `main.lg`, which uses `use-memory!`, sets, gets, deletes and asserts (throws on a mismatch), with a comment showing the real-Keychain usage. **Run** `cd keyring/example && lgx run`. Expected: it prints its steps and exits 0.
+- [x] **Step 7:** `keyring/README.md`: what it is, the deps coord with `keyring-v0.1.0`, the API, platforms (macOS through `/usr/bin/security`, password on stdin; Linux Secret Service over D-Bus, which needs a running secret service; Windows Credential Manager, untested), `use-memory!` being process-wide, layout, development. Add a row to the root README's package table and `keyring` to the in-tree shim list under "Releasing".
+- [x] **Step 8:** Check `.github/scripts/changed-packages.sh` picks up a new top-level package dir with an `lgx.edn` (read it). Change it only if it does not.
+- [x] **Step 9: Commit** `keyring: Keychain and Secret Service access over go-keyring`.
+
+> Deviation: the veneer's setter is `put!`, the fallback the plan named: `set!` is a let-go special form. CI's changed-package selection picks up `keyring/` with no change (Step 8). No `:contexts` in `lgx.edn`: `nrepl`'s has none, and `lgx test` finds `test/` on its own.
 
 ### Task 2: keyring review, PR, release
 
-- [ ] **Step 1:** A codex review of the branch against master in the background (the `review-with-codex` mechanism). Fold real findings, then re-run `lgx test` and the example.
-- [ ] **Step 2:** Push, open the PR against letgo-packages master, link it with `link_pull_request`, wait for CI (`gh pr checks --watch`), merge.
-- [ ] **Step 3:** Tag `keyring-v0.1.0` on the merge commit and push the tag.
+- [x] **Step 1:** A codex review of the branch against master in the background (the `review-with-codex` mechanism). Fold real findings, then re-run `lgx test` and the example.
+- [x] **Step 2:** Push, open the PR against letgo-packages master, link it with `link_pull_request`, wait for CI (`gh pr checks --watch`), merge.
+- [x] **Step 3:** Tag `keyring-v0.1.0` on the merge commit and push the tag.
+
+> Codex found nothing actionable. PR: letgo-packages #13, merged; tagged `keyring-v0.1.0`.
 
 ### Task 3: Quel deps and the app database
 

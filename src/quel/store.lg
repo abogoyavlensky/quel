@@ -1,0 +1,61 @@
+(ns quel.store
+  (:require [integrant.core :as ig]
+            [quel.migrations :as migrations]
+            [ragtime.letgo :as rt]
+            [sqlite.core :as sqlite]
+            [string :as str]))
+
+;; The app database: connection profiles now, query history and the saved
+;; workspace later. SQLite in the per-user data dir, migrated on start.
+;;
+;; The component's value is the sqlite.core connectable. Bridge calls run
+;; concurrently and the pool hands each its own connection, so the
+;; connection settings go in the DSN, which modernc applies to every
+;; connection it opens (a PRAGMA statement would reach only the one that
+;; ran it): busy_timeout makes a second writer wait instead of failing with
+;; SQLITE_BUSY, and WAL lets reads go on during a write.
+
+(def ^:private dsn-pragmas
+  "?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=journal_mode(wal)")
+
+(defn data-dir-for
+  "The data dir, given a getenv fn and the OS name: QUEL_DATA_DIR when set,
+   else ~/Library/Application Support/Quel on macOS, else the XDG data
+   home's quel. Blank variables count as unset."
+  [getenv os-name]
+  (let [env (fn [k] (let [v (getenv k)] (when-not (str/blank? v) v)))]
+    (cond
+      (env "QUEL_DATA_DIR") (env "QUEL_DATA_DIR")
+      (= "darwin" os-name) (str (env "HOME") "/Library/Application Support/Quel")
+      (env "XDG_DATA_HOME") (str (env "XDG_DATA_HOME") "/quel")
+      :else (str (env "HOME") "/.local/share/quel"))))
+
+(defn data-dir
+  "Where Quel keeps its database on this machine."
+  []
+  (data-dir-for os/getenv (os/os-name)))
+
+(defn db-path [dir]
+  (str dir "/quel.db"))
+
+(defn open!
+  "Open (creating it if needed) the app database in dir, migrated to the
+   latest version. Returns the connectable."
+  [dir]
+  (mkdir dir)
+  (let [db (sqlite/open (str (db-path dir) dsn-pragmas))]
+    (try
+      (rt/migrate {:datastore (rt/sql-database db)
+                   :migrations migrations/migrations
+                   :reporter (fn [& _])})
+      db
+      (catch e
+        (sqlite/close! db)
+        (throw e)))))
+
+;; :dir nil means (data-dir).
+(defmethod ig/init-key ::db [_ {:keys [dir]}]
+  (open! (or dir (data-dir))))
+
+(defmethod ig/halt-key! ::db [_ db]
+  (sqlite/close! db))

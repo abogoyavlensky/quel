@@ -1,0 +1,73 @@
+(ns quel.store-test
+  (:require [integrant.core :as ig]
+            [quel.store :as store]
+            [sql.core :as sql]
+            [sql.shim :as shim]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+(defn temp-dir []
+  (str/trim (:out (os/sh "mktemp" "-d"))))
+
+(defn with-store
+  "Run (f db dir) over a fresh app database in a throwaway dir."
+  [f]
+  (let [dir (temp-dir)
+        db (ig/init-key :quel.store/db {:dir dir})]
+    (try (f db dir)
+         (finally
+           (ig/halt-key! :quel.store/db db)
+           (os/sh "rm" "-rf" dir)))))
+
+(defn- env [m] (fn [k] (get m k "")))
+
+(deftest the-data-dir
+  (is (= "/x/data" (store/data-dir-for (env {"QUEL_DATA_DIR" "/x/data" "HOME" "/h"}) "darwin")))
+  (is (= "/h/Library/Application Support/Quel" (store/data-dir-for (env {"HOME" "/h"}) "darwin")))
+  (is (= "/h/Library/Application Support/Quel"
+         (store/data-dir-for (env {"QUEL_DATA_DIR" "  " "HOME" "/h"}) "darwin")))
+  (is (= "/xdg/quel" (store/data-dir-for (env {"XDG_DATA_HOME" "/xdg" "HOME" "/h"}) "linux")))
+  (is (= "/h/.local/share/quel" (store/data-dir-for (env {"HOME" "/h"}) "linux"))))
+
+(deftest init-creates-and-migrates
+  (with-store
+    (fn [db dir]
+      (is (false? (:dir? (os/stat (str dir "/quel.db")))))
+      (is (= ["001-create-profiles"]
+             (mapv :id (sql/execute! db ["select id from ragtime_migrations order by seq"]))))
+      (is (= #{"profiles_name"}
+             (set (map :name (sql/execute! db ["select name from sqlite_master where type = 'index' and tbl_name = 'profiles' and name not like 'sqlite_%'"]))))))))
+
+(deftest init-again-is-idempotent
+  (let [dir (temp-dir)]
+    (try
+      (ig/halt-key! :quel.store/db (ig/init-key :quel.store/db {:dir dir}))
+      (let [db (ig/init-key :quel.store/db {:dir dir})]
+        (is (= 1 (:n (sql/execute-one! db ["select count(*) as n from ragtime_migrations"]))))
+        (ig/halt-key! :quel.store/db db))
+      (finally (os/sh "rm" "-rf" dir)))))
+
+(defn- pragma [conn p]
+  (let [rows (shim/Query conn (str "pragma " p) [])]
+    (try (.Next rows) (first (shim/ScanRow rows)) (finally (.Close rows)))))
+
+;; Every pooled connection gets the settings, not just the first.
+(deftest every-connection-is-configured
+  (with-store
+    (fn [db _]
+      (let [h (:sql/handle db)
+            a (shim/Conn h)
+            b (shim/Conn h)]
+        (try
+          (doseq [c [a b]]
+            (is (= 1 (pragma c "foreign_keys")))
+            (is (= 5000 (pragma c "busy_timeout")))
+            (is (= "wal" (pragma c "journal_mode"))))
+          (finally (.Close a) (.Close b)))))))
+
+(deftest halt-closes
+  (let [dir (temp-dir)
+        db (ig/init-key :quel.store/db {:dir dir})]
+    (ig/halt-key! :quel.store/db db)
+    (is (= :threw (try (sql/execute! db ["select 1"]) :ran (catch e :threw))))
+    (os/sh "rm" "-rf" dir)))

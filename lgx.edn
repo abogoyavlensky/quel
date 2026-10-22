@@ -47,6 +47,21 @@
          :git/tag "postgres-v0.4.0"
          :deps/root "postgres"}
 
+        ;; Profile passwords in the macOS Keychain (the Secret Service on
+        ;; Linux), over go-keyring. keyring-v0.1.0 is the first release.
+        abogoyavlensky/letgo-keyring
+        {:git/url "https://github.com/abogoyavlensky/letgo-packages"
+         :git/tag "keyring-v0.1.0"
+         :deps/root "keyring"}
+
+        ;; Migrations for the app database (profiles, later history and
+        ;; the workspace). It names sql-v0.3.0, the tag sqlite and postgres
+        ;; name, so the three resolve to one checkout.
+        abogoyavlensky/letgo-ragtime
+        {:git/url "https://github.com/abogoyavlensky/letgo-packages"
+         :git/tag "ragtime-v0.3.0"
+         :deps/root "ragtime"}
+
         ;; integrant wires the registries, the handlers, the window, the
         ;; menu and the dev loop together. It depends on
         ;; weavejester/dependency; lgx does not read a plain Clojure lib's
