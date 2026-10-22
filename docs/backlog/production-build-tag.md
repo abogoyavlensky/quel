@@ -1,6 +1,8 @@
 # Built binaries keep Wails' devtools and dev asset server
 
-**Status: open**
+**Status: done**
+
+Landed with lgx 0.5.1: `lgx.edn` sets `:targets {:bin {:go/build-tags ["production"]}}`, checked with a server-mode production binary, by `docs/plans/2026-10-22-0833-query-loop.md`, 2026-10-22. The macOS check (devtools gone) is on the plan's macOS list.
 
 ## Problem
 
