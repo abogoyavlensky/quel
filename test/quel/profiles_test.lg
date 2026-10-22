@@ -1,0 +1,195 @@
+(ns quel.profiles-test
+  (:require [integrant.core :as ig]
+            [quel.conn :as conn]
+            [quel.profiles :as profiles]
+            [quel.secrets :as secrets]
+            [quel.store-test :refer [with-store temp-dir]]
+            [sql.core :as sql]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+(def s (ig/init-key :quel.secrets/store {:backend :memory}))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(defn- error-of [f]
+  (try (f) nil (catch e e)))
+
+(def pg {"name" "Warehouse" "engine" "postgres" "host" " db.example.com "
+         "database" "app" "user" "admin"})
+
+(defn- sqlite-file
+  "A file that exists, for SQLite profiles."
+  [dir]
+  (let [p (str dir "/x.db")]
+    (spit p "")
+    p))
+
+(deftest normalize-trims-and-reads-the-port
+  (let [p (profiles/normalize {"name" "  A  " "engine" "postgres" "host" "" "port" " 6543 "
+                               "password" "  pw  " "forget-password" false})]
+    (is (= "A" (:name p)))
+    (is (nil? (:host p)))
+    (is (= 6543 (:port p)))
+    (is (= "  pw  " (:password p)))
+    (is (false? (:forget-password? p))))
+  (is (= 5432 (:port (profiles/normalize {:port 5432.0}))))
+  (is (nil? (:port (profiles/normalize {"port" ""}))))
+  (is (= "The port must be a number." (message-of #(profiles/normalize {"port" "54x"})))))
+
+(deftest password-change-precedence
+  (is (= [:forget] (profiles/password-change {:password "pw" :forget-password? true})))
+  (is (= [:forget] (profiles/password-change {:password ""})))
+  (is (= [:set " pw "] (profiles/password-change {:password " pw "})))
+  (is (= [:keep] (profiles/password-change {:password nil}))))
+
+(deftest validate-fills-defaults-and-clears-fields
+  (with-store
+    (fn [db dir]
+      (let [p (profiles/validate db (profiles/normalize (assoc pg "path" "/x")))]
+        (is (= [5432 "prefer" "none" nil] [(:port p) (:ssl-mode p) (:color p) (:path p)])))
+      (let [p (profiles/validate db (profiles/normalize (assoc pg "engine" "redshift")))]
+        (is (= [5439 "require"] [(:port p) (:ssl-mode p)])))
+      (let [p (profiles/validate db (profiles/normalize {"name" "f" "engine" "sqlite" "path" "/x.db"
+                                                         "host" "h" "port" 1}))]
+        (is (= ["/x.db" nil nil] [(:path p) (:host p) (:port p)]))))))
+
+(deftest validate-refuses-bad-input
+  (with-store
+    (fn [db _]
+      (let [bad (fn [m] (message-of #(profiles/validate db (profiles/normalize m))))]
+        (is (= "A name is required." (bad (dissoc pg "name"))))
+        (is (str/starts-with? (bad (assoc pg "engine" "mysql")) "Choose a database type"))
+        (is (= "A host is required." (bad (dissoc pg "host"))))
+        (is (= "A file path is required." (bad {"name" "f" "engine" "sqlite"})))
+        (is (= "The port must be between 1 and 65535." (bad (assoc pg "port" 70000))))
+        (is (= "Unknown SSL mode bogus." (bad (assoc pg "ssl-mode" "bogus"))))
+        (is (= "Unknown colour pink." (bad (assoc pg "color" "pink"))))))))
+
+(deftest save-new-then-edit
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s (assoc pg "password" "s3cret" "color" "red"))]
+        (is (= {:name "Warehouse" :engine "postgres" :host "db.example.com" :port 5432
+                :database "app" :user "admin" :ssl-mode "prefer" :path nil :color "red"
+                :has-password true}
+               (dissoc p :id)))
+        (is (= 36 (count (:id p))))
+        (is (= "s3cret" (secrets/password s (:id p))))
+        (is (= [p] (profiles/list-all db)))
+        ;; No password sent: the saved one stays.
+        (let [e (profiles/save! db s (assoc pg "id" (:id p) "name" "Renamed"))]
+          (is (= "Renamed" (:name e)))
+          (is (:has-password e))
+          (is (= "s3cret" (secrets/password s (:id p)))))
+        ;; A new one replaces it, untrimmed.
+        (profiles/save! db s (assoc pg "id" (:id p) "password" " new "))
+        (is (= " new " (secrets/password s (:id p))))
+        ;; Forget removes it; so does an empty password.
+        (let [e (profiles/save! db s (assoc pg "id" (:id p) "password" "x" "forget-password" true))]
+          (is (false? (:has-password e)))
+          (is (nil? (secrets/password s (:id p)))))
+        (profiles/save! db s (assoc pg "id" (:id p) "password" "again"))
+        (let [e (profiles/save! db s (assoc pg "id" (:id p) "password" ""))]
+          (is (false? (:has-password e)))
+          (is (nil? (secrets/password s (:id p)))))))))
+
+(deftest names-are-unique-ignoring-case
+  (with-store
+    (fn [db _]
+      (let [a (profiles/save! db s pg)]
+        (is (= "A connection named WAREHOUSE already exists."
+               (message-of #(profiles/save! db s (assoc pg "name" "WAREHOUSE")))))
+        ;; Its own name is fine.
+        (is (= "Warehouse" (:name (profiles/save! db s (assoc pg "id" (:id a))))))))))
+
+(deftest editing-a-missing-profile
+  (with-store
+    (fn [db _]
+      (is (= "This connection no longer exists."
+             (message-of #(profiles/save! db s (assoc pg "id" "nope"))))))))
+
+(deftest list-is-by-name
+  (with-store
+    (fn [db _]
+      (doseq [n ["b" "C" "a"]] (profiles/save! db s (assoc pg "name" n)))
+      (is (= ["a" "b" "C"] (mapv :name (profiles/list-all db)))))))
+
+(deftest delete-removes-the-password
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s (assoc pg "password" "pw"))]
+        (is (nil? (profiles/delete! db s (:id p))))
+        (is (nil? (profiles/fetch db (:id p))))
+        (is (nil? (secrets/password s (:id p))))))))
+
+(deftest effective-password
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s (assoc pg "password" "saved"))
+            eff #(profiles/effective-password s (profiles/normalize (merge pg %)))]
+        (is (= "saved" (eff {"id" (:id p)})))
+        (is (= "typed" (eff {"id" (:id p) "password" "typed"})))
+        (is (nil? (eff {"id" (:id p) "forget-password" true})))
+        (is (nil? (eff {})))))))
+
+;; Writes fail, reads still work: validation passes and the Keychain change
+;; happens first, so the rollback is what is tested.
+(defn- refuse-writes! [db]
+  (sql/execute! db ["create trigger no_insert before insert on profiles begin select raise(abort, 'write refused'); end"])
+  (sql/execute! db ["create trigger no_update before update on profiles begin select raise(abort, 'write refused'); end"]))
+
+(deftest a-failed-write-puts-the-password-back
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s (assoc pg "password" "old"))
+            q (profiles/save! db s (assoc pg "name" "No password"))]
+        (refuse-writes! db)
+        (let [e (error-of #(profiles/save! db s (assoc pg "name" "New" "password" "pw")))]
+          (is (str/includes? (ex-message e) "write refused"))
+          (is (nil? (secrets/password s (:id (ex-data e))))))
+        (error-of #(profiles/save! db s (assoc pg "id" (:id p) "password" "new")))
+        (is (= "old" (secrets/password s (:id p))))
+        (error-of #(profiles/save! db s (assoc pg "id" (:id p) "forget-password" true)))
+        (is (= "old" (secrets/password s (:id p))))
+        (error-of #(profiles/save! db s (assoc pg "id" (:id q) "name" "No password" "password" "pw")))
+        (is (nil? (secrets/password s (:id q))))))))
+
+(deftest concurrent-saves
+  (with-store
+    (fn [db _]
+      (let [fs (doall (for [i (range 20)]
+                        (future (profiles/save! db s (assoc pg "name" (str "p" i))))))]
+        (doseq [f fs] @f)
+        (is (= 20 (count (profiles/list-all db)))))
+      ;; Two saves of one name at once: one lands, the other is refused.
+      (let [rs (mapv deref (doall (for [_ (range 2)]
+                                    (future (try (profiles/save! db s (assoc pg "name" "Same"))
+                                                 (catch e (ex-message e)))))))]
+        (is (= 1 (count (filter map? rs))))
+        (is (= ["A connection named Same already exists."] (filterv string? rs)))))))
+
+(deftest targets
+  (let [dir (temp-dir)]
+    (try
+      (let [path (sqlite-file dir)]
+        (is (= {:engine :sqlite :path path :label "f"}
+               (profiles/target {:engine "sqlite" :path path :name "f"} nil)))
+        (is (= (str "No such file: " dir "/missing.db")
+               (message-of #(profiles/target {:engine "sqlite" :path (str dir "/missing.db")} nil))))
+        (is (= (str "No such file: " dir)
+               (message-of #(profiles/target {:engine "sqlite" :path dir} nil)))))
+      (finally (os/sh "rm" "-rf" dir))))
+  (let [p {:engine "redshift" :name "W" :host "h" :port 5439 :database "dev"
+           :user "o'neil" :ssl-mode "require"}]
+    (is (= {:engine :redshift :label "W" :secret "p'w \\x"
+            :dsn "host='h' port='5439' dbname='dev' user='o\\'neil' password='p\\'w \\\\x' sslmode='require'"}
+           (profiles/target p "p'w \\x")))
+    ;; No password saved: the key is left out, for pgx's own fallbacks.
+    (is (= "host='h' port='5439' dbname='dev' user='o\\'neil' sslmode='require'"
+           (:dsn (profiles/target p nil))))))
+
+(deftest dsn-quote
+  (is (= "'a b'" (conn/dsn-quote "a b")))
+  (is (= "'it\\'s \\\\ ok'" (conn/dsn-quote "it's \\ ok"))))

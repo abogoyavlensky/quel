@@ -36,13 +36,20 @@
 ;;
 ;; The registry is an atom; the component's value is the atom.
 
-(defn- new-id
+(defn new-id
   "A random UUID as its bare 36-character string. let-go 1.13.0's (str
    (random-uuid)) is the tagged #uuid \"...\" form, which Clojure's is not;
    taking the UUID out of it works either way."
   []
   (let [s (str (random-uuid))]
     (or (re-find #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" s) s)))
+
+(defn dsn-quote
+  "s as a value in a key/value DSN (host='h' port='5432' ...): single-quoted,
+   with backslashes and single quotes backslash-escaped, as libpq and pgx
+   read it."
+  [s]
+  (str "'" (-> (str s) (str/replace "\\" "\\\\") (str/replace "'" "\\'")) "'"))
 
 (def ^:private url-re #"(?i)^(postgres|postgresql|redshift)://")
 

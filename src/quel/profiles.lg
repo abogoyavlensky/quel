@@ -1,0 +1,231 @@
+(ns quel.profiles
+  (:refer-clojure :exclude [get])
+  (:require [quel.conn :as conn]
+            [quel.secrets :as secrets]
+            [sql.core :as sql]
+            [string :as str]))
+
+;; Connection profiles: the saved description of a database, in the app
+;; database's profiles table. A profile, as the handlers return it:
+;;
+;;   {:id "6f1c…" :name "Warehouse" :engine "redshift"
+;;    :host "wh.example.com" :port 5439 :database "dev" :user "admin"
+;;    :ssl-mode "require" :path nil :color "red" :has-password true}
+;;
+;; The password is not part of it: it lives in the Keychain (quel.secrets)
+;; under the profile's id, and has-password says whether one is saved. A
+;; profile from the frontend arrives as a map with string keys and may
+;; carry a "password" and "forget-password"; normalize reads both.
+
+(def engines #{"sqlite" "postgres" "redshift"})
+(def ssl-modes ["disable" "allow" "prefer" "require" "verify-ca" "verify-full"])
+(def colors ["none" "red" "orange" "yellow" "green" "blue" "purple"])
+(def default-ports {"postgres" 5432 "redshift" 5439})
+
+(defn- field
+  "m's value for k, under the string key the bridge sends or the keyword."
+  [m k]
+  (let [s (name k)]
+    (if (contains? m s) (clojure.core/get m s) (clojure.core/get m k))))
+
+(defn- text
+  "A trimmed string, or nil when blank or not a string."
+  [v]
+  (when (string? v)
+    (let [t (str/trim v)]
+      (when-not (str/blank? t) t))))
+
+(defn- port-of [v]
+  (cond
+    (integer? v) v
+    (and (number? v) (== v (int v))) (int v)
+    (string? v) (let [t (str/trim v)]
+                  (cond
+                    (str/blank? t) nil
+                    (re-matches #"\d+" t) (parse-long t)
+                    :else (throw (ex-info "The port must be a number." {}))))
+    (nil? v) nil
+    :else (throw (ex-info "The port must be a number." {}))))
+
+(defn normalize
+  "m (string or keyword keys) as a profile: strings trimmed, blanks nil, the
+   port a number. The password is passed through exactly as sent, under
+   :password, with \"forget-password\" under :forget-password?."
+  [m]
+  (let [pw (field m :password)]
+    {:id (text (field m :id))
+     :name (text (field m :name))
+     :engine (text (field m :engine))
+     :host (text (field m :host))
+     :port (port-of (field m :port))
+     :database (text (field m :database))
+     :user (text (field m :user))
+     :ssl-mode (text (field m :ssl-mode))
+     :path (text (field m :path))
+     :color (text (field m :color))
+     :password (when (string? pw) pw)
+     :forget-password? (true? (field m :forget-password))}))
+
+(defn password-change
+  "What saving p does to its saved password: [:forget], [:set pw] or
+   [:keep]. Forget wins over a password sent alongside it. An empty
+   password counts as none: pgx treats \"\" as no password and falls back
+   to .pgpass, so Quel cannot promise an explicitly empty one."
+  [{:keys [password forget-password?]}]
+  (cond
+    forget-password? [:forget]
+    (= "" password) [:forget]
+    (string? password) [:set password]
+    :else [:keep]))
+
+(def ^:private columns
+  "id, name, engine, host, port, database, user_name, ssl_mode, path, color, has_password")
+
+(defn- row->profile [r]
+  (when r
+    {:id (:id r) :name (:name r) :engine (:engine r)
+     :host (:host r) :port (:port r) :database (:database r)
+     :user (:user_name r) :ssl-mode (:ssl_mode r) :path (:path r)
+     :color (:color r) :has-password (= 1 (:has_password r))}))
+
+(defn list-all
+  "Every profile, by name."
+  [db]
+  (mapv row->profile
+        (sql/execute! db [(str "select " columns " from profiles order by name collate nocase")])))
+
+(defn fetch
+  "The profile with id, or nil."
+  [db id]
+  (row->profile
+   (sql/execute-one! db [(str "select " columns " from profiles where id = ?") (str id)])))
+
+(defn- duplicate-name [n]
+  (ex-info (str "A connection named " n " already exists.") {:name n}))
+
+(defn validate
+  "p (normalized) checked and completed: defaults filled in, the fields
+   its engine does not use cleared. Throws with a message for the user.
+   With :unique? (the default), the name must not be another profile's,
+   ignoring case."
+  ([db p] (validate db p {:unique? true}))
+  ([db {:keys [id name engine port ssl-mode color] :as p} {:keys [unique?]}]
+   (when-not name
+     (throw (ex-info "A name is required." {})))
+   (when-not (contains? engines engine)
+     (throw (ex-info "Choose a database type: SQLite, PostgreSQL or Redshift." {:engine engine})))
+   (when (and color (not (some #{color} colors)))
+     (throw (ex-info (str "Unknown colour " color ".") {:color color})))
+   (when (and unique?
+              (sql/execute-one! db ["select id from profiles where name = ? collate nocase and id <> ?"
+                                    name (or id "")]))
+     (throw (duplicate-name name)))
+   (let [p (assoc p :color (or color "none"))]
+     (if (= "sqlite" engine)
+       (do (when-not (:path p)
+             (throw (ex-info "A file path is required." {})))
+           (assoc p :host nil :port nil :database nil :user nil :ssl-mode nil))
+       (let [port (or port (default-ports engine))
+             ssl-mode (or ssl-mode (if (= "redshift" engine) "require" "prefer"))]
+         (when-not (:host p)
+           (throw (ex-info "A host is required." {})))
+         (when-not (<= 1 port 65535)
+           (throw (ex-info "The port must be between 1 and 65535." {:port port})))
+         (when-not (some #{ssl-mode} ssl-modes)
+           (throw (ex-info (str "Unknown SSL mode " ssl-mode ".") {:ssl-mode ssl-mode})))
+         (assoc p :port port :ssl-mode ssl-mode :path nil))))))
+
+(defn effective-password
+  "The password to connect p (normalized) with: the one it carries, none
+   when it asks to forget, else the saved one for its id."
+  [secrets p]
+  (let [[op pw] (password-change p)]
+    (case op
+      :set pw
+      :forget nil
+      :keep (when (:id p) (secrets/password secrets (:id p))))))
+
+(defn- unique-violation? [e]
+  (str/includes? (str (ex-message e)) "UNIQUE constraint failed: profiles.name"))
+
+(defn- write-row! [db new? {:keys [id name engine host port database user ssl-mode path color]} has-password]
+  (let [vals [name engine host port database user ssl-mode path color (if has-password 1 0)]]
+    (if new?
+      (sql/execute! db (into [(str "insert into profiles (name, engine, host, port, database, user_name,"
+                                   " ssl_mode, path, color, has_password, id)"
+                                   " values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")]
+                             (conj vals id)))
+      (sql/execute! db (into [(str "update profiles set name = ?, engine = ?, host = ?, port = ?,"
+                                   " database = ?, user_name = ?, ssl_mode = ?, path = ?, color = ?,"
+                                   " has_password = ? where id = ?")]
+                             (conj vals id))))))
+
+(defn- restore-password!
+  "Put profile id's saved password back to old, nil meaning none."
+  [secrets id old]
+  (if (nil? old)
+    (secrets/delete-password! secrets id)
+    (secrets/set-password! secrets id old)))
+
+(defn save!
+  "Validate and save m (from the frontend, see normalize): a new profile
+   when it has no id. The password change goes to the Keychain first; if
+   the row then fails to write, the old password is put back. Returns the
+   saved profile."
+  [db secrets m]
+  (let [p (validate db (normalize m))
+        existing (when (:id p)
+                   (or (fetch db (:id p))
+                       (throw (ex-info "This connection no longer exists." {:id (:id p)}))))
+        new? (nil? existing)
+        id (or (:id p) (conn/new-id))
+        p (assoc p :id id)
+        [op pw] (password-change p)
+        old (when (and existing (not= :keep op)) (secrets/password secrets id))
+        has-password (case op :set true :forget false :keep (boolean (:has-password existing)))]
+    (case op
+      :set (secrets/set-password! secrets id pw)
+      :forget (when existing (secrets/delete-password! secrets id))
+      :keep nil)
+    (try
+      (write-row! db new? p has-password)
+      (catch e
+        (when-not (= :keep op)
+          (restore-password! secrets id old))
+        (if (unique-violation? e)
+          (throw (duplicate-name (:name p)))
+          (throw (ex-info (ex-message e) {:id id} e)))))
+    (fetch db id)))
+
+(defn delete!
+  "Delete profile id and its saved password. A Keychain failure is
+   reported on stderr, not thrown: the profile is gone either way."
+  [db secrets id]
+  (sql/execute! db ["delete from profiles where id = ?" (str id)])
+  (try
+    (secrets/delete-password! secrets id)
+    (catch e
+      (write! *err* (str "quel: could not delete the saved password of " id ": " (ex-message e) "\n"))))
+  nil)
+
+(defn- dsn
+  "A key/value DSN for pgx: every value quoted, nil fields left out (a nil
+   password lets pgx's PGPASSWORD and .pgpass fallbacks apply, as in psql)."
+  [{:keys [host port database user ssl-mode]} password]
+  (->> [["host" host] ["port" (when port (str port))] ["dbname" database]
+        ["user" user] ["password" password] ["sslmode" ssl-mode]]
+       (remove (comp nil? second))
+       (map (fn [[k v]] (str k "=" (conn/dsn-quote v))))
+       (str/join " ")))
+
+(defn target
+  "What quel.conn/open-target! opens for profile p (validated) with
+   password. A SQLite file must exist: a typo must not quietly create an
+   empty database."
+  [{:keys [engine path name] :as p} password]
+  (if (= "sqlite" engine)
+    (let [st (os/stat path)]
+      (when (or (nil? st) (:dir? st))
+        (throw (ex-info (str "No such file: " path) {:path path})))
+      {:engine :sqlite :path path :label name})
+    {:engine (keyword engine) :dsn (dsn p password) :label name :secret password}))

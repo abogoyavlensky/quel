@@ -483,31 +483,37 @@ Quel (branch `profiles`):
 
 **Files:** `lgx.edn`, `src/quel/store.lg`, `src/quel/migrations.lg`, `test/quel/store_test.lg`.
 
-- [ ] **Step 1:** In Quel, `git switch -c profiles` from master. Add the `abogoyavlensky/letgo-keyring` (`keyring-v0.1.0`, `:deps/root "keyring"`) and `abogoyavlensky/letgo-ragtime` (`ragtime-v0.3.0`, `:deps/root "ragtime"`) coords to `lgx.edn`, each with a comment in the file's style. Run `lgx test` once to build the runtime. Expected: the existing suite passes, with no `already resolved` warning for `letgo-sql`.
-- [ ] **Step 2: Write the tests** in `store_test.lg`: `data-dir` with `QUEL_DATA_DIR` set returns it (test the rule fn: factor the choice into `(data-dir-for env-fn os-name)`, so tests pass a map lookup instead of changing the process env); darwin gives the Application Support path; linux with and without `XDG_DATA_HOME`; init on a temp dir creates `quel.db` with a `profiles` table, its unique name index and a `ragtime_migrations` row; two pooled connections both report `foreign_keys` 1 and `busy_timeout` 5000; a second init on the same dir succeeds; halt closes.
-- [ ] **Step 3: Run** `lgx test`. Expected: the new tests FAIL.
-- [ ] **Step 4:** Implement `quel.migrations` and `quel.store` per the Design (the DSN pragmas, migrate, halt).
-- [ ] **Step 5: Run** `lgx test`. Expected: PASS.
-- [ ] **Step 6: Commit** `Add the app database with its first migration`.
+- [x] **Step 1:** In Quel, `git switch -c profiles` from master. Add the `abogoyavlensky/letgo-keyring` (`keyring-v0.1.0`, `:deps/root "keyring"`) and `abogoyavlensky/letgo-ragtime` (`ragtime-v0.3.0`, `:deps/root "ragtime"`) coords to `lgx.edn`, each with a comment in the file's style. Run `lgx test` once to build the runtime. Expected: the existing suite passes, with no `already resolved` warning for `letgo-sql`.
+- [x] **Step 2: Write the tests** in `store_test.lg`: `data-dir` with `QUEL_DATA_DIR` set returns it (test the rule fn: factor the choice into `(data-dir-for env-fn os-name)`, so tests pass a map lookup instead of changing the process env); darwin gives the Application Support path; linux with and without `XDG_DATA_HOME`; init on a temp dir creates `quel.db` with a `profiles` table, its unique name index and a `ragtime_migrations` row; two pooled connections both report `foreign_keys` 1 and `busy_timeout` 5000; a second init on the same dir succeeds; halt closes.
+- [x] **Step 3: Run** `lgx test`. Expected: the new tests FAIL.
+- [x] **Step 4:** Implement `quel.migrations` and `quel.store` per the Design (the DSN pragmas, migrate, halt).
+- [x] **Step 5: Run** `lgx test`. Expected: PASS.
+- [x] **Step 6: Commit** `Add the app database with its first migration`.
+
+> Deviation: the dir is made with let-go's `mkdir` (it creates parents; there is no `os/mkdir-p`). A codex review found that a `?` in the data dir truncated the file name, so the store opens a `file:` URI with `%`, `?` and `#` escaped (a13e8e1, with a test). `lgx` runs through `mise exec` and with `CGO_ENABLED=0 GOFLAGS=-tags=server`: the `lgx` on PATH is 0.4.2.
 
 ### Task 4: Secrets
 
 **Files:** `src/quel/secrets.lg`, `test/quel/secrets_test.lg`.
 
-- [ ] **Step 1: Write the tests** on the `:memory` backend: set, read, overwrite, delete, a missing one reads nil, and two ids stay apart.
-- [ ] **Step 2:** Implement the component and the three fns per the Design.
-- [ ] **Step 3: Run** `lgx test`. Expected: PASS.
-- [ ] **Step 4: Commit** `Keep profile passwords in the Keychain`.
+- [x] **Step 1: Write the tests** on the `:memory` backend: set, read, overwrite, delete, a missing one reads nil, and two ids stay apart.
+- [x] **Step 2:** Implement the component and the three fns per the Design.
+- [x] **Step 3: Run** `lgx test`. Expected: PASS.
+- [x] **Step 4: Commit** `Keep profile passwords in the Keychain`.
+
+> Codex found nothing actionable.
 
 ### Task 5: Profiles
 
 **Files:** `src/quel/profiles.lg`, `src/quel/conn.lg` (public `new-id`, and the new `dsn-quote`), `test/quel/profiles_test.lg`.
 
-- [ ] **Step 1: Write the tests** listed under Testing for `profiles_test`, over a temp store and memory secrets. For the rollback cases, make the row write fail while reads keep working, so validation passes and the Keychain change happens first: in that test's own store, create `before insert` and `before update` triggers on `profiles` that `select raise(abort, 'write refused')`. A new profile leaves no password behind: `save!` puts the id in the error's `ex-data`, and the memory store has no entry for it. An edit that sets a new password leaves the old one in place. Save the edited profile before creating the triggers. The concurrency case: 20 futures save distinct names and all land; two futures save the same name and exactly one succeeds, the other throws the "already exists" message.
-- [ ] **Step 2: Run** `lgx test`. Expected: FAIL.
-- [ ] **Step 3:** Implement `normalize`, `password-change`, `effective-password`, `validate`, `list-all`, `fetch`, `save!`, `delete!` and `target` per the Design. Rows map to profiles in one `row->profile` fn (`user_name` → `:user`, `ssl_mode` → `:ssl-mode`, `has_password` 0/1 → boolean). SQL uses `?` params through `sql.core`.
-- [ ] **Step 4: Run** `lgx test`. Expected: PASS.
-- [ ] **Step 5: Commit** `Save, validate and delete connection profiles`.
+- [x] **Step 1: Write the tests** listed under Testing for `profiles_test`, over a temp store and memory secrets. For the rollback cases, make the row write fail while reads keep working, so validation passes and the Keychain change happens first: in that test's own store, create `before insert` and `before update` triggers on `profiles` that `select raise(abort, 'write refused')`. A new profile leaves no password behind: `save!` puts the id in the error's `ex-data`, and the memory store has no entry for it. An edit that sets a new password leaves the old one in place. Save the edited profile before creating the triggers. The concurrency case: 20 futures save distinct names and all land; two futures save the same name and exactly one succeeds, the other throws the "already exists" message.
+- [x] **Step 2: Run** `lgx test`. Expected: FAIL.
+- [x] **Step 3:** Implement `normalize`, `password-change`, `effective-password`, `validate`, `list-all`, `fetch`, `save!`, `delete!` and `target` per the Design. Rows map to profiles in one `row->profile` fn (`user_name` → `:user`, `ssl_mode` → `:ssl-mode`, `has_password` 0/1 → boolean). SQL uses `?` params through `sql.core`.
+- [x] **Step 4: Run** `lgx test`. Expected: PASS.
+- [x] **Step 5: Commit** `Save, validate and delete connection profiles`.
+
+> Deviation: `dsn-quote` landed in `quel.conn` with this task, since `target` needs it. A SQLite path that is a directory also counts as missing: `os/stat` has `:dir?` but no `:file?`.
 
 ### Task 6: Opening a target
 
