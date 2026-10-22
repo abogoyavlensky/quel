@@ -19,22 +19,26 @@
 
 (def default-page-size 500)
 
+(defn- same-session? [conn-id session-id e]
+  (and (= conn-id (:conn-id e)) (= session-id (:session-id e))))
+
 (defn- register!
-  "Add the query's entry, refusing a reused query-id and a second query on
-   a connection: one session cannot run two statements at once."
-  [execs query-id conn-id ctx]
-  (let [[old _] (swap-vals! execs
+  "Add the query's entry, refusing a reused query-id and a second query in
+   a session: one connection cannot run two statements at once."
+  [execs query-id conn-id session-id ctx]
+  (let [busy? (fn [m] (some #(same-session? conn-id session-id %) (vals m)))
+        [old _] (swap-vals! execs
                             (fn [m]
-                              (if (or (contains? m query-id)
-                                      (some #(= conn-id (:conn-id %)) (vals m)))
+                              (if (or (contains? m query-id) (busy? m))
                                 m
-                                (assoc m query-id {:ctx ctx :conn-id conn-id}))))]
+                                (assoc m query-id {:ctx ctx :conn-id conn-id
+                                                   :session-id session-id}))))]
     (cond
       (contains? old query-id)
       (throw (ex-info (str "Query " query-id " is already running.") {:query-id query-id}))
 
-      (some #(= conn-id (:conn-id %)) (vals old))
-      (throw (ex-info "A query is already running on this connection." {:conn-id conn-id})))))
+      (busy? old)
+      (throw (ex-info "A query is already running in this session." {:conn-id conn-id})))))
 
 ;; Tokens of a statement - words (lower-cased) and parentheses - past
 ;; string literals, quoted identifiers and comments: those alternatives are
@@ -154,30 +158,30 @@
       (if canceled? (ex-info msg {:query-id query-id}) e))))
 
 (defn run!
-  "Run one statement on the connection's session. Returns
+  "Run one statement in the tab's session (session-id). Returns
    {:columns [{:name :type}] :rows [[cell ...]] :has-more :update-count
     :elapsed-ms}. A cancelled query throws \"Query canceled.\". After any
    failure the session is probed, and a dead one is dropped so the next
    run takes a fresh connection; the error then says so."
-  [execs conns {:keys [conn-id query-id sql page-size]
+  [execs conns {:keys [conn-id session-id query-id sql page-size]
                 :or {page-size default-page-size}}]
   (when (str/blank? query-id)
     (throw (ex-info "A query id is required." {})))
   (when (str/blank? sql)
     (throw (ex-info "Nothing to run." {})))
   (let [ctx (shim/NewCtx)]
-    (register! execs query-id conn-id ctx)
+    (register! execs query-id conn-id session-id ctx)
     (try
-      (let [session (conn/session! conns conn-id)
+      (let [session (conn/session! conns conn-id session-id)
             t0 (System/nanoTime)
             result (if (rows? sql)
                      (run-rows session ctx sql page-size)
                      (run-exec session ctx sql))]
         (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
       (catch e
-        (let [session (conn/current-session conns conn-id)
+        (let [session (conn/current-session conns conn-id session-id)
               reset? (and session (dead? session))]
-          (when reset? (conn/reset-session! conns conn-id))
+          (when reset? (conn/reset-session! conns conn-id session-id))
           (throw (failure e (.Canceled ctx) reset? query-id))))
       (finally
         (.Cancel ctx)

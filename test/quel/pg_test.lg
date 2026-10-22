@@ -65,7 +65,7 @@
         (ig/halt-key! :quel.conn/registry conns)))))
 
 (defn- run [execs conns conn-id q]
-  (exec/run! execs conns {:conn-id conn-id :query-id (str (random-uuid)) :sql q}))
+  (exec/run! execs conns {:conn-id conn-id :session-id "s1" :query-id (str (random-uuid)) :sql q}))
 
 (defn- first-cell [execs conns conn-id q]
   (ffirst (:rows (run execs conns conn-id q))))
@@ -88,7 +88,7 @@
         (run execs conns id "create temp table kept (x int)")
         (let [qid (str (random-uuid))
               t0 (System/nanoTime)
-              f (future (try (exec/run! execs conns {:conn-id id :query-id qid
+              f (future (try (exec/run! execs conns {:conn-id id :session-id "s1" :query-id qid
                                                      :sql "select pg_sleep(30)"})
                              (catch e (ex-message e))))]
           (sleep 300)
@@ -127,6 +127,20 @@
           (run execs conns id "rollback")
           (is (= pid (first-cell execs conns id "select pg_backend_pid()"))
               "the same connection throughout"))))))
+
+(deftest two-tabs-two-sessions
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [in (fn [sid q] (exec/run! execs conns {:conn-id id :session-id sid
+                                                    :query-id (str (random-uuid)) :sql q}))]
+          (in "a" "create temp table only_a (x int)")
+          (is (= [[0]] (:rows (in "a" "select count(*) from only_a"))))
+          (is (str/includes? (str (try (in "b" "select count(*) from only_a") nil
+                                       (catch e (ex-message e))))
+                             "does not exist"))
+          (is (not= (ffirst (:rows (in "a" "select pg_backend_pid()")))
+                    (ffirst (:rows (in "b" "select pg_backend_pid()"))))))))))
 
 (defn- utc-minute-of-day
   "Minutes past midnight UTC of an ISO-8601 timestamp with an offset (Z, or

@@ -119,7 +119,7 @@ export default function App() {
     queryIdRef.current = queryId;
     setStatus({ kind: "running" });
     try {
-      const result = await call<RunResult>("run", c["conn-id"], queryId, sqlRef.current);
+      const result = await call<RunResult>("run", c["conn-id"], "spike", queryId, sqlRef.current);
       setStatus({ kind: "done", result });
     } catch (e) {
       setStatus({ kind: "error", message: message(e) });

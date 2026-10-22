@@ -37,26 +37,90 @@
     (fn [registry _]
       (is (str/includes? (message-of #(conn/open! registry "  ")) "is required")))))
 
-(deftest the-session-is-taken-once-and-keeps-state
+(deftest a-session-is-taken-once-per-id-and-keeps-state
   (with-registry
     (fn [registry path]
       (let [{:keys [conn-id]} (conn/open! registry path)
-            s1 (conn/session! registry conn-id)
-            s2 (conn/session! registry conn-id)]
+            s1 (conn/session! registry conn-id "a")
+            s2 (conn/session! registry conn-id "a")]
         (is (identical? s1 s2))
         (sql/execute! {:sql/handle s1} ["create temp table t (x integer)"])
         (sql/execute! {:sql/handle s2} ["insert into t (x) values (1)"])
         (is (= [{:x 1}] (sql/execute! {:sql/handle s1} ["select x from t"])))))))
 
+(deftest each-tab-has-its-own-session
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)
+            a (conn/session! registry conn-id "a")
+            b (conn/session! registry conn-id "b")]
+        (is (not (identical? a b)))
+        (sql/execute! {:sql/handle a} ["create temp table only_a (x integer)"])
+        (is (str/includes? (str (message-of #(sql/execute! {:sql/handle b} ["select x from only_a"])))
+                           "no such table"))))))
+
+(deftest a-session-id-is-required
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)]
+        (is (str/includes? (str (message-of #(conn/session! registry conn-id " ")))
+                           "session id is required"))))))
+
+(defn- open-conns
+  "The session pool's open connections, read from its DBStats (a struct
+   let-go prints as {MaxOpen Open InUse Idle ...})."
+  [registry conn-id]
+  (let [stats (str (.Stats (:sql/handle (:sessions-db (get @registry conn-id)))))]
+    (parse-long (second (re-find #"\{\d+ (\d+) " stats)))))
+
+(deftest a-retired-session-is-closed-for-good
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)
+            a (conn/session! registry conn-id "a")]
+        (sql/execute! {:sql/handle a} ["create temp table t (x integer)"])
+        (is (= 1 (open-conns registry conn-id)))
+        (let [detached (conn/retire-session! registry conn-id "a")]
+          (is (identical? a detached))
+          (.Close detached))
+        (is (= 0 (open-conns registry conn-id))
+            "the connection is closed, not parked in the pool")
+        (is (str/includes? (str (message-of #(conn/session! registry conn-id "a")))
+                           "This tab was closed"))
+        (let [b (conn/session! registry conn-id "b")]
+          (is (str/includes? (str (message-of #(sql/execute! {:sql/handle b} ["select x from t"])))
+                             "no such table")
+              "a new tab starts clean"))))))
+
+(deftest retiring-a-tab-without-a-session
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)]
+        (is (nil? (conn/retire-session! registry conn-id "never-ran")))
+        (is (str/includes? (str (message-of #(conn/session! registry conn-id "never-ran")))
+                           "This tab was closed"))
+        (is (nil? (conn/retire-session! registry "nope" "x")) "an unknown database is a no-op")))))
+
 (deftest close-removes-the-entry
   (with-registry
     (fn [registry path]
       (let [{:keys [conn-id]} (conn/open! registry path)]
-        (conn/session! registry conn-id)
+        (conn/session! registry conn-id "a")
+        (conn/session! registry conn-id "b")
         (is (nil? (conn/close! registry conn-id)))
         (is (not (contains? @registry conn-id)))
-        (is (str/includes? (message-of #(conn/session! registry conn-id))
+        (is (str/includes? (message-of #(conn/session! registry conn-id "a"))
                            "No open database"))))))
+
+(deftest detach-then-session-fails
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)
+            e (conn/detach! registry conn-id)]
+        (is (some? e))
+        (is (str/includes? (message-of #(conn/session! registry conn-id "a")) "No open database"))
+        (is (nil? (conn/close-entry! e)))
+        (is (nil? (conn/detach! registry conn-id)))))))
 
 (deftest closing-an-unknown-id-is-a-no-op
   (with-registry
@@ -70,7 +134,7 @@
     (try
       (conn/open! registry p1)
       (let [{:keys [conn-id]} (conn/open! registry p2)]
-        (conn/session! registry conn-id))
+        (conn/session! registry conn-id "a"))
       (ig/halt-key! :quel.conn/registry registry)
       (is (= {} @registry))
       (finally (os/sh "rm" "-f" p1 p2)))))

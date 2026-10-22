@@ -72,12 +72,12 @@ json() { python3 -c "import json,sys; print(json.loads(sys.argv[1])$2)" "$1"; }
 opened="$(call open-db "[\"$db\"]")"
 conn="$(json "$opened" "['conn-id']")" || fail "open-db: $opened"
 
-dup="$(call run "[\"$conn\",\"q-dup\",\"select 1 as id, 2 as id\"]")"
+dup="$(call run "[\"$conn\",\"s1\",\"q-dup\",\"select 1 as id, 2 as id\"]")"
 [[ "$dup" == *'"rows":[[1,2]]'* ]] || fail "duplicate columns: $dup"
 [[ "$(json "$dup" "['columns']")" == *"'name': 'id'"*"'name': 'id'"* ]] || fail "column names: $dup"
 
 # Cancel a runaway query from a second call while the first is in flight.
-call run "[\"$conn\",\"q-runaway\",\"$runaway\"]" >"$tmp/runaway" &
+call run "[\"$conn\",\"s1\",\"q-runaway\",\"$runaway\"]" >"$tmp/runaway" &
 runaway_pid=$!
 canceled=""
 for _ in $(seq 1 50); do
@@ -102,8 +102,8 @@ if [[ -n "${QUEL_PG_URL:-}" ]]; then
     pg="$(json "$pg_opened" "['conn-id']")" || fail "open-db (postgres): $pg_opened"
     [[ "$pg_opened" == *'"engine":"postgres"'* ]] || fail "engine: $pg_opened"
     [[ "$pg_opened" != *"$QUEL_PG_URL"* ]] || fail "the label shows the password: $pg_opened"
-    call run "[\"$pg\",\"pg-temp\",\"create temp table kept (x int)\"]" >/dev/null
-    call run "[\"$pg\",\"pg-sleep\",\"select pg_sleep(30)\"]" >"$tmp/pg-sleep" &
+    call run "[\"$pg\",\"s1\",\"pg-temp\",\"create temp table kept (x int)\"]" >/dev/null
+    call run "[\"$pg\",\"s1\",\"pg-sleep\",\"select pg_sleep(30)\"]" >"$tmp/pg-sleep" &
     pg_pid=$!
     pg_canceled=""
     for _ in $(seq 1 50); do
@@ -114,7 +114,7 @@ if [[ -n "${QUEL_PG_URL:-}" ]]; then
     [[ "$pg_canceled" == *'"canceled":true'* ]] || fail "postgres cancel did not find the query: $pg_canceled"
     wait "$pg_pid" || true
     [[ "$(cat "$tmp/pg-sleep")" == *'Query canceled.'* ]] || fail "postgres cancel reply: $(cat "$tmp/pg-sleep")"
-    after="$(call run "[\"$pg\",\"pg-after\",\"select count(*) from kept\"]")"
+    after="$(call run "[\"$pg\",\"s1\",\"pg-after\",\"select count(*) from kept\"]")"
     [[ "$after" == *'"rows":[[0]]'* ]] || fail "the postgres session did not survive the cancel: $after"
     call close-db "[\"$pg\"]" >/dev/null
 else

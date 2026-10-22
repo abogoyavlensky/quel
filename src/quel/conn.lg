@@ -7,8 +7,9 @@
             [string :as str]))
 
 ;; Open databases, keyed by a conn-id the frontend holds. Each entry is
-;; {:db <connectable> :engine <:sqlite :postgres :redshift> :label <string>
-;;  :session <*sql.Conn or nil>}.
+;; {:db <connectable> :sessions-db <connectable>
+;;  :engine <:sqlite :postgres :redshift> :label <string>
+;;  :sessions {session-id <*sql.Conn>} :retired #{session-id}}.
 ;;
 ;; What to open arrives as one string: a SQLite file path, or a
 ;; postgres:// / postgresql:// / redshift:// URL. Postgres and Redshift
@@ -16,11 +17,22 @@
 ;; catalog queries). A password in the URL is a stopgap until connection
 ;; profiles keep it in the Keychain.
 ;;
-;; The pool (:db) is for work that can take any connection; statements the
-;; user runs go to the session, a dedicated connection taken on first use,
-;; so session state (BEGIN ... COMMIT, temp tables) behaves as in a shell.
-;; For now there is one session per database; later in milestone 1, one
-;; per editor tab.
+;; The pool (:db) is for work that can take any connection. Statements the
+;; user runs go to a session: a dedicated connection per editor tab, keyed
+;; by the session-id the frontend gives the tab, taken on the tab's first
+;; run and held until the tab closes. Session state (BEGIN ... COMMIT, SET,
+;; temp tables) therefore behaves as in a shell.
+;;
+;; Sessions come from a second pool, :sessions-db, that keeps no idle
+;; connections: closing a session closes its connection instead of parking
+;; it, so a closed tab's settings, temp tables or (on SQLite) open
+;; transaction never reach whoever takes that connection next.
+;;
+;; A closed tab's session-id is retired, and session! refuses it from then
+;; on. Bridge calls run concurrently, so a run sent just before the tab
+;; closed can reach session! after the close; without the tombstone it
+;; would open a session nothing owns. Session ids are frontend UUIDs,
+;; never reused; the set goes with its connection.
 ;;
 ;; The registry is an atom; the component's value is the atom.
 
@@ -79,28 +91,43 @@
     true (str/replace #"(?i)(password\s*=\s*)('[^']*'|[^\s&'`]+)" "$1***")
     true (str/replace #"([a-z]+://[^/?#:@\s]*):[^/?#@\s]*@" "$1:***@")))
 
-(defn- connect
-  "A connectable for target. Postgres pools keep a session across a
-   cancelled query (:postgres/cancel :request), and are pinged so a wrong
-   password or host fails here, not at the first run. Errors are redacted
-   before they reach the UI."
+(defn- open-pool
+  "A pool for target. Postgres pools keep a session across a cancelled
+   query (:postgres/cancel :request). Errors are redacted before they reach
+   the UI. Opening is lazy: no connection is made yet."
   [{:keys [engine path url] :as t}]
   (if (= :sqlite engine)
     (sqlite/open path)
-    (let [db (try
-               (pg/open url {:postgres/cancel :request})
-               (catch e (throw (ex-info (redact t (ex-message e)) {}))))]
+    (try
+      (pg/open url {:postgres/cancel :request})
+      (catch e (throw (ex-info (redact t (ex-message e)) {}))))))
+
+(defn- close-pool! [engine db]
+  (if (= :sqlite engine)
+    (sqlite/close! db)
+    (pg/close! db)))
+
+(defn- connect
+  "The shared pool and the session pool for target. A Postgres pool is
+   pinged, so a wrong password or host fails here, not at the first run."
+  [{:keys [engine] :as t}]
+  (let [db (open-pool t)]
+    (when (not= :sqlite engine)
       (when-let [err (.Ping (:sql/handle db))]
-        (pg/close! db)
-        (throw (ex-info (redact t (.Error err)) {})))
-      db)))
+        (close-pool! engine db)
+        (throw (ex-info (redact t (.Error err)) {}))))
+    (let [sessions-db (try (open-pool t)
+                           (catch e (close-pool! engine db) (throw e)))]
+      (.SetMaxIdleConns (:sql/handle sessions-db) 0)
+      {:db db :sessions-db sessions-db})))
 
 (defn open!
   "Open what `s` names (see `target`). Returns {:conn-id :engine :label}."
   [registry s]
   (let [t (target s)
         id (new-id)
-        e {:db (connect t) :engine (:engine t) :label (label t) :session nil}]
+        e (merge (connect t)
+                 {:engine (:engine t) :label (label t) :sessions {} :retired #{}})]
     (swap! registry assoc id e)
     {:conn-id id :engine (:engine e) :label (:label e)}))
 
@@ -113,58 +140,97 @@
   [registry conn-id]
   (:db (entry registry conn-id)))
 
+(defn- check-session-id [session-id]
+  (when (str/blank? session-id)
+    (throw (ex-info "A session id is required." {}))))
+
 (defn session!
-  "The database's session, taken from the pool on first use."
-  [registry conn-id]
-  (or (:session (entry registry conn-id))
-      (let [fresh (shim/Conn (:sql/handle (db registry conn-id)))
-            [_ now] (swap-vals! registry
-                                (fn [m]
-                                  (if (and (contains? m conn-id)
-                                           (nil? (get-in m [conn-id :session])))
-                                    (assoc-in m [conn-id :session] fresh)
-                                    m)))
-            winner (get-in now [conn-id :session])]
-        ;; Lost a race with another caller, or the database was closed
-        ;; meanwhile: give the extra connection back.
-        (when-not (identical? winner fresh)
-          (.Close fresh))
-        (or winner
-            (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))
+  "The tab's session, taken from the session pool on first use. Throws for
+   an unknown database or a retired session-id."
+  [registry conn-id session-id]
+  (check-session-id session-id)
+  (let [e (entry registry conn-id)]
+    (when (contains? (:retired e) session-id)
+      (throw (ex-info "This tab was closed." {:session-id session-id})))
+    (or (get-in e [:sessions session-id])
+        (let [fresh (shim/Conn (:sql/handle (:sessions-db e)))
+              [_ now] (swap-vals! registry
+                                  (fn [m]
+                                    (let [cur (get m conn-id)]
+                                      (if (and cur
+                                               (not (contains? (:retired cur) session-id))
+                                               (nil? (get-in cur [:sessions session-id])))
+                                        (assoc-in m [conn-id :sessions session-id] fresh)
+                                        m))))
+              winner (get-in now [conn-id :sessions session-id])]
+          ;; Lost a race with another caller, or the database was closed or
+          ;; the tab retired meanwhile: give the extra connection back.
+          (when-not (identical? winner fresh)
+            (.Close fresh))
+          (or winner
+              (if (contains? (get-in now [conn-id :retired]) session-id)
+                (throw (ex-info "This tab was closed." {:session-id session-id}))
+                (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))))
 
 (defn current-session
-  "The database's session if one was taken, else nil. Takes none."
-  [registry conn-id]
-  (get-in @registry [conn-id :session]))
+  "The tab's session if one was taken, else nil. Takes none."
+  [registry conn-id session-id]
+  (get-in @registry [conn-id :sessions session-id]))
 
 (defn reset-session!
-  "Drop the database's session, so the next session! takes a fresh
-   connection. For a session whose connection died; closing it is best
-   effort."
-  [registry conn-id]
+  "Drop the tab's session, so the next session! takes a fresh connection.
+   For a session whose connection died; closing it is best effort."
+  [registry conn-id session-id]
   (let [[old _] (swap-vals! registry
                             (fn [m]
                               (if (contains? m conn-id)
-                                (assoc-in m [conn-id :session] nil)
+                                (update-in m [conn-id :sessions] dissoc session-id)
                                 m)))]
-    (when-let [session (get-in old [conn-id :session])]
+    (when-let [session (get-in old [conn-id :sessions session-id])]
       (.Close session))
     nil))
 
-(defn- close-entry! [{:keys [db engine session]}]
-  (when session (.Close session))
-  (if (= :sqlite engine)
-    (sqlite/close! db)
-    (pg/close! db)))
+(defn retire-session!
+  "Retire session-id - session! refuses it from now on - and detach its
+   session. Returns the detached *sql.Conn, or nil if the tab had none;
+   the caller closes it (after cancelling what runs on it: closing a busy
+   connection waits for it). An unknown database is a no-op."
+  [registry conn-id session-id]
+  (check-session-id session-id)
+  (let [[old _] (swap-vals! registry
+                            (fn [m]
+                              (if (contains? m conn-id)
+                                (-> m
+                                    (update-in [conn-id :sessions] dissoc session-id)
+                                    (update-in [conn-id :retired] conj session-id))
+                                m)))]
+    (get-in old [conn-id :sessions session-id])))
 
-(defn close!
-  "Close the database's session, then the database. Unknown ids are a
-   no-op."
+(defn detach!
+  "Remove the database's entry, so every later call for it fails with \"No
+   open database\". Returns the entry, or nil for an unknown id; the caller
+   closes it with close-entry!."
   [registry conn-id]
   (let [[old _] (swap-vals! registry dissoc conn-id)]
-    (when-let [e (get old conn-id)]
-      (close-entry! e))
-    nil))
+    (get old conn-id)))
+
+(defn close-entry!
+  "Close a detached entry: its sessions, then both pools."
+  [{:keys [db sessions-db engine sessions]}]
+  (doseq [session (vals sessions)]
+    (.Close session))
+  (close-pool! engine sessions-db)
+  (close-pool! engine db)
+  nil)
+
+(defn close!
+  "Close the database: its sessions, then its pools. For callers with no
+   queries or cursors on it (quel.exec/close-conn! handles those). Unknown
+   ids are a no-op."
+  [registry conn-id]
+  (when-let [e (detach! registry conn-id)]
+    (close-entry! e))
+  nil)
 
 (defmethod ig/init-key ::registry [_ _]
   (atom {}))

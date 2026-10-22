@@ -30,7 +30,7 @@
     (fn [env path]
       (let [{:keys [conn-id] :as opened} (api/open-db env path)]
         (is (= path (:label opened)))
-        (let [r (api/run env conn-id "q1" "select 1 as id, 'a' as name")]
+        (let [r (api/run env conn-id "s1" "q1" "select 1 as id, 'a' as name")]
           (is (= #{:columns :rows :has-more :update-count :elapsed-ms} (set (keys r))))
           (is (= [[1 "a"]] (:rows r))))
         (is (nil? (api/close-db env conn-id)))

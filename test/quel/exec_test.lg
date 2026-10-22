@@ -28,7 +28,7 @@
         (os/sh "rm" "-f" path)))))
 
 (defn- run [execs conns conn-id q & {:as opts}]
-  (exec/run! execs conns (merge {:conn-id conn-id :query-id (str (random-uuid)) :sql q}
+  (exec/run! execs conns (merge {:conn-id conn-id :session-id "s1" :query-id (str (random-uuid)) :sql q}
                                 opts)))
 
 (defn- message-of [f]
@@ -135,7 +135,7 @@
     (fn [execs conns id]
       (let [qid "runaway-1"
             started (System/nanoTime)
-            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id qid :sql runaway})))]
+            result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id qid :sql runaway})))]
         (is (until #(contains? @execs qid)))
         (sleep 100)
         (is (true? (exec/cancel! execs qid)))
@@ -148,13 +148,13 @@
     (fn [execs _ _]
       (is (false? (exec/cancel! execs "nope"))))))
 
-(deftest one-query-per-connection
+(deftest one-query-per-session
   (with-env
     (fn [execs conns id]
-      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "a" :sql runaway})))]
+      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id "a" :sql runaway})))]
         (is (until #(contains? @execs "a")))
         (is (str/includes? (str (message-of #(run execs conns id "select 1")))
-                           "already running on this connection"))
+                           "already running in this session"))
         (exec/cancel! execs "a")
         (is (= "Query canceled." (deref result 5000 :timeout)))))))
 
@@ -163,10 +163,10 @@
     (fn [execs conns id]
       (let [p2 (temp-path)
             id2 (:conn-id (conn/open! conns p2))
-            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "same" :sql runaway})))]
+            result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id "same" :sql runaway})))]
         (try
           (is (until #(contains? @execs "same")))
-          (is (str/includes? (str (message-of #(exec/run! execs conns {:conn-id id2 :query-id "same" :sql "select 1"})))
+          (is (str/includes? (str (message-of #(exec/run! execs conns {:conn-id id2 :session-id "s1" :query-id "same" :sql "select 1"})))
                              "already running"))
           (exec/cancel! execs "same")
           (is (= "Query canceled." (deref result 5000 :timeout)))
@@ -175,7 +175,7 @@
 (deftest halting-cancels-running-queries
   (with-env
     (fn [execs conns id]
-      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "h" :sql runaway})))]
+      (let [result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id "h" :sql runaway})))]
         (is (until #(contains? @execs "h")))
         (ig/halt-key! :quel.exec/registry execs)
         (is (= "Query canceled." (deref result 5000 :timeout)))
@@ -191,7 +191,7 @@
         path (temp-path)]
     (try
       (let [id (:conn-id (conn/open! conns path))
-            result (future (message-of #(exec/run! execs conns {:conn-id id :query-id "s" :sql runaway})))]
+            result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id "s" :sql runaway})))]
         (is (until #(contains? @execs "s")))
         (let [t0 (System/nanoTime)]
           (ig/halt! sys)
