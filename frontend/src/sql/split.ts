@@ -5,17 +5,20 @@
 // string ('...', with '' and, after E, backslash escapes), a quoted
 // identifier ("...", `...`, [...]), a dollar-quoted body ($tag$...$tag$),
 // a comment (-- to the end of the line, /* */ nested as Postgres allows),
-// or a block body. A `[` quotes an identifier (SQLite) only where one can
-// start, not straight after a word or a `]` or `)`, where it is a
-// Postgres array subscript or type (`a[1]`, `int[]`, `ARRAY[...]`).
+// or a block body. A `[` is read by the token before it: after ARRAY, a
+// name, `]` or `)` it is a Postgres array or subscript (`ARRAY [...]`,
+// `a[1]`, `int[]`), read as SQL; after a keyword or punctuation it quotes a
+// SQLite identifier (`select [a;b]`, `t.[c]`).
 //
 // Block bodies are SQLite's CREATE TRIGGER ... BEGIN ... END and the
-// SQL-standard BEGIN ATOMIC ... END (Postgres 14+). In those statements
-// only, BEGIN and CASE open a level. END closes a CASE level, or a BEGIN
-// level where a statement can start (after `;` or BEGIN), so a table named
-// `end` inside the body does not. Anywhere else BEGIN is a plain word, so
-// `begin; ...; commit;` splits as it should. An unterminated quote or
-// comment runs to the end of the text.
+// SQL-standard BEGIN ATOMIC ... END (Postgres 14+); there, a `;` does not
+// end the statement. A trigger's body opens at the first BEGIN past
+// `ON <table>`, and neither body nests another BEGIN, so a table or trigger
+// named `begin` opens nothing. CASE opens a level inside a body. END closes
+// a CASE level, or the body where a statement can start (after `;`, BEGIN
+// or ATOMIC), so a table named `end` does not. Outside these statements
+// BEGIN is a plain word, so `begin; ...; commit;` splits as it should. An
+// unterminated quote or comment runs to the end of the text.
 
 export interface Statement {
   from: number; // offset of its first character (a leading comment included)
@@ -28,6 +31,17 @@ export interface Statement {
 const isIdentStart = (c: string) => /[\p{L}_]/u.test(c);
 const isIdentChar = (c: string) => /[\p{L}\p{N}_$]/u.test(c);
 const isSpace = (c: string) => /\s/.test(c);
+
+// Words after which a `[` starts a quoted identifier, not a subscript.
+const keywords = new Set(
+  (
+    "select from join as on where and or not by into update table set values insert delete " +
+    "create index view trigger if exists distinct all when then else case in is like returning " +
+    "with using group order having union except intersect limit offset references drop alter " +
+    "column add rename to replace pragma explain unique primary key foreign check default " +
+    "between escape glob match regexp collate begin end"
+  ).split(" "),
+);
 
 // create [or replace] [temp|temporary] trigger
 function isTriggerHead(words: string[]): boolean {
@@ -84,6 +98,8 @@ export function split(text: string): Statement[] {
   let words: string[] = [];
   let block = false;
   let levels: ("begin" | "case")[] = []; // open BEGIN / CASE levels in a block
+  let trigger = false; // a CREATE TRIGGER, whose body opens past ON <table>
+  let onTable = 0; // 0: ON not seen; 1: next word is the table; 2: past it
   let last = ""; // the previous token: a word (lower-cased) or a character
 
   const finish = () => {
@@ -94,6 +110,8 @@ export function split(text: string): Statement[] {
     words = [];
     block = false;
     levels = [];
+    trigger = false;
+    onTable = 0;
     last = "";
   };
   // Mark [from, to) as part of the current statement.
@@ -136,7 +154,7 @@ export function split(text: string): Statement[] {
       const j = skipQuoted(text, i, c, false);
       take(i, j, true);
       i = j;
-    } else if (c === "[" && !(isIdentChar(prev) || prev === "]" || prev === ")")) {
+    } else if (c === "[" && !(last === "array" || last === "]" || last === ")" || (/^[\p{L}_]/u.test(last) && !keywords.has(last)))) {
       const j = skipQuoted(text, i, "]", false);
       take(i, j, true);
       i = j;
@@ -158,16 +176,24 @@ export function split(text: string): Statement[] {
       const word = text.slice(i, j).toLowerCase();
       take(i, j, true);
       i = j;
-      if (block) {
+      if (trigger && levels.length === 0) {
+        if (onTable === 1) onTable = 2;
+        else if (word === "on" && onTable === 0) onTable = 1;
+        else if (word === "begin" && onTable === 2) levels.push("begin");
+      } else if (block) {
         const top = levels[levels.length - 1];
-        if (word === "begin" || word === "case") levels.push(word);
-        else if (word === "end" && (top === "case" || (top === "begin" && (last === ";" || last === "begin"))))
+        if (word === "case") levels.push("case");
+        else if (word === "end" && (top === "case" || (top === "begin" && [";", "begin", "atomic"].includes(last))))
           levels.pop();
       } else if (word === "atomic" && last === "begin") {
         block = true;
         levels = ["begin"];
       }
       words.push(word);
+      if (!block && words.length <= 6 && isTriggerHead(words)) {
+        block = true;
+        trigger = true;
+      }
       last = word;
       if (!block && words.length <= 6 && isTriggerHead(words)) block = true;
     } else {

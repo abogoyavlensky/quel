@@ -45,6 +45,20 @@ describe("split", () => {
     expect(texts("select ARRAY[']', ';']; select 2")).toEqual(["select ARRAY[']', ';']", "select 2"]);
     expect(texts("select a[1], '{1}'::int[]; select 2")).toEqual(["select a[1], '{1}'::int[]", "select 2"]);
     expect(texts("select (f())[1]; select 2")).toEqual(["select (f())[1]", "select 2"]);
+    expect(texts("select ARRAY [']', ';']; select 2")).toEqual(["select ARRAY [']', ';']", "select 2"]);
+  });
+
+  it("reads brackets after a keyword as SQLite quoted identifiers", () => {
+    const q = "select[a;b] from (select 1 as [a;b])";
+    expect(texts(`${q}; select 2`)).toEqual([q, "select 2"]);
+    expect(texts("select t.[a;b] from t; select 2")).toEqual(["select t.[a;b] from t", "select 2"]);
+  });
+
+  it("does not take tables or triggers named begin for a trigger body", () => {
+    const a = "create trigger tr after insert on t begin insert into begin values(1); end";
+    expect(texts(`${a}; select 2`)).toEqual([a, "select 2"]);
+    const b = "create trigger begin after insert on begin begin delete from x; end";
+    expect(texts(`${b}; select 2`)).toEqual([b, "select 2"]);
   });
 
   it("takes non-ASCII dollar-quote tags", () => {
