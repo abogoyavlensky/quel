@@ -1,8 +1,8 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { Cell, Column, Engine } from "@/lib/types";
+import type { Cell, Color, Column, Engine, Profile } from "@/lib/types";
 
-// The app's state: the open database, the editor tabs, and each tab's
+// The app's state: the open database, the saved profiles, the editor tabs, and each tab's
 // results and messages. Plain data in a zustand store: the runner
 // (state/runner.ts) changes it from async code and menu events through
 // store.getState()/setState(), and components read it with useApp and a
@@ -49,13 +49,21 @@ export interface EditorTab {
 export interface Conn {
   connId: string;
   engine: Engine;
-  label: string;
+  label: string; // the profile's name, or the path / URL opened
+  profileId: string | null; // null for a quick open
+  color: Color; // the profile's colour tag; "none" for a quick open
 }
+
+// The profile dialog: closed, a new profile, or editing one.
+export type ProfileDialog = { mode: "new" } | { mode: "edit"; id: string } | null;
 
 export interface AppState {
   conn: Conn | null;
   switching: boolean; // opening or closing a database
   dbError: string | null;
+  profiles: Profile[]; // by name, as the backend lists them
+  profilesError: string | null;
+  profileDialog: ProfileDialog;
   tabs: EditorTab[];
   activeTab: string;
   nextTabNumber: number;
@@ -78,7 +86,17 @@ export function newTabState(n: number): EditorTab {
 
 export function initialState(): AppState {
   const first = newTabState(1);
-  return { conn: null, switching: false, dbError: null, tabs: [first], activeTab: first.id, nextTabNumber: 2 };
+  return {
+    conn: null,
+    switching: false,
+    dbError: null,
+    profiles: [],
+    profilesError: null,
+    profileDialog: null,
+    tabs: [first],
+    activeTab: first.id,
+    nextTabNumber: 2,
+  };
 }
 
 export const store = createStore<AppState>()(() => initialState());

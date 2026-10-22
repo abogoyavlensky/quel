@@ -69,7 +69,7 @@ beforeEach(() => {
   api.cancel.mockResolvedValue({ canceled: true });
   editor.dropped = [];
   store.setState(initialState(), true);
-  store.setState({ conn: { connId: "c1", engine: "sqlite", label: "/x.db" } });
+  store.setState({ conn: { connId: "c1", engine: "sqlite", label: "/x.db", profileId: null, color: "none" } });
 });
 
 describe("runStatements", () => {
@@ -353,7 +353,13 @@ describe("databases", () => {
     api.openDb.mockResolvedValue({ "conn-id": "c2", engine: "postgres", label: "postgres://h/db" });
     await runner.openDb("postgres://h/db");
     expect(api.closeDb).toHaveBeenCalledWith("c1");
-    expect(store.getState().conn).toEqual({ connId: "c2", engine: "postgres", label: "postgres://h/db" });
+    expect(store.getState().conn).toEqual({
+      connId: "c2",
+      engine: "postgres",
+      label: "postgres://h/db",
+      profileId: null,
+      color: "none",
+    });
     expect(tab().results[0].cursor).toBe("closed");
   });
 
