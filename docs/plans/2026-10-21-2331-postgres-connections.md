@@ -295,11 +295,11 @@ Quel (branch `postgres-connections`):
 - Modify: `src/quel/exec.lg`
 - Test: `test/quel/exec_test.lg`, `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Tests.** `exec_test`: `rows?` for `fetch all from c`, `call p()`, and the existing cases unchanged. `pg_test`: `run!` of a `select` returns columns with pg types; an `insert` returns its update count; `insert ... returning` returns rows; cancel of `select pg_sleep(30)` throws "Query canceled." within 5 s, and afterwards a temp table created before the cancel still answers on the same conn-id (the session survived); a session killed server-side (`select pg_terminate_backend(pid)` from the pool, with the pid read from the session first) makes the next run fail with a message ending "The session was reset.", and the run after that succeeds; inside `begin`, a failing statement leaves the session in place (the next `select 1` reports the aborted transaction, not a reset), and `rollback` recovers it. A cancel that destroys the connection cannot be forced from Postgres (it always answers the cancel request), so that path is covered by the terminate test, which reaches the same probe.
-- [ ] **Step 2:** `lgx test-pg` to see them fail.
-- [ ] **Step 3: Implement** `fetch`/`call` in `rows?`, and the probe-and-reset in `run!`'s error path as in the design (a `future` that sleeps 5 s and cancels the probe's `Ctx`, skipped once the probe returns).
-- [ ] **Step 4:** `lgx test-pg`: all pass.
-- [ ] **Step 5: Commit** `"Run and cancel on Postgres, resetting a broken session"`.
+- [x] **Step 1: Tests.** `exec_test`: `rows?` for `fetch all from c`, `call p()`, and the existing cases unchanged. `pg_test`: `run!` of a `select` returns columns with pg types; an `insert` returns its update count; `insert ... returning` returns rows; cancel of `select pg_sleep(30)` throws "Query canceled." within 5 s, and afterwards a temp table created before the cancel still answers on the same conn-id (the session survived); a session killed server-side (`select pg_terminate_backend(pid)` from the pool, with the pid read from the session first) makes the next run fail with a message ending "The session was reset.", and the run after that succeeds; inside `begin`, a failing statement leaves the session in place (the next `select 1` reports the aborted transaction, not a reset), and `rollback` recovers it. A cancel that destroys the connection cannot be forced from Postgres (it always answers the cancel request), so that path is covered by the terminate test, which reaches the same probe.
+- [x] **Step 2:** `lgx test-pg` to see them fail.
+- [x] **Step 3: Implement** `fetch`/`call` in `rows?`, and the probe-and-reset in `run!`'s error path as in the design (a `future` that sleeps 5 s and cancels the probe's `Ctx`, skipped once the probe returns).
+- [x] **Step 4:** `lgx test-pg`: all pass.
+- [x] **Step 5: Commit** `"Run and cancel on Postgres, resetting a broken session"`.
 
 ### Task 7: Type-aware cells
 

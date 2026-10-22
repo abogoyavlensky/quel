@@ -1,6 +1,8 @@
 (ns quel.pg-test
   (:require [integrant.core :as ig]
             [quel.conn :as conn]
+            [quel.exec :as exec]
+            [sql.core :as sql]
             [string :as str]
             [clojure.test :refer [deftest is]]))
 
@@ -49,3 +51,79 @@
               msg (message-of #(conn/open! registry bad))]
           (is (str/includes? (str msg) "password authentication failed") (str "got " (pr-str msg)))
           (is (= {} @registry) "nothing is left registered"))))))
+
+(defn with-env
+  "Run (f execs conns conn-id) over fresh registries and an open Postgres,
+   halting both afterwards in the system's order."
+  [f]
+  (let [conns (ig/init-key :quel.conn/registry {})
+        execs (ig/init-key :quel.exec/registry {:conns conns})]
+    (try
+      (f execs conns (:conn-id (conn/open! conns pg-url)))
+      (finally
+        (ig/halt-key! :quel.exec/registry execs)
+        (ig/halt-key! :quel.conn/registry conns)))))
+
+(defn- run [execs conns conn-id q]
+  (exec/run! execs conns {:conn-id conn-id :query-id (str (random-uuid)) :sql q}))
+
+(defn- first-cell [execs conns conn-id q]
+  (ffirst (:rows (run execs conns conn-id q))))
+
+(deftest select-insert-returning
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [r (run execs conns id "select 1::int4 as a, 'x'::text as b")]
+          (is (= [{:name "a" :type "INT4"} {:name "b" :type "TEXT"}] (:columns r)))
+          (is (= [[1 "x"]] (:rows r))))
+        (run execs conns id "create temp table t (id serial, x int)")
+        (is (= 2 (:update-count (run execs conns id "insert into t (x) values (1), (2)"))))
+        (is (= [[3]] (:rows (run execs conns id "insert into t (x) values (3) returning id"))))))))
+
+(deftest a-cancel-keeps-the-session
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept (x int)")
+        (let [qid (str (random-uuid))
+              t0 (System/nanoTime)
+              f (future (try (exec/run! execs conns {:conn-id id :query-id qid
+                                                     :sql "select pg_sleep(30)"})
+                             (catch e (ex-message e))))]
+          (sleep 300)
+          (is (true? (exec/cancel! execs qid)))
+          (is (= "Query canceled." (deref f 5000 :timeout)))
+          (is (< (/ (- (System/nanoTime) t0) 1000000) 5000)))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept"))
+            "the temp table survived, so the session did")))))
+
+(defn- message-of-run [execs conns id q]
+  (try (run execs conns id q) nil (catch e (ex-message e))))
+
+(deftest a-dead-session-is-reset
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [pid (first-cell execs conns id "select pg_backend_pid()")]
+          (sql/execute! (conn/db conns id) [(str "select pg_terminate_backend(" pid ")")])
+          (let [msg (message-of-run execs conns id "select 1")]
+            (is (str/ends-with? (str msg) "The session was reset.") (str "got " (pr-str msg))))
+          (let [pid2 (first-cell execs conns id "select pg_backend_pid()")]
+            (is (int? pid2) "the next run works")
+            (is (not= pid pid2) "on a fresh connection")))))))
+
+(deftest an-aborted-transaction-keeps-the-session
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [pid (first-cell execs conns id "select pg_backend_pid()")]
+          (run execs conns id "begin")
+          (let [msg (message-of-run execs conns id "select 1/0")]
+            (is (str/includes? (str msg) "division by zero"))
+            (is (not (str/includes? (str msg) "reset"))))
+          (is (str/includes? (str (message-of-run execs conns id "select 1"))
+                             "current transaction is aborted"))
+          (run execs conns id "rollback")
+          (is (= pid (first-cell execs conns id "select pg_backend_pid()"))
+              "the same connection throughout"))))))

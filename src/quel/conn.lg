@@ -119,6 +119,11 @@
         (or winner
             (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))
 
+(defn current-session
+  "The database's session if one was taken, else nil. Takes none."
+  [registry conn-id]
+  (get-in @registry [conn-id :session]))
+
 (defn reset-session!
   "Drop the database's session, so the next session! takes a fresh
    connection. For a session whose connection died; closing it is best

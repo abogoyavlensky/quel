@@ -50,6 +50,11 @@
 (def ^:private operations
   #{"select" "values" "insert" "update" "delete" "replace"})
 
+;; Heads whose statements return rows that sql/returns-rows? does not
+;; know: Postgres FETCH, and CALL (rows for OUT parameters; a CALL without
+;; them reads as an empty result).
+(def ^:private row-heads #{"pragma" "fetch" "call"})
+
 (defn- outer-operation
   "The statement's operation after a WITH: the first operation keyword at
    parenthesis depth 0, past the CTE definitions (whose bodies are in
@@ -72,7 +77,7 @@
   (let [ts (tokens q)
         head (first ts)]
     (cond
-      (= "pragma" head) true
+      (contains? row-heads head) true
       (some #{"returning"} ts) true
       (= "with" head) (contains? #{"select" "values" nil} (outer-operation (rest ts)))
       :else (sql/returns-rows? q))))
@@ -116,10 +121,43 @@
    :has-more false
    :update-count (.RowsAffected (shim/ExecCtx session ctx q []))})
 
+(def ^:private probe-timeout-ms 5000)
+
+(defn- dead?
+  "Is this session's connection gone? A failed run cannot say: its error
+   may be a server FATAL or an EOF, and only later calls report the
+   connection as bad. So run `select 1`, bounded by probe-timeout-ms, and
+   judge by that. Any other failure - an aborted transaction answering
+   SQLSTATE 25P02, say - means the connection is alive and must be kept:
+   the user still has to ROLLBACK."
+  [session]
+  (let [ctx (shim/NewCtx)]
+    (future (sleep probe-timeout-ms) (.Cancel ctx))
+    (try
+      (shim/ExecCtx session ctx "select 1" [])
+      false
+      (catch e
+        (let [msg (str (ex-message e))]
+          (boolean (or (.Canceled ctx)
+                       (str/includes? msg "bad connection")
+                       (str/includes? msg "connection is already closed")))))
+      (finally (.Cancel ctx)))))
+
+(defn- failure
+  "The error a failed run throws: \"Query canceled.\" for a cancel, else
+   the driver's error; either way noting a reset session."
+  [e canceled? reset? query-id]
+  (let [msg (if canceled? "Query canceled." (ex-message e))]
+    (if reset?
+      (ex-info (str msg " The session was reset.") {:query-id query-id})
+      (if canceled? (ex-info msg {:query-id query-id}) e))))
+
 (defn run!
   "Run one statement on the connection's session. Returns
    {:columns [{:name :type}] :rows [[cell ...]] :has-more :update-count
-    :elapsed-ms}. A cancelled query throws \"Query canceled.\"."
+    :elapsed-ms}. A cancelled query throws \"Query canceled.\". After any
+   failure the session is probed, and a dead one is dropped so the next
+   run takes a fresh connection; the error then says so."
   [execs conns {:keys [conn-id query-id sql page-size]
                 :or {page-size default-page-size}}]
   (when (str/blank? query-id)
@@ -136,9 +174,10 @@
                      (run-exec session ctx sql))]
         (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
       (catch e
-        (if (.Canceled ctx)
-          (throw (ex-info "Query canceled." {:query-id query-id}))
-          (throw e)))
+        (let [session (conn/current-session conns conn-id)
+              reset? (and session (dead? session))]
+          (when reset? (conn/reset-session! conns conn-id))
+          (throw (failure e (.Canceled ctx) reset? query-id))))
       (finally
         (.Cancel ctx)
         (swap! execs dissoc query-id)))))

@@ -93,6 +93,8 @@
   (is (true? (exec/rows? "select 1")))
   (is (true? (exec/rows? "PRAGMA database_list")))
   (is (true? (exec/rows? "pragma user_version = 3")))
+  (is (true? (exec/rows? "fetch all from c")))
+  (is (true? (exec/rows? "CALL p(1)")))
   (is (true? (exec/rows? "with c(x) as (values (1)) select x from c")))
   (is (false? (exec/rows? "WITH c(x) AS (VALUES (1)) INSERT INTO t SELECT x FROM c")))
   (is (true? (exec/rows? "with c(x) as (values (1)) insert into t select x from c returning x")))
