@@ -507,7 +507,8 @@ package feature, not app glue.
    slice done 2026-10-22: editor tabs with a session each; CodeMirror
    with highlighting and keyword completion; run statement, selection or
    script; a virtualized grid paging through open cursors, with cancel;
-   result tabs with pinning; the messages log; HMR in the dev loop. Then
+   result tabs with pinning; the messages log; HMR in the dev loop;
+   checked in the native macOS window as well. Then
    profiles and Keychain; structure tree (schemas, tables, views,
    columns) and schema completion; history; workspace restore.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
