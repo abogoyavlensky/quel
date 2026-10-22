@@ -5,11 +5,17 @@
 // string ('...', with '' and, after E, backslash escapes), a quoted
 // identifier ("...", `...`, [...]), a dollar-quoted body ($tag$...$tag$),
 // a comment (-- to the end of the line, /* */ nested as Postgres allows),
-// or a block body. Block bodies are SQLite's CREATE TRIGGER ... BEGIN ...
-// END and the SQL-standard BEGIN ATOMIC ... END (Postgres 14+): in those
-// statements only, BEGIN and CASE open a level and END closes one. Anywhere
-// else BEGIN is a plain word, so `begin; ...; commit;` splits as it should.
-// An unterminated quote or comment runs to the end of the text.
+// or a block body. A `[` quotes an identifier (SQLite) only where one can
+// start, not straight after a word or a `]` or `)`, where it is a
+// Postgres array subscript or type (`a[1]`, `int[]`, `ARRAY[...]`).
+//
+// Block bodies are SQLite's CREATE TRIGGER ... BEGIN ... END and the
+// SQL-standard BEGIN ATOMIC ... END (Postgres 14+). In those statements
+// only, BEGIN and CASE open a level. END closes a CASE level, or a BEGIN
+// level where a statement can start (after `;` or BEGIN), so a table named
+// `end` inside the body does not. Anywhere else BEGIN is a plain word, so
+// `begin; ...; commit;` splits as it should. An unterminated quote or
+// comment runs to the end of the text.
 
 export interface Statement {
   from: number; // offset of its first character (a leading comment included)
@@ -17,8 +23,10 @@ export interface Statement {
   text: string;
 }
 
-const isIdentStart = (c: string) => /[A-Za-z_]/.test(c);
-const isIdentChar = (c: string) => /[A-Za-z0-9_$]/.test(c);
+// Unquoted identifiers, Postgres' rules: letters (any script), digits, _
+// and $, not starting with a digit or $.
+const isIdentStart = (c: string) => /[\p{L}_]/u.test(c);
+const isIdentChar = (c: string) => /[\p{L}\p{N}_$]/u.test(c);
 const isSpace = (c: string) => /\s/.test(c);
 
 // create [or replace] [temp|temporary] trigger
@@ -66,7 +74,7 @@ function skipBlockComment(text: string, i: number): number {
   return text.length;
 }
 
-const dollarTag = /\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/y;
+const dollarTag = /\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/uy;
 
 export function split(text: string): Statement[] {
   const out: Statement[] = [];
@@ -75,7 +83,8 @@ export function split(text: string): Statement[] {
   let hasCode = false; // anything but comments?
   let words: string[] = [];
   let block = false;
-  let depth = 0;
+  let levels: ("begin" | "case")[] = []; // open BEGIN / CASE levels in a block
+  let last = ""; // the previous token: a word (lower-cased) or a character
 
   const finish = () => {
     if (hasCode) out.push({ from: start, to: end, text: text.slice(start, end) });
@@ -84,7 +93,8 @@ export function split(text: string): Statement[] {
     hasCode = false;
     words = [];
     block = false;
-    depth = 0;
+    levels = [];
+    last = "";
   };
   // Mark [from, to) as part of the current statement.
   const take = (from: number, to: number, code: boolean) => {
@@ -100,8 +110,12 @@ export function split(text: string): Statement[] {
 
     if (isSpace(c)) {
       i++;
-    } else if (c === ";" && depth === 0) {
+    } else if (c === ";" && levels.length === 0) {
       finish();
+      i++;
+    } else if (c === ";") {
+      take(i, i + 1, true);
+      last = ";";
       i++;
     } else if (c === "-" && text[i + 1] === "-") {
       const nl = text.indexOf("\n", i);
@@ -122,7 +136,7 @@ export function split(text: string): Statement[] {
       const j = skipQuoted(text, i, c, false);
       take(i, j, true);
       i = j;
-    } else if (c === "[") {
+    } else if (c === "[" && !(isIdentChar(prev) || prev === "]" || prev === ")")) {
       const j = skipQuoted(text, i, "]", false);
       take(i, j, true);
       i = j;
@@ -145,16 +159,20 @@ export function split(text: string): Statement[] {
       take(i, j, true);
       i = j;
       if (block) {
-        if (word === "begin" || word === "case") depth++;
-        else if (word === "end") depth = Math.max(0, depth - 1);
-      } else if (word === "atomic" && words[words.length - 1] === "begin") {
+        const top = levels[levels.length - 1];
+        if (word === "begin" || word === "case") levels.push(word);
+        else if (word === "end" && (top === "case" || (top === "begin" && (last === ";" || last === "begin"))))
+          levels.pop();
+      } else if (word === "atomic" && last === "begin") {
         block = true;
-        depth = 1;
+        levels = ["begin"];
       }
       words.push(word);
+      last = word;
       if (!block && words.length <= 6 && isTriggerHead(words)) block = true;
     } else {
       take(i, i + 1, true);
+      last = c;
       i++;
     }
   }

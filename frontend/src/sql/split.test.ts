@@ -41,6 +41,21 @@ describe("split", () => {
     expect(texts(`${stmt}; select 2`)).toEqual([stmt, "select 2"]);
   });
 
+  it("reads Postgres array brackets as SQL, not as quoted identifiers", () => {
+    expect(texts("select ARRAY[']', ';']; select 2")).toEqual(["select ARRAY[']', ';']", "select 2"]);
+    expect(texts("select a[1], '{1}'::int[]; select 2")).toEqual(["select a[1], '{1}'::int[]", "select 2"]);
+    expect(texts("select (f())[1]; select 2")).toEqual(["select (f())[1]", "select 2"]);
+  });
+
+  it("takes non-ASCII dollar-quote tags", () => {
+    expect(texts("select $é$a;b$é$; select 2")).toEqual(["select $é$a;b$é$", "select 2"]);
+  });
+
+  it("does not take a table named end for the end of a trigger body", () => {
+    const trigger = "create trigger t after insert on x begin insert into end values (1); insert into log values (2); end";
+    expect(texts(`${trigger}; select 2`)).toEqual([trigger, "select 2"]);
+  });
+
   it("treats a backslash in a plain string as a character", () => {
     expect(texts("select 'a\\'; select 2")).toEqual(["select 'a\\'", "select 2"]);
   });
