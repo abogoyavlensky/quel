@@ -227,3 +227,20 @@
         msg (message-of #(conn/check! t))]
     (is (some? msg))
     (is (not (leaks? msg)) msg)))
+
+;; The path goes to the driver as a URI, so a ? in a file name opens that
+;; file, not the part before it.
+(deftest a-question-mark-in-a-sqlite-path
+  (let [dir (str/trim (:out (os/sh "mktemp" "-d")))
+        path (str dir "/a?b #1.db")
+        registry (ig/init-key :quel.conn/registry {})]
+    (try
+      (spit path "")
+      (let [{:keys [conn-id]} (conn/open-target! registry {:engine :sqlite :path path :label "x"})]
+        (sql/execute! (conn/db registry conn-id) ["create table marker (x int)"])
+        (conn/close! registry conn-id))
+      (is (nil? (os/stat (str dir "/a"))))
+      (is (pos? (:size (os/stat path))))
+      (finally
+        (ig/halt-key! :quel.conn/registry registry)
+        (os/sh "rm" "-rf" dir)))))

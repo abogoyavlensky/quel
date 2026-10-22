@@ -1,5 +1,6 @@
 (ns quel.store
   (:require [integrant.core :as ig]
+            [quel.conn :as conn]
             [quel.migrations :as migrations]
             [ragtime.letgo :as rt]
             [sqlite.core :as sqlite]
@@ -38,24 +39,12 @@
 (defn db-path [dir]
   (str dir "/quel.db"))
 
-(defn- dsn
-  "The driver's name for the file at path: a file: URI, so a ? or # in the
-   path is part of the name rather than the start of the parameters, which
-   follow."
-  [path]
-  (str "file:"
-       (-> path
-           (str/replace "%" "%25")
-           (str/replace "?" "%3F")
-           (str/replace "#" "%23"))
-       dsn-pragmas))
-
 (defn open!
   "Open (creating it if needed) the app database in dir, migrated to the
    latest version. Returns the connectable."
   [dir]
   (mkdir dir)
-  (let [db (sqlite/open (dsn (db-path dir)))]
+  (let [db (sqlite/open (str (conn/sqlite-uri (db-path dir)) dsn-pragmas))]
     (try
       (rt/migrate {:datastore (rt/sql-database db)
                    :migrations migrations/migrations

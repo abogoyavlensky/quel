@@ -89,6 +89,17 @@
         (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@"))
     path))
 
+(defn sqlite-uri
+  "The SQLite driver's name for the file at path: a file: URI, so a ? or #
+   in the path is part of the file name rather than the start of
+   parameters. Append ?_pragma=... to configure every connection."
+  [path]
+  (str "file:"
+       (-> path
+           (str/replace "%" "%25")
+           (str/replace "?" "%3F")
+           (str/replace "#" "%23"))))
+
 (defn- dsn-escaped
   "s as it appears inside a quoted DSN value."
   [s]
@@ -120,7 +131,7 @@
    the UI. Opening is lazy: no connection is made yet."
   [{:keys [engine path url dsn] :as t}]
   (if (= :sqlite engine)
-    (sqlite/open path)
+    (sqlite/open (sqlite-uri path))
     (try
       (pg/open (or url dsn) {:postgres/cancel :request})
       (catch e (throw (ex-info (redact t (ex-message e)) {}))))))
