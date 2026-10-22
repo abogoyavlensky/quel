@@ -22,7 +22,8 @@
   (is (= {:ok true} (api/ping {}))))
 
 (deftest every-handler-is-a-var
-  (is (= #{"ping" "open-db" "close-db" "run" "cancel"} (set (keys api/handlers))))
+  (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"}
+         (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 
 (deftest open-run-close
@@ -40,3 +41,29 @@
   (with-env
     (fn [env _]
       (is (= {:canceled false} (api/cancel env "nope"))))))
+
+(deftest page-through-and-close
+  (with-env
+    (fn [env path]
+      (let [{:keys [conn-id]} (api/open-db env path)]
+        (api/run env conn-id "s1" "mk" "create table t (id integer)")
+        (api/run env conn-id "s1" "fill"
+                 (str "insert into t (id) with recursive c(x) as (select 1 union all"
+                      " select x + 1 from c where x < 1200) select x from c"))
+        (let [r (api/run env conn-id "s1" "big" "select id from t order by id")
+              p2 (api/fetch-page env "big")
+              p3 (api/fetch-page env "big")]
+          (is (true? (:has-more r)))
+          (is (= #{:rows :has-more :closed} (set (keys p2))))
+          (is (= [500 200] [(count (:rows p2)) (count (:rows p3))]))
+          (is (false? (:has-more p3))))
+        (api/run env conn-id "s1" "again" "select id from t")
+        (is (nil? (api/close-result env "again")))
+        (is (true? (:closed (api/fetch-page env "again"))))
+        (api/run env conn-id "s2" "other" "select id from t")
+        (is (nil? (api/close-session env conn-id "s2")))
+        (is (true? (:closed (api/fetch-page env "other"))))
+        (api/run env conn-id "s1" "open" "select id from t")
+        (is (nil? (api/close-db env conn-id)))
+        (is (empty? @(:execs env)))
+        (is (empty? @(:conns env)))))))

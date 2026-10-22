@@ -31,20 +31,43 @@
                                         :filters db-filters})]
         (w/emit! app "menu:open-db" {:path path})))))
 
-(defn run! [{:keys [app]}]
-  (reporting app "Run"
-    (fn [] (w/emit! app "menu:run" {}))))
+(defn- emitter
+  "A click handler that emits `event` to the frontend, which does the work."
+  [what event]
+  (fn [{:keys [app]}]
+    (reporting app what (fn [] (w/emit! app event {})))))
 
+(def new-tab! (emitter "New Tab" "menu:new-tab"))
+(def close-tab! (emitter "Close Tab" "menu:close-tab"))
+(def run! (emitter "Run" "menu:run"))
+(def run-script! (emitter "Run Script" "menu:run-script"))
+(def cancel! (emitter "Cancel" "menu:cancel"))
+
+;; Cmd+W closes the editor tab: on macOS Wails' window menu has no Close
+;; item, so the key is free. If the native menu and the editor's own keymap
+;; both see Cmd+Enter, the frontend drops the second run (one in flight
+;; per tab).
 (defn spec [env]
   [{:role :app-menu}
    {:label "File"
-    :items [{:label "Open Database…" :accelerator "CmdOrCtrl+O"
+    :items [{:label "New Tab" :accelerator "CmdOrCtrl+T"
+             :on-click (partial #'new-tab! env)}
+            {:label "Open Database…" :accelerator "CmdOrCtrl+O"
              :on-click (partial #'open-db! env)}
-            {:label "Run" :accelerator "CmdOrCtrl+Enter"
-             :on-click (partial #'run! env)}
+            {:separator true}
+            {:label "Close Tab" :accelerator "CmdOrCtrl+W"
+             :on-click (partial #'close-tab! env)}
             {:separator true}
             {:role :quit}]}
    {:role :edit-menu}
+   {:label "Query"
+    :items [{:label "Run" :accelerator "CmdOrCtrl+Enter"
+             :on-click (partial #'run! env)}
+            {:label "Run Script" :accelerator "CmdOrCtrl+Shift+Enter"
+             :on-click (partial #'run-script! env)}
+            {:separator true}
+            {:label "Cancel" :accelerator "CmdOrCtrl+."
+             :on-click (partial #'cancel! env)}]}
    {:role :window-menu}])
 
 (defn install!
