@@ -1,7 +1,7 @@
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // The page always comes from Wails' origin, so it can reach the bridge.
 // Under `lgx dev` Wails proxies it from this dev server (HMR); otherwise
@@ -24,5 +24,9 @@ export default defineConfig({
   build: {
     outDir: "../resources/public",
     emptyOutDir: true,
+  },
+  // Unit tests only; e2e/*.spec.ts are Playwright's.
+  test: {
+    include: ["src/**/*.test.ts"],
   },
 });
