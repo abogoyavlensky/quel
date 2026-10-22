@@ -198,3 +198,96 @@
           (is (< (quot (- (System/nanoTime) t0) 1000000) 5000)))
         (is (= "Query canceled." (deref result 5000 :timeout))))
       (finally (os/sh "rm" "-f" path)))))
+
+;; Open cursors and paging.
+
+(defn- fetch [execs conns qid & [n]]
+  (exec/fetch-page! execs conns qid (or n 500)))
+
+(defn- run-in [execs conns conn-id sid qid q & {:as opts}]
+  (exec/run! execs conns (merge {:conn-id conn-id :session-id sid :query-id qid :sql q} opts)))
+
+(deftest a-result-with-more-rows-keeps-its-cursor
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (let [r (run-in execs conns id "s1" "big" "select id from t order by id" :page-size 500)
+            p2 (fetch execs conns "big")
+            p3 (fetch execs conns "big")]
+        (is (true? (:has-more r)))
+        (is (= 500 (count (:rows p2))))
+        (is (true? (:has-more p2)))
+        (is (false? (:closed p2)))
+        (is (= 200 (count (:rows p3))))
+        (is (false? (:has-more p3)))
+        (is (false? (:closed p3)))
+        (is (= (vec (range 1 1201)) (mapv first (concat (:rows r) (:rows p2) (:rows p3))))
+            "the peeked row is neither lost nor duplicated")
+        (is (= {} @execs) "read to the end, the cursor is gone")
+        (is (= {:rows [] :has-more false :closed true} (fetch execs conns "big")))))))
+
+(deftest pages-that-end-exactly
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1000)
+      (let [r (run-in execs conns id "s1" "q" "select id from t order by id" :page-size 500)
+            p2 (fetch execs conns "q")]
+        (is (true? (:has-more r)))
+        (is (= 500 (count (:rows p2))))
+        (is (false? (:has-more p2)))
+        (is (= 1000 (last (mapv first (:rows p2)))))
+        (is (= {} @execs))))))
+
+(deftest a-small-page-size-pages-one-row-at-a-time
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 3)
+      (let [r (run-in execs conns id "s1" "q" "select id from t order by id" :page-size 1)
+            p2 (fetch execs conns "q" 1)
+            p3 (fetch execs conns "q" 1)]
+        (is (= [[[1]] [[2]] [[3]]] [(:rows r) (:rows p2) (:rows p3)]))
+        (is (= [true true false] [(:has-more r) (:has-more p2) (:has-more p3)]))))))
+
+(deftest an-unknown-result-is-closed
+  (with-env
+    (fn [execs conns _]
+      (is (= {:rows [] :has-more false :closed true} (fetch execs conns "nope"))))))
+
+(deftest a-new-run-in-the-session-closes-its-cursor
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "first" "select id from t order by id")
+      (run-in execs conns id "s2" "other" "select id from t order by id")
+      (is (= [[1]] (:rows (run-in execs conns id "s1" "second" "select 1"))))
+      (is (true? (:closed (fetch execs conns "first"))) "closed by the next run in s1")
+      (is (= 500 (count (:rows (fetch execs conns "other")))) "s2's cursor is untouched"))))
+
+(deftest a-running-session-refuses-a-second-run
+  (with-env
+    (fn [execs conns id]
+      (let [result (future (message-of #(run-in execs conns id "s1" "a" runaway)))]
+        (is (until #(contains? @execs "a")))
+        (is (str/includes? (str (message-of #(run-in execs conns id "s1" "b" "select 1")))
+                           "already running in this session"))
+        (is (= [[1]] (:rows (run-in execs conns id "s2" "c" "select 1"))) "another tab runs")
+        (exec/cancel! execs "a")
+        (is (= "Query canceled." (deref result 5000 :timeout)))))))
+
+(deftest an-open-cursor-is-not-running
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (is (false? (exec/cancel! execs "big")))
+      (is (= :open (get-in @execs ["big" :state]))))))
+
+(deftest halting-closes-open-cursors-promptly
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (let [t0 (System/nanoTime)]
+        (ig/halt-key! :quel.exec/registry execs)
+        (is (< (quot (- (System/nanoTime) t0) 1000000) 1000)))
+      (is (= {} @execs)))))

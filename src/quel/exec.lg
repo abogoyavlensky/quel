@@ -7,17 +7,33 @@
             [sql.shim :as shim]
             [string :as str]))
 
-;; Running queries, keyed by a query-id the frontend generates, so it can
-;; cancel a query before its first row arrives. Each entry is
-;; {:ctx <shim Ctx> :conn-id <string>}; an entry lives exactly as long as
-;; its query runs.
+;; Queries and their open cursors, keyed by a query-id the frontend
+;; generates, so it can cancel a query before its first row arrives. An
+;; entry is
 ;;
-;; Milestone 0 returns the first page and closes the cursor. fetch-page and
-;; cursor lifetime (idle timeout, close on tab close) are milestone 1.
+;;   {:conn-id :session-id :engine :ctx <shim Ctx>
+;;    :state :running | :open | :fetching
+;;    ;; :open and :fetching only: the cursor, its column types, whether it
+;;    ;; sits on an unread row, and when it was last read
+;;    :rows <*sql.Rows> :types [...] :pending? bool :touched <ms>}
+;;
+;; A query whose result has more rows than its first page keeps its cursor
+;; open under its query-id, which is then the result's id, and fetch-page!
+;; reads on from it. There is one entry per session at most: a connection
+;; with open rows cannot run another statement, so a new run in the session
+;; closes the session's open cursor first.
+;;
+;; Whoever removes an entry from the registry owns it and disposes of it.
 ;;
 ;; The registry is an atom; the component's value is the atom.
 
 (def default-page-size 500)
+
+;; How long closing a pgx cursor may drain the rest of its result before
+;; the query is cancelled (see dispose!).
+(def drain-ms 1000)
+
+(defn- now-ms [] (quot (System/nanoTime) 1000000))
 
 (defn- same-session? [conn-id session-id e]
   (and (= conn-id (:conn-id e)) (= session-id (:session-id e))))
@@ -25,20 +41,66 @@
 (defn- register!
   "Add the query's entry, refusing a reused query-id and a second query in
    a session: one connection cannot run two statements at once."
-  [execs query-id conn-id session-id ctx]
+  [execs query-id conn-id session-id engine ctx]
   (let [busy? (fn [m] (some #(same-session? conn-id session-id %) (vals m)))
         [old _] (swap-vals! execs
                             (fn [m]
                               (if (or (contains? m query-id) (busy? m))
                                 m
                                 (assoc m query-id {:ctx ctx :conn-id conn-id
-                                                   :session-id session-id}))))]
+                                                   :session-id session-id
+                                                   :engine engine :state :running}))))]
     (cond
       (contains? old query-id)
       (throw (ex-info (str "Query " query-id " is already running.") {:query-id query-id}))
 
       (busy? old)
       (throw (ex-info "A query is already running in this session." {:conn-id conn-id})))))
+
+(defn- take-entries!
+  "Remove the entries pred matches and return them: the caller owns them
+   now."
+  [execs pred]
+  (let [[old _] (swap-vals! execs (fn [m] (into {} (remove (fn [[_ e]] (pred e)) m))))]
+    (filterv pred (vals old))))
+
+(defn- take-entry!
+  "Remove the query's entry and return it, or nil if it is gone."
+  [execs query-id]
+  (let [[old _] (swap-vals! execs dissoc query-id)]
+    (get old query-id)))
+
+(defn- dispose!
+  "Close an entry's cursor, if it has one, and release its ctx.
+
+   On SQLite closing a cursor resets its statement, which is instant. On
+   pgx, Rows.Close reads and discards the rest of the result. A cancel
+   would be faster, but inside an explicit transaction it aborts the
+   transaction (SQLSTATE 25P02 until ROLLBACK), and a script of `begin;
+   select <big>; insert ...` must not fail because the insert closed the
+   select's cursor. So drain, and cancel only if that takes longer than
+   drain-ms: then a cursor with a lot left unread is cancelled after all,
+   as after a cancel in psql. Outside a transaction the cancel costs
+   nothing."
+  [{:keys [engine ctx rows]}]
+  (cond
+    (nil? rows) (.Cancel ctx)
+
+    (= :sqlite engine)
+    (try (.Close rows) (finally (.Cancel ctx)))
+
+    :else
+    (let [done (atom false)]
+      (future (sleep drain-ms) (when-not @done (.Cancel ctx)))
+      (try (.Close rows) (finally (reset! done true) (.Cancel ctx)))))
+  nil)
+
+(defn- close-open-cursor!
+  "Close the session's open cursor, if it has one."
+  [execs conn-id session-id]
+  (doseq [e (take-entries! execs #(and (= :open (:state %))
+                                       (same-session? conn-id session-id %)))]
+    (dispose! e)))
 
 ;; Tokens of a statement - words (lower-cased) and parentheses - past
 ;; string literals, quoted identifiers and comments: those alternatives are
@@ -95,30 +157,42 @@
 
 (defn read-page
   "Read up to n rows from an open cursor as encoded cells, typed by the
-   columns' type names. Returns {:rows [...] :has-more bool}; has-more
-   consumes one row to find out."
-  [rows types n]
-  (loop [acc []]
-    (if (< (count acc) n)
-      (if (.Next rows)
-        (recur (conj acc (cells/encode-row types (vec (shim/ScanRow rows)))))
-        (do (fail-on-err! rows)
-            {:rows acc :has-more false}))
-      (let [more (.Next rows)]
-        (when-not more (fail-on-err! rows))
-        {:rows acc :has-more more}))))
+   columns' type names. Returns {:rows [...] :has-more bool}. has-more
+   consumes one more .Next to find out, which leaves the cursor on an
+   unread row: pass pending? true for the next page, which then scans that
+   row before calling .Next again."
+  [rows types n pending?]
+  (let [scan #(cells/encode-row types (vec (shim/ScanRow rows)))]
+    (loop [acc (if pending? [(scan)] [])]
+      (if (< (count acc) n)
+        (if (.Next rows)
+          (recur (conj acc (scan)))
+          (do (fail-on-err! rows)
+              {:rows acc :has-more false}))
+        (let [more (.Next rows)]
+          (when-not more (fail-on-err! rows))
+          {:rows acc :has-more more})))))
 
-(defn- run-rows [session ctx q page-size]
+(defn- run-rows
+  "Run a row-returning statement and read its first page. Returns
+   {:result <the reply> :rows <the cursor, when it has more> :types [...]};
+   a cursor without more rows is closed here."
+  [session ctx q page-size]
   (let [rows (shim/QueryCtx session ctx q [])]
     (try
       (let [names (vec (.Columns rows))
             types (vec (shim/ColumnTypeNames rows))
-            page (read-page rows types page-size)]
-        {:columns (mapv (fn [n t] {:name n :type t}) names types)
-         :rows (:rows page)
-         :has-more (:has-more page)
-         :update-count nil})
-      (finally (.Close rows)))))
+            page (read-page rows types page-size false)]
+        (when-not (:has-more page) (.Close rows))
+        {:result {:columns (mapv (fn [n t] {:name n :type t}) names types)
+                  :rows (:rows page)
+                  :has-more (:has-more page)
+                  :update-count nil}
+         :rows (when (:has-more page) rows)
+         :types types})
+      (catch e
+        (.Close rows)
+        (throw e)))))
 
 (defn- run-exec [session ctx q]
   {:columns []
@@ -157,53 +231,138 @@
       (ex-info (str msg " The session was reset.") {:query-id query-id})
       (if canceled? (ex-info msg {:query-id query-id}) e))))
 
+(defn- fail!
+  "Throw for a failed run or page read. The failure's own error cannot say
+   whether the session survived, so probe it, and drop a dead one so the
+   next run takes a fresh connection."
+  [conns conn-id session-id ctx query-id e]
+  (let [session (conn/current-session conns conn-id session-id)
+        reset? (and session (dead? session))]
+    (when reset? (conn/reset-session! conns conn-id session-id))
+    (throw (failure e (.Canceled ctx) reset? query-id))))
+
+(defn- open-cursor!
+  "Turn the query's :running entry into an :open cursor. False when the
+   entry is gone or its query was cancelled meanwhile (its session closed,
+   say): the caller then disposes of the cursor."
+  [execs query-id ctx rows types]
+  (let [[_ now] (swap-vals! execs
+                            (fn [m]
+                              (if (and (= :running (get-in m [query-id :state]))
+                                       (not (.Canceled ctx)))
+                                (update m query-id assoc :state :open :rows rows
+                                        :types types :pending? true :touched (now-ms))
+                                m)))]
+    (= :open (get-in now [query-id :state]))))
+
 (defn run!
   "Run one statement in the tab's session (session-id). Returns
    {:columns [{:name :type}] :rows [[cell ...]] :has-more :update-count
-    :elapsed-ms}. A cancelled query throws \"Query canceled.\". After any
-   failure the session is probed, and a dead one is dropped so the next
-   run takes a fresh connection; the error then says so."
+    :elapsed-ms}. With :has-more true the cursor stays open under the
+   query-id, for fetch-page!. A run first closes the session's open
+   cursor. A cancelled query throws \"Query canceled.\". After any failure
+   the session is probed, and a dead one is dropped so the next run takes
+   a fresh connection; the error then says so."
   [execs conns {:keys [conn-id session-id query-id sql page-size]
                 :or {page-size default-page-size}}]
   (when (str/blank? query-id)
     (throw (ex-info "A query id is required." {})))
   (when (str/blank? sql)
     (throw (ex-info "Nothing to run." {})))
-  (let [ctx (shim/NewCtx)]
-    (register! execs query-id conn-id session-id ctx)
+  (let [ctx (shim/NewCtx)
+        engine (conn/engine conns conn-id)
+        kept (atom false)]
+    (close-open-cursor! execs conn-id session-id)
+    ;; Registered before the session is taken: a tab closing meanwhile
+    ;; either finds this entry and cancels it, or has retired the
+    ;; session-id, and session! refuses it.
+    (register! execs query-id conn-id session-id engine ctx)
     (try
       (let [session (conn/session! conns conn-id session-id)
             t0 (System/nanoTime)
-            result (if (rows? sql)
-                     (run-rows session ctx sql page-size)
-                     (run-exec session ctx sql))]
+            {:keys [result rows types]} (if (rows? sql)
+                                          (run-rows session ctx sql page-size)
+                                          {:result (run-exec session ctx sql)})]
+        (when rows
+          (if (open-cursor! execs query-id ctx rows types)
+            (reset! kept true)
+            (dispose! {:engine engine :ctx ctx :rows rows})))
         (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
       (catch e
-        (let [session (conn/current-session conns conn-id session-id)
-              reset? (and session (dead? session))]
-          (when reset? (conn/reset-session! conns conn-id session-id))
-          (throw (failure e (.Canceled ctx) reset? query-id))))
+        (fail! conns conn-id session-id ctx query-id e))
       (finally
-        (.Cancel ctx)
-        (swap! execs dissoc query-id)))))
+        (when-not @kept
+          (.Cancel ctx)
+          (swap! execs dissoc query-id))))))
+
+(def ^:private closed-page {:rows [] :has-more false :closed true})
+
+(defn fetch-page!
+  "Read the next page of an open result. Returns {:rows :has-more
+   :closed}; :closed true means the cursor is gone (read to the end before,
+   closed by a new run in its session, by close-result!, or when idle), and
+   the result has no more rows to give. A failed read closes the cursor and
+   throws as run! does."
+  ([execs conns query-id] (fetch-page! execs conns query-id default-page-size))
+  ([execs conns query-id page-size]
+   (let [[old _] (swap-vals! execs
+                             (fn [m]
+                               (if (= :open (get-in m [query-id :state]))
+                                 (assoc-in m [query-id :state] :fetching)
+                                 m)))
+         {:keys [state rows types pending? conn-id session-id ctx]} (get old query-id)]
+     (case state
+       nil closed-page
+       :fetching (throw (ex-info "A page is already being read." {:query-id query-id}))
+       :running (throw (ex-info "The query is still running." {:query-id query-id}))
+       :open
+       (let [page (try
+                    (read-page rows types page-size pending?)
+                    (catch err
+                      ;; Still ours: close it and report. Gone: whoever
+                      ;; closed it caused the error and disposed of it.
+                      (when-let [e (take-entry! execs query-id)]
+                        (dispose! e)
+                        (fail! conns conn-id session-id ctx query-id err))))]
+         (cond
+           (nil? page) closed-page
+
+           (:has-more page)
+           (let [[_ now] (swap-vals! execs
+                                     (fn [m]
+                                       (if (contains? m query-id)
+                                         (update m query-id assoc :state :open
+                                                 :pending? true :touched (now-ms))
+                                         m)))]
+             (if (contains? now query-id) (assoc page :closed false) closed-page))
+
+           :else
+           (if-let [e (take-entry! execs query-id)]
+             (do (dispose! e) (assoc page :closed false))
+             closed-page)))))))
 
 (defn cancel!
-  "Cancel a running query. True if it was running, false if the id is
-   unknown (never started, or already finished)."
+  "Cancel a running query or a page being read. True if one was, false
+   otherwise: an unknown id, or an open cursor nobody is reading (close
+   that with close-result!)."
   [execs query-id]
-  (if-let [{:keys [ctx]} (get @execs query-id)]
-    (do (.Cancel ctx) true)
-    false))
+  (let [{:keys [state ctx]} (get @execs query-id)]
+    (if (contains? #{:running :fetching} state)
+      (do (.Cancel ctx) true)
+      false)))
 
 ;; :conns is unused here but makes this component depend on the connection
-;; registry, so integrant halts it first: running queries are cancelled
-;; before their sessions close (closing a busy session waits for it).
+;; registry, so integrant halts it first: running queries are cancelled and
+;; cursors closed before their sessions close (closing a busy session waits
+;; for it).
 (defmethod ig/init-key ::registry [_ _]
   (atom {}))
 
 (defmethod ig/halt-key! ::registry [_ execs]
-  (doseq [id (keys @execs)]
-    (cancel! execs id))
+  (doseq [e (take-entries! execs #(contains? #{:open :fetching} (:state %)))]
+    (dispose! e))
+  (doseq [e (vals @execs)]
+    (.Cancel (:ctx e)))
   ;; Give the cancelled queries a moment to unwind and deregister.
   (loop [waited 0]
     (when (and (seq @execs) (< waited 5000))

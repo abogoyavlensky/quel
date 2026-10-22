@@ -140,6 +140,11 @@
   [registry conn-id]
   (:db (entry registry conn-id)))
 
+(defn engine
+  "The engine of an open database: :sqlite, :postgres or :redshift."
+  [registry conn-id]
+  (:engine (entry registry conn-id)))
+
 (defn- check-session-id [session-id]
   (when (str/blank? session-id)
     (throw (ex-info "A session id is required." {}))))
