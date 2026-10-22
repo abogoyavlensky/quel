@@ -130,7 +130,7 @@
   (with-store
     (fn [db _]
       (let [p (profiles/save! db s (assoc pg "password" "saved"))
-            eff #(profiles/effective-password s (profiles/normalize (merge pg %)))]
+            eff #(profiles/effective-password db s (profiles/normalize (merge pg %)))]
         (is (= "saved" (eff {"id" (:id p)})))
         (is (= "typed" (eff {"id" (:id p) "password" "typed"})))
         (is (nil? (eff {"id" (:id p) "forget-password" true})))
@@ -209,3 +209,14 @@
         (doseq [f fs] @f)
         (let [saved (profiles/fetch db (:id p))]
           (is (= (:has-password saved) (some? (secrets/password s (:id p))))))))))
+
+;; A profile without a saved password never asks the keyring, which may
+;; not be reachable at all: an entry planted behind its back is not read.
+(deftest no-saved-password-no-keyring
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s pg)]
+        (secrets/set-password! s (:id p) "planted")
+        (is (nil? (profiles/saved-password s p)))
+        (is (nil? (profiles/effective-password db s (profiles/normalize (assoc pg "id" (:id p))))))
+        (secrets/delete-password! s (:id p))))))

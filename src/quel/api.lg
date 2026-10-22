@@ -4,7 +4,6 @@
             [quel.exec :as exec]
             [quel.menu :as menu]
             [quel.profiles :as profiles]
-            [quel.secrets :as secrets]
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
@@ -53,14 +52,14 @@
    tested."
   [{:keys [store secrets]} m]
   (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
-        t (profiles/target p (profiles/effective-password secrets p))]
+        t (profiles/target p (profiles/effective-password store secrets p))]
     (conn/check! t)
     {:ok true :label (:label t)}))
 
 (defn connect [{:keys [conns store secrets]} profile-id]
   (let [p (or (profiles/fetch store profile-id)
               (throw (ex-info "This connection no longer exists." {:id profile-id})))
-        t (profiles/target p (secrets/password secrets profile-id))]
+        t (profiles/target p (profiles/saved-password secrets p))]
     (assoc (conn/open-target! conns t) :profile-id profile-id)))
 
 (defn choose-file

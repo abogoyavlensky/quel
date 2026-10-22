@@ -138,15 +138,23 @@
            (throw (ex-info (str "Unknown SSL mode " ssl-mode ".") {:ssl-mode ssl-mode})))
          (assoc p :port port :ssl-mode ssl-mode :path nil))))))
 
+(defn saved-password
+  "The saved password of profile p, or nil. Asks the Keychain only when p
+   says one is saved: a profile without one must connect even where no
+   keyring is reachable (a Linux box with no Secret Service)."
+  [secrets p]
+  (when (:has-password p)
+    (secrets/password secrets (:id p))))
+
 (defn effective-password
   "The password to connect p (normalized) with: the one it carries, none
    when it asks to forget, else the saved one for its id."
-  [secrets p]
+  [db secrets p]
   (let [[op pw] (password-change p)]
     (case op
       :set pw
       :forget nil
-      :keep (when (:id p) (secrets/password secrets (:id p))))))
+      :keep (when (:id p) (saved-password secrets (fetch db (:id p)))))))
 
 (defn- unique-violation? [e]
   (str/includes? (str (ex-message e)) "UNIQUE constraint failed: profiles.name"))
