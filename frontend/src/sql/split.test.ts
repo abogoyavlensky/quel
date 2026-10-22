@@ -54,6 +54,17 @@ describe("split", () => {
     expect(texts("select t.[a;b] from t; select 2")).toEqual(["select t.[a;b] from t", "select 2"]);
   });
 
+  it("reads brackets after SQLite commands as quoted identifiers", () => {
+    expect(texts("analyze [a;b]; savepoint [c;d]; select 2")).toEqual(["analyze [a;b]", "savepoint [c;d]", "select 2"]);
+  });
+
+  it("keeps a trigger on a quoted table whole", () => {
+    for (const table of ['"t"', "`t`", "[t]"]) {
+      const trigger = `create trigger tr after insert on ${table} begin delete from x; end`;
+      expect(texts(`${trigger}; select 2`)).toEqual([trigger, "select 2"]);
+    }
+  });
+
   it("does not take tables or triggers named begin for a trigger body", () => {
     const a = "create trigger tr after insert on t begin insert into begin values(1); end";
     expect(texts(`${a}; select 2`)).toEqual([a, "select 2"]);

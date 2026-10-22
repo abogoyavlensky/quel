@@ -39,7 +39,11 @@ const keywords = new Set(
     "create index view trigger if exists distinct all when then else case in is like returning " +
     "with using group order having union except intersect limit offset references drop alter " +
     "column add rename to replace pragma explain unique primary key foreign check default " +
-    "between escape glob match regexp collate begin end"
+    "between escape glob match regexp collate begin end analyze savepoint release rollback " +
+    "commit vacuum reindex attach detach database transaction of for each row instead before " +
+    "after virtual temp temporary without rowid conflict abort fail ignore raise natural left " +
+    "right inner outer cross full asc desc nulls first last filter over partition window do " +
+    "nothing indexed exclusive immediate deferred"
   ).split(" "),
 );
 
@@ -114,6 +118,11 @@ export function split(text: string): Statement[] {
     onTable = 0;
     last = "";
   };
+  // A quoted name counts as the trigger's table, as a word would.
+  const quotedName = () => {
+    if (trigger && levels.length === 0 && onTable === 1) onTable = 2;
+    last = '"';
+  };
   // Mark [from, to) as part of the current statement.
   const take = (from: number, to: number, code: boolean) => {
     if (start < 0) start = from;
@@ -153,10 +162,12 @@ export function split(text: string): Statement[] {
     } else if (c === '"' || c === "`") {
       const j = skipQuoted(text, i, c, false);
       take(i, j, true);
+      quotedName();
       i = j;
-    } else if (c === "[" && !(last === "array" || last === "]" || last === ")" || (/^[\p{L}_]/u.test(last) && !keywords.has(last)))) {
+    } else if (c === "[" && !(last === "array" || last === "]" || last === ")" || last === "\"" || (/^[\p{L}_]/u.test(last) && !keywords.has(last)))) {
       const j = skipQuoted(text, i, "]", false);
       take(i, j, true);
+      quotedName();
       i = j;
     } else if (c === "$" && !isIdentChar(prev)) {
       dollarTag.lastIndex = i;
