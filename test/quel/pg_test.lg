@@ -250,3 +250,24 @@
         (is (= {} @execs))
         (is (= 0 (first-cell execs conns id "select count(*) from kept3"))
             "the session survived")))))
+
+(defn pg-parts
+  "QUEL_PG_URL's parts, as a profile's fields: postgres://user:pw@host:port/db."
+  []
+  (let [[_ user pw host port db] (re-find #"^postgres(?:ql)?://([^:]+):([^@]*)@([^:/]+):(\d+)/([^?]+)" pg-url)]
+    {:user user :password pw :host host :port (parse-long port) :database db}))
+
+(deftest open-a-dsn-target
+  (with-pg
+    (with-registry
+      (fn [registry]
+        (let [{:keys [user password host port database]} (pg-parts)
+              dsn (str "host=" (conn/dsn-quote host) " port=" (conn/dsn-quote (str port))
+                       " dbname=" (conn/dsn-quote database) " user=" (conn/dsn-quote user)
+                       " password=" (conn/dsn-quote password) " sslmode='disable'")
+              t {:engine :postgres :dsn dsn :label "Local" :secret password}
+              {:keys [conn-id] :as r} (conn/open-target! registry t)]
+          (is (= {:engine :postgres :label "Local"} (dissoc r :conn-id)))
+          (is (= [{:one 1}] (sql/execute! (conn/db registry conn-id) ["select 1 as one"])))
+          (is (nil? (conn/check! t)))
+          (conn/close! registry conn-id))))))

@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [close!])
   (:require [integrant.core :as ig]
             [postgres.core :as pg]
+            [sql.core :as sql]
             [sql.shim :as shim]
             [sqlite.core :as sqlite]
             [string :as str]))
@@ -88,25 +89,40 @@
         (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@"))
     path))
 
+(defn- dsn-escaped
+  "s as it appears inside a quoted DSN value."
+  [s]
+  (let [q (dsn-quote s)]
+    (subs q 1 (dec (count q)))))
+
 (defn redact
-  "msg with the target's URL replaced by its label, and anything else that
-   looks like a password (user:password@, password=...) masked: driver
-   errors can quote the URL they failed to parse."
-  [t msg]
+  "msg with the target's URL replaced by its label, its :secret masked
+   (raw and as escaped in a DSN), and anything else that looks like a
+   password (user:password@, password=...) masked: driver errors can quote
+   the URL or DSN they failed to use.
+
+   pgx's own parse errors read \"cannot parse `<dsn>`: <reason>\", with the
+   password inside half-masked by a regex that does not know about escaped
+   quotes, which can leave a piece of it no pattern here matches. For a DSN
+   target, the quoted DSN goes first, and only the reason is kept."
+  [{:keys [url dsn secret] :as t} msg]
   (cond-> (str msg)
-    (:url t) (str/replace (:url t) (label t))
-    true (str/replace #"(?i)(password\s*=\s*)('[^']*'|[^\s&'`]+)" "$1***")
+    dsn (str/replace #"cannot parse `(?s:.*)`: " "cannot parse the connection settings: ")
+    url (str/replace url (label t))
+    (not (str/blank? secret)) (str/replace (dsn-escaped secret) "***")
+    (not (str/blank? secret)) (str/replace secret "***")
+    true (str/replace #"(?i)(password\s*=\s*)('(?:[^'\\]|\\.)*'|[^\s&'`]+)" "$1***")
     true (str/replace #"([a-z]+://[^/?#:@\s]*):[^/?#@\s]*@" "$1:***@")))
 
 (defn- open-pool
   "A pool for target. Postgres pools keep a session across a cancelled
    query (:postgres/cancel :request). Errors are redacted before they reach
    the UI. Opening is lazy: no connection is made yet."
-  [{:keys [engine path url] :as t}]
+  [{:keys [engine path url dsn] :as t}]
   (if (= :sqlite engine)
     (sqlite/open path)
     (try
-      (pg/open url {:postgres/cancel :request})
+      (pg/open (or url dsn) {:postgres/cancel :request})
       (catch e (throw (ex-info (redact t (ex-message e)) {}))))))
 
 (defn- close-pool! [engine db]
@@ -114,29 +130,53 @@
     (sqlite/close! db)
     (pg/close! db)))
 
+(defn- ping!
+  "Make a connection on db, throwing the redacted error if it fails."
+  [t db]
+  (when-let [err (.Ping (:sql/handle db))]
+    (throw (ex-info (redact t (.Error err)) {}))))
+
 (defn- connect
   "The shared pool and the session pool for target. A Postgres pool is
    pinged, so a wrong password or host fails here, not at the first run."
   [{:keys [engine] :as t}]
   (let [db (open-pool t)]
     (when (not= :sqlite engine)
-      (when-let [err (.Ping (:sql/handle db))]
-        (close-pool! engine db)
-        (throw (ex-info (redact t (.Error err)) {}))))
+      (try (ping! t db)
+           (catch e (close-pool! engine db) (throw e))))
     (let [sessions-db (try (open-pool t)
                            (catch e (close-pool! engine db) (throw e)))]
       (.SetMaxIdleConns (:sql/handle sessions-db) 0)
       {:db db :sessions-db sessions-db})))
 
+(defn open-target!
+  "Open target t: {:engine (:path | :url | :dsn) :label [:secret]}, where
+   :secret is the password a :dsn carries, for redact. Returns
+   {:conn-id :engine :label}."
+  [registry t]
+  (let [id (new-id)
+        e (merge (connect t)
+                 {:engine (:engine t) :label (:label t) :sessions {} :retired #{}})]
+    (swap! registry assoc id e)
+    {:conn-id id :engine (:engine e) :label (:label e)}))
+
 (defn open!
   "Open what `s` names (see `target`). Returns {:conn-id :engine :label}."
   [registry s]
-  (let [t (target s)
-        id (new-id)
-        e (merge (connect t)
-                 {:engine (:engine t) :label (label t) :sessions {} :retired #{}})]
-    (swap! registry assoc id e)
-    {:conn-id id :engine (:engine e) :label (:label e)}))
+  (let [t (target s)]
+    (open-target! registry (assoc t :label (label t)))))
+
+(defn check!
+  "Connect to target t once and close again; throws the redacted error if
+   that fails. Nothing is kept: this backs the Test button."
+  [{:keys [engine] :as t}]
+  (let [db (open-pool t)]
+    (try
+      (if (= :sqlite engine)
+        (sql/execute! db ["select 1"])
+        (ping! t db))
+      nil
+      (finally (close-pool! engine db)))))
 
 (defn- entry [registry conn-id]
   (or (get @registry conn-id)

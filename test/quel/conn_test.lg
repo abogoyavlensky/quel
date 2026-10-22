@@ -180,3 +180,50 @@
   (let [t (conn/target "postgres://u:s3@h/db?password=s4")]
     (is (= "cannot parse `postgres://u:***@h/db`" (conn/redact t "cannot parse `postgres://u:s3@h/db?password=s4`")))
     (is (= "host=h password=*** x" (conn/redact t "host=h password='a b' x")))))
+
+(deftest open-target-uses-the-given-label
+  (with-registry
+    (fn [registry path]
+      (spit path "")
+      (let [r (conn/open-target! registry {:engine :sqlite :path path :label "My file"})]
+        (is (= {:engine :sqlite :label "My file"} (dissoc r :conn-id)))
+        (is (= "My file" (:label (get @registry (:conn-id r)))))))))
+
+;; A password with a quote, a backslash and spaces, as the profile's DSN
+;; carries it.
+(def odd-secret "p'w \\tail x")
+(def odd-dsn (str "host='h' port='5432' user='u' password=" (conn/dsn-quote odd-secret) " sslmode='prefer'"))
+
+(defn- leaks? [msg]
+  (some #(str/includes? msg %) ["p'w" "p\\'w" "tail" " x'"]))
+
+(deftest redact-masks-the-secret
+  (let [t {:engine :postgres :dsn odd-dsn :secret odd-secret}]
+    (is (= "auth failed for *** ok" (conn/redact t (str "auth failed for " odd-secret " ok"))))
+    (let [msg (conn/redact t (str "failed to connect to `" odd-dsn "`: refused"))]
+      (is (not (leaks? msg)) msg))
+    (let [msg (conn/redact t (str "cannot parse `" odd-dsn "`: invalid sslmode"))]
+      (is (= "cannot parse the connection settings: invalid sslmode" msg)))))
+
+(deftest check-a-sqlite-file
+  (with-registry
+    (fn [registry path]
+      (spit path "")
+      (is (nil? (conn/check! {:engine :sqlite :path path})))
+      (is (empty? @registry)))))
+
+(deftest check-a-dead-server
+  (let [msg (message-of #(conn/check! {:engine :postgres :secret odd-secret
+                                       :dsn (str "host='127.0.0.1' port='1' password="
+                                                 (conn/dsn-quote odd-secret) " connect_timeout='2'")}))]
+    (is (some? msg))
+    (is (not (leaks? msg)) msg)))
+
+;; pgx's own parse error, for a DSN Quel built by hand (validate would
+;; refuse the SSL mode).
+(deftest a-real-parse-failure-is-redacted
+  (let [t {:engine :postgres :secret odd-secret
+           :dsn (str "host='h' password=" (conn/dsn-quote odd-secret) " sslmode='bogus'")}
+        msg (message-of #(conn/check! t))]
+    (is (some? msg))
+    (is (not (leaks? msg)) msg)))
