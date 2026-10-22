@@ -12,15 +12,17 @@
  :lg-runtime :built
  :lg-version "1.13.0"
 
- ;; The `production` build tag (drops Wails' devtools and dev asset server
- ;; from the shipped binary) waits on an lgx release carrying
- ;; :go/build-tags; lgx 0.5.0 predates it.
- :targets {:bin {:out "bin/quel"}}
+ ;; `production` drops Wails' devtools and dev asset server from the shipped
+ ;; binary (and the wails package's dev-server proxy). It applies to `lgx
+ ;; build` only; `lgx run` keeps the dev build.
+ :targets {:bin {:out "bin/quel" :go/build-tags ["production"]}}
 
  :deps {;; The desktop shell: a Wails v3 window whose handlers are let-go fns.
+        ;; wails-v0.3.0 is the first that serves the frontend from a dev
+        ;; server (FRONTEND_DEVSERVER_URL), for HMR under `lgx dev`.
         abogoyavlensky/letgo-wails
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "wails-v0.2.0"
+         :git/tag "wails-v0.3.0"
          :deps/root "wails"}
 
         ;; An nREPL inside the running app, started only under `lgx run`.
