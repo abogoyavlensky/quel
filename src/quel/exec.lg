@@ -11,7 +11,7 @@
 ;; generates, so it can cancel a query before its first row arrives. An
 ;; entry is
 ;;
-;;   {:conn-id :session-id :engine :ctx <shim Ctx>
+;;   {:query-id :conn-id :session-id :engine :ctx <shim Ctx>
 ;;    :state :running | :open | :fetching
 ;;    ;; :open and :fetching only: the cursor, its column types, whether it
 ;;    ;; sits on an unread row, and when it was last read
@@ -47,7 +47,7 @@
                             (fn [m]
                               (if (or (contains? m query-id) (busy? m))
                                 m
-                                (assoc m query-id {:ctx ctx :conn-id conn-id
+                                (assoc m query-id {:query-id query-id :ctx ctx :conn-id conn-id
                                                    :session-id session-id
                                                    :engine engine :state :running}))))]
     (cond
@@ -235,11 +235,11 @@
   "Throw for a failed run or page read. The failure's own error cannot say
    whether the session survived, so probe it, and drop a dead one so the
    next run takes a fresh connection."
-  [conns conn-id session-id ctx query-id e]
+  [conns conn-id session-id canceled? query-id e]
   (let [session (conn/current-session conns conn-id session-id)
         reset? (and session (dead? session))]
     (when reset? (conn/reset-session! conns conn-id session-id))
-    (throw (failure e (.Canceled ctx) reset? query-id))))
+    (throw (failure e canceled? reset? query-id))))
 
 (defn- open-cursor!
   "Turn the query's :running entry into an :open cursor. False when the
@@ -289,7 +289,7 @@
             (dispose! {:engine engine :ctx ctx :rows rows})))
         (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
       (catch e
-        (fail! conns conn-id session-id ctx query-id e))
+        (fail! conns conn-id session-id (.Canceled ctx) query-id e))
       (finally
         (when-not @kept
           (.Cancel ctx)
@@ -322,8 +322,10 @@
                       ;; Still ours: close it and report. Gone: whoever
                       ;; closed it caused the error and disposed of it.
                       (when-let [e (take-entry! execs query-id)]
-                        (dispose! e)
-                        (fail! conns conn-id session-id ctx query-id err))))]
+                        ;; Before dispose!, which cancels the ctx itself.
+                        (let [canceled? (.Canceled ctx)]
+                          (dispose! e)
+                          (fail! conns conn-id session-id canceled? query-id err)))))]
          (cond
            (nil? page) closed-page
 
@@ -351,6 +353,55 @@
       (do (.Cancel ctx) true)
       false)))
 
+(defn close-result!
+  "Close a result's open cursor (a page being read stops). A running query
+   or an unknown id is a no-op: cancel a query with cancel!."
+  [execs query-id]
+  (doseq [e (take-entries! execs #(and (= query-id (:query-id %))
+                                       (contains? #{:open :fetching} (:state %))))]
+    (dispose! e))
+  nil)
+
+(defn- close-entries!
+  "Close what pred matches: open cursors are taken and disposed of; running
+   queries are cancelled, and their run! removes them as it unwinds."
+  [execs pred]
+  (doseq [e (take-entries! execs #(and (pred %) (contains? #{:open :fetching} (:state %))))]
+    (dispose! e))
+  (doseq [e (vals @execs)]
+    (when (pred e) (.Cancel (:ctx e)))))
+
+(defn close-session!
+  "Close a tab's session: retire its id, so no run can take it again, close
+   its query or cursor, then close its connection. In that order: a run
+   registers before it takes its session, so it is either cancelled here or
+   refused by session!; and closing the connection last means closing it
+   does not wait on a query nobody has cancelled yet."
+  [execs conns conn-id session-id]
+  (let [detached (conn/retire-session! conns conn-id session-id)]
+    (close-entries! execs #(same-session? conn-id session-id %))
+    (when detached (.Close detached))
+    nil))
+
+(defn close-conn!
+  "Close a database: detach it, so nothing new starts on it, close its
+   queries and cursors, then its sessions and pools."
+  [execs conns conn-id]
+  (let [e (conn/detach! conns conn-id)]
+    (close-entries! execs #(= conn-id (:conn-id %)))
+    (when e (conn/close-entry! e))
+    nil))
+
+(defn sweep!
+  "Close every open cursor nobody has read for longer than idle-ms. An
+   open cursor holds its session's connection (and, on Redshift, cluster
+   resources; on SQLite, a read lock). Returns how many it closed."
+  [execs idle-ms]
+  (let [cutoff (- (now-ms) idle-ms)
+        idle (take-entries! execs #(and (= :open (:state %)) (< (:touched %) cutoff)))]
+    (doseq [e idle] (dispose! e))
+    (count idle)))
+
 ;; :conns is unused here but makes this component depend on the connection
 ;; registry, so integrant halts it first: running queries are cancelled and
 ;; cursors closed before their sessions close (closing a busy session waits
@@ -368,3 +419,28 @@
     (when (and (seq @execs) (< waited 5000))
       (sleep 50)
       (recur (+ waited 50)))))
+
+;; Closes idle cursors (sweep!) every every-ms, on a future, until halted.
+;; Its own component so the registry's value stays the atom; it refs the
+;; registry, so it stops first.
+(defmethod ig/init-key ::sweeper [_ {:keys [execs idle-ms every-ms]}]
+  (let [stop (atom false)
+        ;; Sleep in short steps, so a halt is not held up by every-ms.
+        wait! (fn [] (loop [slept 0]
+                       (when (and (not @stop) (< slept every-ms))
+                         (sleep 100)
+                         (recur (+ slept 100)))))
+        done (future
+               (loop []
+                 (wait!)
+                 (when-not @stop
+                   (try
+                     (sweep! execs idle-ms)
+                     (catch e
+                       (write! *err* (str "quel: closing idle cursors failed: " (ex-message e) "\n"))))
+                   (recur))))]
+    {:stop stop :done done}))
+
+(defmethod ig/halt-key! ::sweeper [_ {:keys [stop done]}]
+  (reset! stop true)
+  (deref done 1000 nil))

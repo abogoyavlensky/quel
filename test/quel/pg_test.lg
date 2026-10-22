@@ -179,3 +179,57 @@
             (is (= "1.50" n))
             (is (= "9007199254740993" big))
             (is (nil? nd))))))))
+
+;; Open cursors on Postgres.
+
+(defn- until
+  "Poll pred every 10 ms for up to 5 s; its last value."
+  [pred]
+  (loop [n 0]
+    (let [v (pred)]
+      (if (or v (>= n 500)) v (do (sleep 10) (recur (inc n)))))))
+
+(defn- run-q [execs conns id qid q & {:as opts}]
+  (exec/run! execs conns (merge {:conn-id id :session-id "s1" :query-id qid :sql q} opts)))
+
+(deftest closing-a-big-cursor-is-quick-and-keeps-the-session
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept (x int)")
+        (let [r (run-q execs conns id "big" "select * from generate_series(1, 10000000)")]
+          (is (true? (:has-more r))))
+        (let [t0 (System/nanoTime)]
+          (exec/close-result! execs "big")
+          (is (< (quot (- (System/nanoTime) t0) 1000000) 3000) "drain, then cancel"))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept"))
+            "the temp table survived, so the session did")))))
+
+(deftest a-new-run-inside-a-transaction-keeps-it
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "begin")
+        (run execs conns id "create temp table tx (x int)")
+        (is (true? (:has-more (run-q execs conns id "small" "select * from generate_series(1, 20000)"))))
+        (is (= 1 (:update-count (run execs conns id "insert into tx values (1)")))
+            "closing the cursor drained it: the transaction is not aborted")
+        (run execs conns id "commit")
+        (is (= 1 (first-cell execs conns id "select count(*) from tx")))))))
+
+(deftest cancel-a-slow-page
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept2 (x int)")
+        (run-q execs conns id "slow" "select pg_sleep(0.01) from generate_series(1, 100000)"
+               :page-size 1)
+        (let [page (future (try (exec/fetch-page! execs conns "slow" 50000)
+                                (catch e (ex-message e))))]
+          (is (until #(= :fetching (get-in @execs ["slow" :state]))))
+          (sleep 200)
+          (is (true? (exec/cancel! execs "slow")))
+          (is (= "Query canceled." (deref page 5000 :timeout))))
+        (is (= {} @execs))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept2"))
+            "the session survived")))))

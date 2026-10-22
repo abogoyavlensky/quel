@@ -2,6 +2,7 @@
   (:require [integrant.core :as ig]
             [quel.conn :as conn]
             [quel.conn-test :refer [temp-path]]
+            [quel.api :as api]
             [quel.exec :as exec]
             [quel.system :as system]
             [sql.core :as sql]
@@ -291,3 +292,131 @@
         (ig/halt-key! :quel.exec/registry execs)
         (is (< (quot (- (System/nanoTime) t0) 1000000) 1000)))
       (is (= {} @execs)))))
+
+;; Closing cursors and sessions.
+
+(deftest close-result-closes-an-open-cursor
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (is (nil? (exec/close-result! execs "big")))
+      (is (= {} @execs))
+      (is (true? (:closed (fetch execs conns "big"))))
+      (is (nil? (exec/close-result! execs "nope")) "an unknown id is a no-op")
+      (is (= [[1]] (:rows (run-in execs conns id "s1" "after" "select 1")))
+          "the session is fine"))))
+
+(deftest close-result-leaves-a-running-query-alone
+  (with-env
+    (fn [execs conns id]
+      (let [result (future (message-of #(run-in execs conns id "s1" "r" runaway)))]
+        (is (until #(contains? @execs "r")))
+        (exec/close-result! execs "r")
+        (is (= :running (get-in @execs ["r" :state])))
+        (exec/cancel! execs "r")
+        (is (= "Query canceled." (deref result 5000 :timeout)))))))
+
+(deftest close-session-cancels-its-query-and-retires-it
+  (with-env
+    (fn [execs conns id]
+      (let [result (future (message-of #(run-in execs conns id "s1" "r" runaway)))]
+        (is (until #(contains? @execs "r")))
+        (sleep 100)
+        (exec/close-session! execs conns id "s1")
+        (is (= "Query canceled." (deref result 5000 :timeout)))
+        (is (until #(= {} @execs)))
+        (is (str/includes? (str (message-of #(run-in execs conns id "s1" "again" "select 1")))
+                           "This tab was closed"))
+        (is (= {} @execs) "the refused run leaves no entry")
+        (is (nil? (conn/current-session conns id "s1")) "and no session")))))
+
+(deftest close-session-closes-its-cursor
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (run-in execs conns id "s2" "other" "select id from t")
+      (exec/close-session! execs conns id "s1")
+      (is (true? (:closed (fetch execs conns "big"))))
+      (is (false? (:closed (fetch execs conns "other"))) "another tab's cursor stays"))))
+
+(deftest close-conn-closes-everything-on-it
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (let [result (future (message-of #(run-in execs conns id "s2" "r" runaway)))]
+        (is (until #(contains? @execs "r")))
+        (sleep 100)
+        (exec/close-conn! execs conns id)
+        (is (= "Query canceled." (deref result 5000 :timeout)))
+        (is (until #(= {} @execs)))
+        (is (not (contains? @conns id)))))))
+
+(deftest sweep-closes-idle-cursors-only
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (is (= 0 (exec/sweep! execs 60000)) "not idle yet")
+      (let [result (future (message-of #(run-in execs conns id "s2" "r" runaway)))]
+        (is (until #(contains? @execs "r")))
+        (sleep 5)
+        (is (= 1 (exec/sweep! execs 0)))
+        (is (true? (:closed (fetch execs conns "big"))))
+        (is (= :running (get-in @execs ["r" :state])) "running queries are not idle")
+        (exec/cancel! execs "r")
+        (is (= "Query canceled." (deref result 5000 :timeout)))))))
+
+(deftest the-sweeper-sweeps-and-halts
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (let [sweeper (ig/init-key :quel.exec/sweeper {:execs execs :idle-ms 0 :every-ms 100})]
+        (try
+          (run-in execs conns id "s1" "big" "select id from t")
+          (is (until #(= {} @execs)) "swept")
+          (finally
+            (let [t0 (System/nanoTime)]
+              (ig/halt-key! :quel.exec/sweeper sweeper)
+              (is (< (quot (- (System/nanoTime) t0) 1000000) 1000)))))))))
+
+(deftest a-fetch-closed-from-another-thread-reports-closed
+  (with-env
+    (fn [execs conns id]
+      ;; Each row of the second page takes a while to compute, so the close
+      ;; lands mid-page.
+      (run-in execs conns id "s1" "slow"
+              (str "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 3000000)"
+                   " SELECT x FROM c WHERE x % 1000000 = 0 OR x = 1")
+              :page-size 1)
+      (let [page (future (fetch execs conns "slow" 10))]
+        (is (until #(= :fetching (get-in @execs ["slow" :state]))))
+        (exec/close-result! execs "slow")
+        (is (= {:rows [] :has-more false :closed true} (deref page 5000 :timeout)))
+        (is (= {} @execs))))))
+
+(deftest a-failed-page-keeps-the-drivers-message
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 5)
+      ;; abs of the smallest integer overflows, from the third row on: the
+      ;; first fetch meets it when it looks one row ahead for has-more.
+      (run-in execs conns id "s1" "ovf"
+              "select case when id < 3 then id else abs(-9223372036854775807 - 1) end from t"
+              :page-size 1)
+      (let [msg (message-of #(fetch execs conns "ovf" 1))]
+        (is (str/includes? (str msg) "overflow") (str "got " (pr-str msg)))
+        (is (not (str/includes? (str msg) "canceled"))))
+      (is (= {} @execs)))))
+
+(deftest close-db-with-an-open-cursor-does-not-hang
+  (with-env
+    (fn [execs conns id]
+      (fill! conns id 1200)
+      (run-in execs conns id "s1" "big" "select id from t")
+      (let [done (future (api/close-db {:conns conns :execs execs} id))]
+        (is (not= :timeout (deref done 3000 :timeout)))
+        (is (= {} @execs))
+        (is (not (contains? @conns id)))))))

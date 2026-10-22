@@ -28,6 +28,10 @@
    ;; The ref orders the halt: queries are cancelled before their sessions
    ;; close.
    :quel.exec/registry {:conns (ig/ref :quel.conn/registry)}
+   ;; Closes cursors left unread for 5 minutes, checking every 30 s.
+   :quel.exec/sweeper {:execs (ig/ref :quel.exec/registry)
+                       :idle-ms 300000
+                       :every-ms 30000}
    :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
                        :execs (ig/ref :quel.exec/registry)}
    :quel.shell/app {:name "Quel"

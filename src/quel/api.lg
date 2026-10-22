@@ -13,8 +13,8 @@
 (defn open-db [{:keys [conns]} path]
   (conn/open! conns path))
 
-(defn close-db [{:keys [conns]} conn-id]
-  (conn/close! conns conn-id))
+(defn close-db [{:keys [conns execs]} conn-id]
+  (exec/close-conn! execs conns conn-id))
 
 (defn run [{:keys [conns execs]} conn-id session-id query-id sql]
   (exec/run! execs conns {:conn-id conn-id :session-id session-id
