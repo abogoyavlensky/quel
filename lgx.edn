@@ -37,6 +37,14 @@
          :git/tag "sqlite-v0.3.0"
          :deps/root "sqlite"}
 
+        ;; Postgres (and Redshift, which speaks its protocol) through pgx.
+        ;; postgres-v0.4.0 is the first whose pools can keep a session
+        ;; alive across a cancelled query (:postgres/cancel :request).
+        abogoyavlensky/letgo-postgres
+        {:git/url "https://github.com/abogoyavlensky/letgo-packages"
+         :git/tag "postgres-v0.4.0"
+         :deps/root "postgres"}
+
         ;; integrant wires the registries, the handlers, the window, the
         ;; menu and the dev loop together. It depends on
         ;; weavejester/dependency; lgx does not read a plain Clojure lib's
@@ -57,5 +65,7 @@
             :do {:sh "npm --prefix frontend run watch"}}
   build {:doc "Build the frontend, then the binary"
          :do [{:task fe-build} {:task lgx:build}]}
+  test-pg {:doc "Run the backend tests with a throwaway Postgres in Docker"
+           :do {:sh "bash scripts/with-postgres.sh lgx test"}}
   smoke {:doc "Run the app in server mode and drive the bridge over HTTP"
          :do {:sh "bash scripts/smoke.sh"}}}}

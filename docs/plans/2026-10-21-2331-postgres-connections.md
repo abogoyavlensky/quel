@@ -228,10 +228,10 @@ Quel (branch `postgres-connections`):
 - Create: `../letgo-packages/postgres/shim/go.mod`, `../letgo-packages/postgres/shim/shim.go`
 - Modify: `../letgo-packages/postgres/lgx.edn`
 
-- [ ] **Step 1:** In letgo-packages, `git checkout master && git pull && git checkout -b postgres-cancel-request`.
-- [ ] **Step 2:** Write `postgres/shim/go.mod` modelled on `sql/shim/go.mod` (module path above, `require github.com/nooga/let-go v0.0.0`, plus `github.com/jackc/pgx/v5 v5.10.0`). Write `shim.go`: a package comment saying why the shim exists (the context handler is a Go func in `pgconn.Config`), `Open` as specified in the design, and an `init` registering `postgres.shim` with `Open`, following `sql/shim/shim.go`'s registration. Run `go mod tidy` in `postgres/shim` if lgx needs the sums (check how `sql/shim` handles `go.sum`; mirror it).
-- [ ] **Step 3:** In `postgres/lgx.edn`, add `github.com/abogoyavlensky/letgo-packages/postgres/shim {:go/local "shim"}` with a comment in the `sql` package's style, plus `:lg-runtime :built` and `:lg-version "1.13.0"` (needed for its own `lgx test`, as sqlite got in sql-v0.3.0). Keep the stdlib dep (the shim imports it, but the coord documents the driver).
-- [ ] **Step 4:** Smoke: a scratch `.lg` under `postgres/test/` is not needed yet; run `cd postgres && lgx test` and expect "no tests" (or 0 tests) with a successful runtime build.
+- [x] **Step 1:** In letgo-packages, `git checkout master && git pull && git checkout -b postgres-cancel-request`.
+- [x] **Step 2:** Write `postgres/shim/go.mod` modelled on `sql/shim/go.mod` (module path above, `require github.com/nooga/let-go v0.0.0`, plus `github.com/jackc/pgx/v5 v5.10.0`). Write `shim.go`: a package comment saying why the shim exists (the context handler is a Go func in `pgconn.Config`), `Open` as specified in the design, and an `init` registering `postgres.shim` with `Open`, following `sql/shim/shim.go`'s registration. Run `go mod tidy` in `postgres/shim` if lgx needs the sums (check how `sql/shim` handles `go.sum`; mirror it).
+- [x] **Step 3:** In `postgres/lgx.edn`, add `github.com/abogoyavlensky/letgo-packages/postgres/shim {:go/local "shim"}` with a comment in the `sql` package's style, plus `:lg-runtime :built` and `:lg-version "1.13.0"` (needed for its own `lgx test`, as sqlite got in sql-v0.3.0). Keep the stdlib dep (the shim imports it, but the coord documents the driver).
+- [x] **Step 4:** Smoke: a scratch `.lg` under `postgres/test/` is not needed yet; run `cd postgres && lgx test` and expect "no tests" (or 0 tests) with a successful runtime build.
 
 ### Task 2: `postgres.core/open` with `:postgres/cancel`
 
@@ -239,23 +239,26 @@ Quel (branch `postgres-connections`):
 - Modify: `../letgo-packages/postgres/src/postgres/core.lg`
 - Create: `../letgo-packages/postgres/test/postgres/core_test.lg`
 
-- [ ] **Step 1: Write the tests** (gated on `POSTGRES_TEST_URL`, as in the design). Model the file on `sqlite/test/sqlite/core_test.lg` (futures, `deref` with a timeout, `thrown-message`). Use `select pg_sleep(30)` as the runaway. `pg_stat_activity.query` keeps a session's last statement after it ends, so a count by query text would still find a surviving session: read the session's `pg_backend_pid()` before the run, and after the cancel poll (every 100 ms, up to 5 s) from the pool until that pid's `state` is no longer `'active'`.
-- [ ] **Step 2: Run them to see them fail.** Start Postgres: `docker run --rm -d --name lgp-pg -e POSTGRES_PASSWORD=pg -p 127.0.0.1::5432 postgres:17-alpine`, read the port with `docker port lgp-pg 5432`, then `cd postgres && POSTGRES_TEST_URL=postgres://postgres:pg@127.0.0.1:PORT/postgres lgx test`. Expected: the `:request` tests fail (session reports bad connection).
-- [ ] **Step 3: Implement.** `open` calls `shim/Open` with `(= :request (:postgres/cancel opts))`; throw `ex-info` on an error value; reject any value other than `:close`, `:request` or nil. Update the docstring.
-- [ ] **Step 4: Run tests.** Expected: all pass. Also run without `POSTGRES_TEST_URL`: passes, prints the skip line.
-- [ ] **Step 5: Commit** `"postgres: open with a cancel request that keeps the connection"`.
+- [x] **Step 1: Write the tests** (gated on `POSTGRES_TEST_URL`, as in the design). Model the file on `sqlite/test/sqlite/core_test.lg` (futures, `deref` with a timeout, `thrown-message`). Use `select pg_sleep(30)` as the runaway. `pg_stat_activity.query` keeps a session's last statement after it ends, so a count by query text would still find a surviving session: read the session's `pg_backend_pid()` before the run, and after the cancel poll (every 100 ms, up to 5 s) from the pool until that pid's `state` is no longer `'active'`.
+- [x] **Step 2: Run them to see them fail.** Start Postgres: `docker run --rm -d --name lgp-pg -e POSTGRES_PASSWORD=pg -p 127.0.0.1::5432 postgres:17-alpine`, read the port with `docker port lgp-pg 5432`, then `cd postgres && POSTGRES_TEST_URL=postgres://postgres:pg@127.0.0.1:PORT/postgres lgx test`. Expected: the `:request` tests fail (session reports bad connection).
+- [x] **Step 3: Implement.** `open` calls `shim/Open` with `(= :request (:postgres/cancel opts))`; throw `ex-info` on an error value; reject any value other than `:close`, `:request` or nil. Update the docstring.
+- [x] **Step 4: Run tests.** Expected: all pass. Also run without `POSTGRES_TEST_URL`: passes, prints the skip line.
+- [x] **Step 5: Commit** `"postgres: open with a cancel request that keeps the connection"`.
 
 ### Task 3: CI and docs, PR, release
 
 **Files:**
 - Modify: `../letgo-packages/.github/workflows/test.yml`, `../letgo-packages/postgres/README.md`, `../letgo-packages/README.md`
 
-- [ ] **Step 1:** Add the service to the `test` job (`postgres:17-alpine`, `POSTGRES_PASSWORD`, port `5432:5432`, `--health-cmd pg_isready` with interval/timeout/retries) and `POSTGRES_TEST_URL` in the job's `env`. Mention `postgres` in the in-tree shim comment. Run `actionlint` (`mise exec -- actionlint` if the shim needs it).
-- [ ] **Step 2:** README changes from the design. Coords in `postgres/README.md` move to `postgres-v0.4.0`.
-- [ ] **Step 3:** Commit `"postgres: test against a service container in CI"` and `"postgres: document cancellation"` (two commits).
-- [ ] **Step 4:** Codex review of the branch: `codex exec -C ../letgo-packages review --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --base master -o .tmp/codex-review-pg.md`, in the background. Fold real findings, re-run tests.
-- [ ] **Step 5:** Push, open the PR, link it with `link_pull_request`, wait for CI green (`gh pr checks --watch`), merge.
-- [ ] **Step 6:** Tag `postgres-v0.4.0` on the merge commit of master and push the tag. Never move a pushed tag. Verify from a throwaway lgx project (as in the exploration probe at `/tmp/pgprobe`) that the coord resolves and `postgres.shim/Open` is callable.
+- [x] **Step 1:** Add the service to the `test` job (`postgres:17-alpine`, `POSTGRES_PASSWORD`, port `5432:5432`, `--health-cmd pg_isready` with interval/timeout/retries) and `POSTGRES_TEST_URL` in the job's `env`. Mention `postgres` in the in-tree shim comment. Run `actionlint` (`mise exec -- actionlint` if the shim needs it).
+- [x] **Step 2:** README changes from the design. Coords in `postgres/README.md` move to `postgres-v0.4.0`.
+- [x] **Step 3:** Commit `"postgres: test against a service container in CI"` and `"postgres: document cancellation"` (two commits).
+- [x] **Step 4:** Codex review of the branch: `codex exec -C ../letgo-packages review --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --base master -o .tmp/codex-review-pg.md`, in the background. Fold real findings, re-run tests.
+- [x] **Step 5:** Push, open the PR, link it with `link_pull_request`, wait for CI green (`gh pr checks --watch`), merge.
+- [x] **Step 6:** Tag `postgres-v0.4.0` on the merge commit of master and push the tag. Never move a pushed tag. Verify from a throwaway lgx project (as in the exploration probe at `/tmp/pgprobe`) that the coord resolves and `postgres.shim/Open` is callable.
+
+> Deviation: Task 1 had no commit of its own; it landed with Task 2's commit (57f81a9).
+> Deviation: codex (3 rounds) refined the connect-timeout default: it applies only when no source sets `connect_timeout` (a nonzero parsed value is kept; an explicit 0, in the DSN or `PGCONNECT_TIMEOUT`, still means none; the DSN is read with libpq quoting and ASCII whitespace, as pgx does). An explicit 0 in a service file is the one case it cannot see. Added tests: explicit zero, and a keyword DSN whose quoted password mentions `connect_timeout`. Merged as letgo-packages #11; `postgres-v0.4.0` tagged on 8752396 and verified from a throwaway project.
 
 ### Task 4: Postgres in Docker for Quel's tests
 
@@ -263,12 +266,14 @@ Quel (branch `postgres-connections`):
 - Create: `scripts/with-postgres.sh`
 - Modify: `lgx.edn`, `.github/workflows/ci.yml`
 
-- [ ] **Step 1:** In Quel, `git checkout master && git pull && git checkout -b postgres-connections`.
-- [ ] **Step 2:** Write `scripts/with-postgres.sh` as in the design. Unique container name (`quel-pg-$$`), `trap` cleanup, wait up to 30 s for `docker exec ... pg_isready -U postgres`, then `exec`-free run of `"$@"` so the trap fires. Passes `shellcheck`.
-- [ ] **Step 3:** `lgx.edn`: dep `abogoyavlensky/letgo-postgres` at `postgres-v0.4.0` (`:deps/root "postgres"`), comment in the existing style; task `test-pg` (`bash scripts/with-postgres.sh lgx test`).
-- [ ] **Step 4:** `ci.yml`: trigger `push: branches: [master]` (the default branch moved); replace "Backend tests" with `lgx test-pg`. `actionlint`.
-- [ ] **Step 5:** Verify: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test-pg` passes (no pg tests yet) and leaves no container (`docker ps -a --filter name=quel-pg`).
-- [ ] **Step 6: Commit** `"Run the tests with Postgres in Docker"`.
+- [x] **Step 1:** In Quel, `git checkout master && git pull && git checkout -b postgres-connections`.
+- [x] **Step 2:** Write `scripts/with-postgres.sh` as in the design. Unique container name (`quel-pg-$$`), `trap` cleanup, wait up to 30 s for `docker exec ... pg_isready -U postgres`, then `exec`-free run of `"$@"` so the trap fires. Passes `shellcheck`.
+- [x] **Step 3:** `lgx.edn`: dep `abogoyavlensky/letgo-postgres` at `postgres-v0.4.0` (`:deps/root "postgres"`), comment in the existing style; task `test-pg` (`bash scripts/with-postgres.sh lgx test`).
+- [x] **Step 4:** `ci.yml`: trigger `push: branches: [master]` (the default branch moved); replace "Backend tests" with `lgx test-pg`. `actionlint`.
+- [x] **Step 5:** Verify: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test-pg` passes (no pg tests yet) and leaves no container (`docker ps -a --filter name=quel-pg`).
+- [x] **Step 6: Commit** `"Run the tests with Postgres in Docker"`.
+
+> Deviation: `with-postgres.sh` waits for a real `select 1` over TCP inside the container rather than `pg_isready`, which can answer during the image's init restart.
 
 ### Task 5: Opening Postgres and Redshift
 
