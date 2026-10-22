@@ -15,13 +15,15 @@ built into `resources/public`.
 |---|---|
 | `lgx fe-install` / `lgx fe-build` / `lgx fe-watch` | frontend deps, build, rebuild on change |
 | `lgx run` | the app with an nREPL inside (`.nrepl-port`) |
-| `lgx test` | backend tests |
+| `lgx test` | backend tests (Postgres tests skip) |
+| `lgx test-pg` | backend tests with a throwaway Postgres in Docker |
 | `npm --prefix frontend test` | frontend tests |
-| `lgx smoke` | server-mode smoke test over HTTP |
+| `lgx smoke` / `lgx smoke-pg` | server-mode smoke test over HTTP; `-pg` adds Postgres in Docker |
 | `lgx build` | frontend + binary at `bin/quel` |
 
-On Linux without GTK4/WebKitGTK headers, prefix `lgx run`, `lgx test` and
-`lgx smoke` with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
+On Linux without GTK4/WebKitGTK headers, prefix `lgx run` and the test
+and smoke tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`
+tasks need Docker.
 
 ## Rules that bite
 

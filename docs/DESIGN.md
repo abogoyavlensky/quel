@@ -195,8 +195,20 @@ before its first row arrives:
    the reply, with `:has-more`.
 
 `fetch-page` reads the next page from the open cursor. `cancel` calls the
-stored cancel fn; pgx turns that into a protocol cancel request, so
-Redshift and Postgres stop the query server-side.
+stored cancel fn. On SQLite, modernc interrupts the statement. On
+Postgres and Redshift, pgx sends a protocol cancel request, so the query
+stops server-side. pgx's default would then close the connection, killing
+the tab's session (its temp tables, `SET`s, open transaction). Quel opens
+pools with `{:postgres/cancel :request}` (letgo-packages `postgres-v0.4.0`),
+which keeps the connection, as `psql` does after Ctrl+C.
+
+After any failed run, Quel probes the session with `select 1` (bounded by
+5 s). A dead connection - a dropped network, a restarted server - is then
+dropped, the next run takes a fresh one, and the error ends "The session
+was reset." The failed run's own error cannot be trusted to say so: pgx
+may report a server `FATAL` or an EOF first. Any other probe failure,
+such as an aborted transaction's SQLSTATE 25P02, keeps the session, since
+the user still has to `ROLLBACK`.
 
 ### Cursor lifetime
 
@@ -229,8 +241,13 @@ The grid receives arrays, not maps:
 
 - integers beyond ±2^53 become strings, so JavaScript does not round them;
 - `numeric` / `DECIMAL` stay exact strings;
-- dates and timestamps become ISO-8601 strings shaped by the column type;
-- binary values become a truncated hex preview;
+- dates and timestamps (pgx hands them over as Go `time.Time`) become
+  ISO-8601 strings shaped by the column type: `DATE` as `2026-10-21`,
+  `TIMESTAMP` as `2026-10-21T10:00:00.5`, `TIMESTAMPTZ` with its offset;
+- binary values show as `(binary)` for now: the `sql` shim turns `[]byte`
+  into a string, which loses Postgres `bytea` bytes. The intended
+  truncated hex preview waits on the shim keeping binary values (see the
+  backlog);
 - text longer than 64 KB is truncated, with a flag, and the full value is
   fetched on demand;
 - anything opaque falls back to its string form, never an error.
@@ -385,12 +402,19 @@ code stays native-compatible so switching later is cheap:
 
 ### Testing
 
-- **Backend**: `lgx test` against SQLite and DuckDB in-process, and
-  Postgres in Docker. Redshift has no local stand-in: its catalog tests
-  run against a real cluster, gated on an environment variable.
+- **Backend**: `lgx test` against SQLite (and later DuckDB) in-process.
+  `lgx test-pg` runs the same suite with a throwaway Postgres in Docker
+  (`scripts/with-postgres.sh` sets `QUEL_PG_URL`); without it the Postgres
+  tests skip. CI runs `test-pg`.
+- **Redshift**: no Docker image runs it. LocalStack's Redshift is a paid
+  plan that emulates the AWS API, not the SQL engine. Postgres covers
+  what Quel does over pgx (connect, query, sessions, cancel, value types);
+  the Redshift-specific questions under [Unverified](#unverified) wait for
+  a real cluster.
 - **Frontend**: Vitest for pure logic (the splitter, cell rendering).
-- **End to end**: Playwright against the app in Wails' server mode, the
-  way wails-tasks' smoke test runs.
+- **End to end**: `lgx smoke` drives the app in Wails' server mode over
+  HTTP; `lgx smoke-pg` adds Postgres (open, cancel, the session
+  surviving). Playwright for the UI comes with the real screens.
 
 ## Upstream work
 
@@ -400,6 +424,8 @@ package feature, not app glue.
 | Where | Change | Needed by |
 |---|---|---|
 | `letgo-packages/sql` | Done in `sql-v0.3.0`: `NewCtx`/`QueryCtx`/`ExecCtx` (cancellable queries), `Conn` (sessions), a `Connectable` covering `*sql.Conn`, `ColumnTypeNames`; the shim ships in-tree | cancellation, per-tab sessions, column types |
+| `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
+| `letgo-packages/sql` | `ScanRow` keeps binary values as bytes (today `[]byte` becomes a string) | the bytea / BLOB preview |
 | `letgo-packages/wails` | Proxy `FRONTEND_DEVSERVER_URL` in the asset handler | Vite HMR in the dev loop |
 | new `letgo-packages/keyring` | Keychain access, e.g. over `zalando/go-keyring` | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
@@ -414,10 +440,11 @@ package feature, not app glue.
    against SQLite rather than Redshift to stay local. Done 2026-10-21:
    automated checks in server mode on 2026-10-19, the native macOS pass
    on 2026-10-21.
-1. **Workhorse core - Redshift and SQLite.** Starts with the Redshift
-   checks the spike skipped (see [Unverified](#unverified)): pgx connects
-   and queries, a cancel reaches the cluster, the catalog sources behave.
-   Then profiles and Keychain;
+1. **Workhorse core - Redshift and SQLite.** First slice done 2026-10-22:
+   Postgres and Redshift URLs open, run and cancel with the session
+   surviving, tested against Postgres in Docker. The Redshift-specific
+   checks (see [Unverified](#unverified)) wait for a cluster. Then
+   profiles and Keychain;
    structure tree (schemas, tables, views, columns); editor with
    highlighting and completion; run statement, selection or script; paged
    grid with cancel; result tabs with pinning; errors; history; workspace
