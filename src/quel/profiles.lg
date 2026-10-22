@@ -71,11 +71,15 @@
 
 (defn password-change
   "What saving p does to its saved password: [:forget], [:set pw] or
-   [:keep]. Forget wins over a password sent alongside it. An empty
+   [:keep]. A SQLite profile always forgets; otherwise forget wins over a
+   password sent alongside it. An empty
    password counts as none: pgx treats \"\" as no password and falls back
    to .pgpass, so Quel cannot promise an explicitly empty one."
-  [{:keys [password forget-password?]}]
+  [{:keys [engine password forget-password?]}]
   (cond
+    ;; SQLite has no password: one left from the profile's server days is
+    ;; deleted, and never read.
+    (= "sqlite" engine) [:forget]
     forget-password? [:forget]
     (= "" password) [:forget]
     (string? password) [:set password]
@@ -143,7 +147,7 @@
    says one is saved: a profile without one must connect even where no
    keyring is reachable (a Linux box with no Secret Service)."
   [secrets p]
-  (when (:has-password p)
+  (when (and (:has-password p) (not= "sqlite" (:engine p)))
     (secrets/password secrets (:id p))))
 
 (defn effective-password

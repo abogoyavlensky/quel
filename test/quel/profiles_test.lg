@@ -44,7 +44,8 @@
   (is (= [:forget] (profiles/password-change {:password "pw" :forget-password? true})))
   (is (= [:forget] (profiles/password-change {:password ""})))
   (is (= [:set " pw "] (profiles/password-change {:password " pw "})))
-  (is (= [:keep] (profiles/password-change {:password nil}))))
+  (is (= [:keep] (profiles/password-change {:password nil})))
+  (is (= [:forget] (profiles/password-change {:engine "sqlite" :password "pw"}))))
 
 (deftest validate-fills-defaults-and-clears-fields
   (with-store
@@ -220,3 +221,13 @@
         (is (nil? (profiles/saved-password s p)))
         (is (nil? (profiles/effective-password db s (profiles/normalize (assoc pg "id" (:id p))))))
         (secrets/delete-password! s (:id p))))))
+
+;; A server profile turned SQLite drops its saved password.
+(deftest switching-to-sqlite-forgets-the-password
+  (with-store
+    (fn [db dir]
+      (let [p (profiles/save! db s (assoc pg "password" "pw"))
+            path (sqlite-file dir)
+            q (profiles/save! db s {"id" (:id p) "name" "Now a file" "engine" "sqlite" "path" path})]
+        (is (false? (:has-password q)))
+        (is (nil? (secrets/password s (:id p))))))))
