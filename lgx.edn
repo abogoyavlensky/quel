@@ -71,6 +71,8 @@
          :do [{:task fe-build} {:task lgx:build}]}
   test-pg {:doc "Run the backend tests with a throwaway Postgres in Docker"
            :do {:sh "bash scripts/with-postgres.sh lgx test"}}
+  e2e {:doc "Run the Playwright UI tests against the app in server mode"
+       :do {:sh "bash scripts/e2e.sh"}}
   smoke {:doc "Run the app in server mode and drive the bridge over HTTP"
          :do {:sh "bash scripts/smoke.sh"}}
   smoke-pg {:doc "The smoke test, plus Postgres, with a throwaway one in Docker"

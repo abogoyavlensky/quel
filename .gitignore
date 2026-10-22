@@ -6,3 +6,7 @@ frontend/node_modules/
 .tmp/
 .clj-pulse/
 .vscode/
+
+# Playwright output (lgx e2e)
+frontend/test-results/
+frontend/playwright-report/
