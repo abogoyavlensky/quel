@@ -19,6 +19,13 @@ cd "$HERE"
 
 [[ -d frontend/node_modules ]] || "$LGX" fe-install
 
+# Something already answering there (another dev loop, say) would get the
+# app's page while this Vite failed on its strict port.
+if curl -fs -o /dev/null "$VITE_URL/"; then
+    echo "dev: $VITE_URL is already in use; stop whatever runs there first" >&2
+    exit 1
+fi
+
 # Vite and the app each run in their own process group (`set -m`; setsid
 # is not on macOS), so the trap stops each with everything it started,
 # however this script ends: Ctrl+C, a kill, or the app exiting.
