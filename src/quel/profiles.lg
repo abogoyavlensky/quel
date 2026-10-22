@@ -1,6 +1,7 @@
 (ns quel.profiles
   (:refer-clojure :exclude [get])
-  (:require [quel.conn :as conn]
+  (:require [async :as a]
+            [quel.conn :as conn]
             [quel.secrets :as secrets]
             [sql.core :as sql]
             [string :as str]))
@@ -42,7 +43,9 @@
     (string? v) (let [t (str/trim v)]
                   (cond
                     (str/blank? t) nil
-                    (re-matches #"\d+" t) (parse-long t)
+                    ;; parse-long answers nil past the long range.
+                    (re-matches #"\d+" t) (or (parse-long t)
+                                               (throw (ex-info "The port must be between 1 and 65535." {})))
                     :else (throw (ex-info "The port must be a number." {}))))
     (nil? v) nil
     :else (throw (ex-info "The port must be a number." {}))))
@@ -167,12 +170,28 @@
     (secrets/delete-password! secrets id)
     (secrets/set-password! secrets id old)))
 
+;; Saving and deleting change two stores, the Keychain and the table, and
+;; read one to decide the other (has_password, the password a failed write
+;; puts back). Bridge calls run concurrently, so they take this lock: two
+;; saves of one profile must not interleave. A channel holding one token is
+;; let-go's mutex; profile edits are rare, so one lock for all is enough.
+(def ^:private lock (doto (a/chan 1) (a/>!! :token)))
+
+(defn- locked [f]
+  (a/<!! lock)
+  (try (f) (finally (a/>!! lock :token))))
+
+(declare save*)
+
 (defn save!
   "Validate and save m (from the frontend, see normalize): a new profile
    when it has no id. The password change goes to the Keychain first; if
    the row then fails to write, the old password is put back. Returns the
    saved profile."
   [db secrets m]
+  (locked #(save* db secrets m)))
+
+(defn- save* [db secrets m]
   (let [p (validate db (normalize m))
         existing (when (:id p)
                    (or (fetch db (:id p))
@@ -201,12 +220,14 @@
   "Delete profile id and its saved password. A Keychain failure is
    reported on stderr, not thrown: the profile is gone either way."
   [db secrets id]
-  (sql/execute! db ["delete from profiles where id = ?" (str id)])
-  (try
-    (secrets/delete-password! secrets id)
-    (catch e
-      (write! *err* (str "quel: could not delete the saved password of " id ": " (ex-message e) "\n"))))
-  nil)
+  (locked
+   (fn []
+     (sql/execute! db ["delete from profiles where id = ?" (str id)])
+     (try
+       (secrets/delete-password! secrets id)
+       (catch e
+         (write! *err* (str "quel: could not delete the saved password of " id ": " (ex-message e) "\n"))))
+     nil)))
 
 (defn- dsn
   "A key/value DSN for pgx: every value quoted, nil fields left out (a nil

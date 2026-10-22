@@ -36,7 +36,9 @@
     (is (false? (:forget-password? p))))
   (is (= 5432 (:port (profiles/normalize {:port 5432.0}))))
   (is (nil? (:port (profiles/normalize {"port" ""}))))
-  (is (= "The port must be a number." (message-of #(profiles/normalize {"port" "54x"})))))
+  (is (= "The port must be a number." (message-of #(profiles/normalize {"port" "54x"}))))
+  (is (= "The port must be between 1 and 65535."
+         (message-of #(profiles/normalize {"port" "9999999999999999999999999999"})))))
 
 (deftest password-change-precedence
   (is (= [:forget] (profiles/password-change {:password "pw" :forget-password? true})))
@@ -193,3 +195,17 @@
 (deftest dsn-quote
   (is (= "'a b'" (conn/dsn-quote "a b")))
   (is (= "'it\\'s \\\\ ok'" (conn/dsn-quote "it's \\ ok"))))
+
+;; A save that keeps the password must not write back a has-password a
+;; concurrent forget has already changed.
+(deftest concurrent-edits-of-one-profile-stay-consistent
+  (with-store
+    (fn [db _]
+      (let [p (profiles/save! db s (assoc pg "password" "pw"))
+            fs (doall (for [i (range 30)]
+                        (future (profiles/save! db s (if (even? i)
+                                                       (assoc pg "id" (:id p) "forget-password" true)
+                                                       (assoc pg "id" (:id p) "password" (str "pw" i)))))))]
+        (doseq [f fs] @f)
+        (let [saved (profiles/fetch db (:id p))]
+          (is (= (:has-password saved) (some? (secrets/password s (:id p))))))))))
