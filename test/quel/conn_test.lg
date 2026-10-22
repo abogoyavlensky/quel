@@ -101,3 +101,18 @@
   (is (= "postgres://h/db" (conn/label (conn/target "postgres://h/db?pass%77ord=s3")))
       "the query string is dropped whole, however a name is encoded")
   (is (= "/tmp/a.db" (conn/label (conn/target "/tmp/a.db")))))
+
+(deftest connection-errors-hide-passwords
+  (with-registry
+    (fn [registry _]
+      (let [msg (message-of #(conn/open! registry "postgres://localhost/db?password=supersecret&sslmode=invalid"))]
+        (is (some? msg))
+        (is (not (str/includes? (str msg) "supersecret")) (str "got " msg)))
+      (let [msg (message-of #(conn/open! registry "postgres://u:supersecret@localhost:notaport/db"))]
+        (is (some? msg))
+        (is (not (str/includes? (str msg) "supersecret")) (str "got " msg))))))
+
+(deftest redact-masks-what-looks-like-a-password
+  (let [t (conn/target "postgres://u:s3@h/db?password=s4")]
+    (is (= "cannot parse `postgres://u:***@h/db`" (conn/redact t "cannot parse `postgres://u:s3@h/db?password=s4`")))
+    (is (= "host=h password=*** x" (conn/redact t "host=h password='a b' x")))))

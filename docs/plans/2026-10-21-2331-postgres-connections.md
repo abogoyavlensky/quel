@@ -331,10 +331,10 @@ Quel (branch `postgres-connections`):
 - Modify: `docs/DESIGN.md`, `README.md`, `AGENTS.md`
 - Create: `docs/backlog/bytea-preview.md`
 
-- [ ] **Step 1:** DESIGN: "Running" says Quel opens pgx with the cancel-request handler (from `postgres-v0.4.0`) so a cancelled session survives, and why the default would not do; a broken session is reset. Testing replaces the "Redshift ... against a real cluster, gated on an environment variable" line: Postgres runs in Docker (`lgx test-pg`), no Docker image runs Redshift (LocalStack included), and Redshift-specific checks wait for a cluster. The three Redshift items stay in "Unverified". Upstream table: a done row for `postgres` v0.4.0; the bytea row. Cell encoding: dates and timestamps as implemented. Milestone 1: this slice done (date), and its "Starts with the Redshift checks" sentence now says those checks wait for a cluster.
-- [ ] **Step 2:** README and AGENTS command tables: `lgx test-pg`, Docker as a requirement for `test-pg`.
-- [ ] **Step 3: Commit** `"Document Postgres testing"`.
-- [ ] **Step 4:** /backlog: `bytea-preview.md` (the sql shim's `ScanRow` turns `[]byte` into a string, losing binary values; Quel shows `(binary)`; fix upstream by keeping binary columns as bytes). Own commit, `"Backlog: preview binary values"`.
+- [x] **Step 1:** DESIGN: "Running" says Quel opens pgx with the cancel-request handler (from `postgres-v0.4.0`) so a cancelled session survives, and why the default would not do; a broken session is reset. Testing replaces the "Redshift ... against a real cluster, gated on an environment variable" line: Postgres runs in Docker (`lgx test-pg`), no Docker image runs Redshift (LocalStack included), and Redshift-specific checks wait for a cluster. The three Redshift items stay in "Unverified". Upstream table: a done row for `postgres` v0.4.0; the bytea row. Cell encoding: dates and timestamps as implemented. Milestone 1: this slice done (date), and its "Starts with the Redshift checks" sentence now says those checks wait for a cluster.
+- [x] **Step 2:** README and AGENTS command tables: `lgx test-pg`, Docker as a requirement for `test-pg`.
+- [x] **Step 3: Commit** `"Document Postgres testing"`.
+- [x] **Step 4:** /backlog: `bytea-preview.md` (the sql shim's `ScanRow` turns `[]byte` into a string, losing binary values; Quel shows `(binary)`; fix upstream by keeping binary columns as bytes). Own commit, `"Backlog: preview binary values"`.
 
 ### Task 10: Review, PR
 

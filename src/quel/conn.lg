@@ -69,17 +69,30 @@
         (str/replace #"^([a-z]+://[^/?#:@]*):[^/?#]*@" "$1:***@"))
     path))
 
+(defn redact
+  "msg with the target's URL replaced by its label, and anything else that
+   looks like a password (user:password@, password=...) masked: driver
+   errors can quote the URL they failed to parse."
+  [t msg]
+  (cond-> (str msg)
+    (:url t) (str/replace (:url t) (label t))
+    true (str/replace #"(?i)(password\s*=\s*)('[^']*'|[^\s&'`]+)" "$1***")
+    true (str/replace #"([a-z]+://[^/?#:@\s]*):[^/?#@\s]*@" "$1:***@")))
+
 (defn- connect
   "A connectable for target. Postgres pools keep a session across a
    cancelled query (:postgres/cancel :request), and are pinged so a wrong
-   password or host fails here, not at the first run."
-  [{:keys [engine path url]}]
+   password or host fails here, not at the first run. Errors are redacted
+   before they reach the UI."
+  [{:keys [engine path url] :as t}]
   (if (= :sqlite engine)
     (sqlite/open path)
-    (let [db (pg/open url {:postgres/cancel :request})]
+    (let [db (try
+               (pg/open url {:postgres/cancel :request})
+               (catch e (throw (ex-info (redact t (ex-message e)) {}))))]
       (when-let [err (.Ping (:sql/handle db))]
         (pg/close! db)
-        (throw (ex-info (.Error err) {})))
+        (throw (ex-info (redact t (.Error err)) {})))
       db)))
 
 (defn open!
