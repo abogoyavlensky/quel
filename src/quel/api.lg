@@ -2,11 +2,15 @@
   (:require [integrant.core :as ig]
             [quel.conn :as conn]
             [quel.exec :as exec]
+            [quel.menu :as menu]
+            [quel.profiles :as profiles]
+            [quel.secrets :as secrets]
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
-;; env, {:conns :execs}, first, then the plain values JavaScript sends.
-;; A throw rejects the frontend's promise with the message.
+;; env, {:conns :execs :store :secrets :app}, first, then the plain values
+;; JavaScript sends (objects arrive as maps with string keys). A throw
+;; rejects the frontend's promise with the message.
 
 (defn ping [_env] {:ok true})
 
@@ -32,6 +36,38 @@
 (defn close-session [{:keys [conns execs]} conn-id session-id]
   (exec/close-session! execs conns conn-id session-id))
 
+;; Profiles. None of these returns a password.
+
+(defn list-profiles [{:keys [store]}]
+  (profiles/list-all store))
+
+(defn save-profile [{:keys [store secrets]} m]
+  (profiles/save! store secrets m))
+
+(defn delete-profile [{:keys [store secrets]} id]
+  (profiles/delete! store secrets id))
+
+(defn test-connection
+  "Connect with the form as it stands, saved or not, and close again.
+   Saves nothing. No uniqueness check: an unsaved or renamed form can be
+   tested."
+  [{:keys [store secrets]} m]
+  (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
+        t (profiles/target p (profiles/effective-password secrets p))]
+    (conn/check! t)
+    {:ok true :label (:label t)}))
+
+(defn connect [{:keys [conns store secrets]} profile-id]
+  (let [p (or (profiles/fetch store profile-id)
+              (throw (ex-info "This connection no longer exists." {:id profile-id})))
+        t (profiles/target p (secrets/password secrets profile-id))]
+    (assoc (conn/open-target! conns t) :profile-id profile-id)))
+
+(defn choose-file
+  "The SQLite file the user picks, or nil when they cancel."
+  [{:keys [app]}]
+  (w/open-file app {:title "Choose a Database File" :filters menu/db-filters}))
+
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
@@ -43,7 +79,13 @@
    "fetch-page" #'fetch-page
    "cancel" #'cancel
    "close-result" #'close-result
-   "close-session" #'close-session})
+   "close-session" #'close-session
+   "list-profiles" #'list-profiles
+   "save-profile" #'save-profile
+   "delete-profile" #'delete-profile
+   "test-connection" #'test-connection
+   "connect" #'connect
+   "choose-file" #'choose-file})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

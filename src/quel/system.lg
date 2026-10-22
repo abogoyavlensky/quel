@@ -5,7 +5,9 @@
             [quel.dev]
             [quel.exec]
             [quel.menu]
-            [quel.shell]))
+            [quel.secrets]
+            [quel.shell]
+            [quel.store]))
 
 ;; One config map describes the app; integrant starts the components in
 ;; dependency order and halts them in reverse when the app ends.
@@ -23,8 +25,17 @@
 
 (declare stop!)
 
+(defn secrets-backend
+  "Where profile passwords go: the Keychain, or an in-memory store when
+   QUEL_SECRETS is memory (smoke and e2e runs, which must not touch it)."
+  []
+  (if (= "memory" (os/getenv "QUEL_SECRETS")) :memory :system))
+
 (defn config []
-  {:quel.conn/registry {}
+  {;; The app database, in (quel.store/data-dir) unless :dir names one.
+   :quel.store/db {:dir nil}
+   :quel.secrets/store {:backend (secrets-backend)}
+   :quel.conn/registry {}
    ;; The ref orders the halt: queries are cancelled before their sessions
    ;; close.
    :quel.exec/registry {:conns (ig/ref :quel.conn/registry)}
@@ -33,7 +44,10 @@
                        :idle-ms 300000
                        :every-ms 30000}
    :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
-                       :execs (ig/ref :quel.exec/registry)}
+                       :execs (ig/ref :quel.exec/registry)
+                       :store (ig/ref :quel.store/db)
+                       :secrets (ig/ref :quel.secrets/store)
+                       :app (ig/ref :quel.shell/app)}
    :quel.shell/app {:name "Quel"
                     :description "A database client"
                     :assets "public"

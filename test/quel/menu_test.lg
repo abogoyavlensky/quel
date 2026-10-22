@@ -20,11 +20,11 @@
   (mapcat (fn [item] (cons (:label item) (labels (:items item)))) items))
 
 (deftest every-item-with-a-click-has-one
-  (is (= 6 (count (on-clicks (menu/spec {:app nil}))))))
+  (is (= 7 (count (on-clicks (menu/spec {:app nil}))))))
 
 (deftest the-tab-and-query-items-are-there
   (is (every? (set (labels (menu/spec {:app nil})))
-              ["New Tab" "Open Database…" "Close Tab" "Query" "Run" "Run Script" "Cancel"])))
+              ["New Tab" "New Connection…" "Open Database…" "Close Tab" "Query" "Run" "Run Script" "Cancel"])))
 
 (deftest wails-accepts-the-spec
   @app
