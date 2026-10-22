@@ -5,10 +5,14 @@
 ;; and nothing is allowed to fail: an unknown value falls back to its
 ;; string form.
 ;;
-;; Milestone 0 handles what SQLite produces. modernc returns TEXT and BLOB
-;; as []byte, and the sql shim's boxing already surfaces both as strings.
-;; Exact decimals, dates and the large-text cap arrive with the engines
-;; that produce them.
+;; Values arrive as the sql shim scans them. modernc (SQLite) returns TEXT
+;; and BLOB as []byte, which the shim surfaces as strings. pgx (Postgres,
+;; Redshift) returns numeric, uuid, json, intervals and arrays as strings,
+;; and date, timestamp and timestamptz as Go time.Time values, formatted
+;; here by the column's type. bytea also arrives as a string, but one that
+;; has lost its bytes (the shim turns []byte into text), so it shows as a
+;; placeholder until the shim keeps binary values (docs/backlog). The
+;; large-text cap comes later.
 
 ;; The largest integer a JavaScript number holds exactly: 2^53 - 1.
 (def ^:private max-safe-int 9007199254740991)
@@ -22,18 +26,35 @@
     (NaN? x) "NaN"
     (infinite? x) (if (pos? x) "Infinity" "-Infinity")))
 
+(def ^:private binary-types #{"BYTEA"})
+
+;; Go time layouts per column type: ISO-8601, as precise as the value.
+(def ^:private time-layouts
+  {"DATE" "2006-01-02"
+   "TIMESTAMP" "2006-01-02T15:04:05.999999"
+   "TIMESTAMPTZ" "2006-01-02T15:04:05.999999Z07:00"})
+
+(defn- go-time? [v]
+  (= "go.time.Time" (str (type v))))
+
 (defn encode
-  "One driver value as a bridge-safe cell."
-  [v]
-  (cond
-    (nil? v) nil
-    (boolean? v) v
-    (string? v) v
-    (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))
-    (number? v) (or (non-finite v) v)
-    :else (str v)))
+  "One driver value as a bridge-safe cell, given its column's type name
+   (as sql.shim/ColumnTypeNames reports it; nil when unknown)."
+  ([v] (encode nil v))
+  ([type-name v]
+   (cond
+     (nil? v) nil
+     ;; Before strings: bytea arrives as one.
+     (contains? binary-types type-name) "(binary)"
+     (boolean? v) v
+     (string? v) v
+     (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))
+     (number? v) (or (non-finite v) v)
+     (go-time? v) (.Format v (get time-layouts type-name "2006-01-02T15:04:05.999999Z07:00"))
+     :else (str v))))
 
 (defn encode-row
-  "A row of driver values, in column order, as a vector of cells."
-  [row]
-  (mapv encode row))
+  "A row of driver values, in column order, as a vector of cells. types
+   are the columns' type names, in the same order."
+  ([row] (mapv encode row))
+  ([types row] (mapv encode types row)))

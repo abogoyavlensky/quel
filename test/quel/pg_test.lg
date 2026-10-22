@@ -127,3 +127,38 @@
           (run execs conns id "rollback")
           (is (= pid (first-cell execs conns id "select pg_backend_pid()"))
               "the same connection throughout"))))))
+
+(defn- utc-hour
+  "The UTC hour of an ISO-8601 timestamp with a whole-hour offset (Z or
+   +HH:MM / -HH:MM), or nil if it is not one."
+  [s]
+  (when-let [[_ h zone sign oh] (re-matches #"\d{4}-\d\d-\d\dT(\d\d):\d\d:\d\d(?:\.\d+)?(Z|([+-])(\d\d):00)" (str s))]
+    (let [h (parse-long h)]
+      (if (= "Z" zone)
+        h
+        (mod (- h (* (if (= "+" sign) 1 -1) (parse-long oh))) 24)))))
+
+(deftest dates-timestamps-and-binary-become-cells
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [r (run execs conns id
+                     (str "select date '2026-10-21' d,"
+                          " timestamp '2026-10-21 10:00:00.5' ts,"
+                          " timestamptz '2026-10-21 10:00:00+02' tz,"
+                          " '\\xdeadbeef'::bytea b,"
+                          " 1.50::numeric(10,2) n,"
+                          " 9007199254740993::int8 big,"
+                          " null::date nd"))]
+          (is (= ["DATE" "TIMESTAMP" "TIMESTAMPTZ" "BYTEA" "NUMERIC" "INT8" "DATE"]
+                 (mapv :type (:columns r))))
+          ;; pgx decodes timestamptz in the machine's local zone, so the offset
+          ;; varies by machine: check the hour against the offset given.
+          (let [[d ts tz b n big nd] (first (:rows r))]
+            (is (= "2026-10-21" d))
+            (is (= "2026-10-21T10:00:00.5" ts))
+            (is (= 8 (utc-hour tz)) (str "got " tz))
+            (is (= "(binary)" b))
+            (is (= "1.50" n))
+            (is (= "9007199254740993" big))
+            (is (nil? nd))))))))

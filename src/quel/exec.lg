@@ -90,13 +90,14 @@
     (throw (ex-info (.Error err) {}))))
 
 (defn read-page
-  "Read up to n rows from an open cursor as encoded cells. Returns
-   {:rows [...] :has-more bool}; has-more consumes one row to find out."
-  [rows n]
+  "Read up to n rows from an open cursor as encoded cells, typed by the
+   columns' type names. Returns {:rows [...] :has-more bool}; has-more
+   consumes one row to find out."
+  [rows types n]
   (loop [acc []]
     (if (< (count acc) n)
       (if (.Next rows)
-        (recur (conj acc (cells/encode-row (vec (shim/ScanRow rows)))))
+        (recur (conj acc (cells/encode-row types (vec (shim/ScanRow rows)))))
         (do (fail-on-err! rows)
             {:rows acc :has-more false}))
       (let [more (.Next rows)]
@@ -108,7 +109,7 @@
     (try
       (let [names (vec (.Columns rows))
             types (vec (shim/ColumnTypeNames rows))
-            page (read-page rows page-size)]
+            page (read-page rows types page-size)]
         {:columns (mapv (fn [n t] {:name n :type t}) names types)
          :rows (:rows page)
          :has-more (:has-more page)

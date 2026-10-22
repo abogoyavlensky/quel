@@ -307,9 +307,11 @@ Quel (branch `postgres-connections`):
 - Modify: `src/quel/cells.lg`, `src/quel/exec.lg`
 - Test: `test/quel/cells_test.lg`, `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Tests.** `cells_test`: strings in `DATE`/`TIMESTAMP` columns pass through; `BYTEA` becomes `"(binary)"`; untyped (nil type) values behave as before. `pg_test`: a row of `date`, `timestamp`, `timestamptz` (`timestamptz '2026-10-21 10:00:00+02'`), `bytea`, `numeric`, `int8` beyond 2^53 comes back as the cells in the design's table.
-- [ ] **Step 2:** Run, see them fail. Implement `encode [type v]` and `encode-row [types row]`; `exec/read-page` passes the type names it already reads. Run `lgx test-pg`: all pass.
-- [ ] **Step 3: Commit** `"Encode dates, timestamps and binary values by column type"`.
+- [x] **Step 1: Tests.** `cells_test`: strings in `DATE`/`TIMESTAMP` columns pass through; `BYTEA` becomes `"(binary)"`; untyped (nil type) values behave as before. `pg_test`: a row of `date`, `timestamp`, `timestamptz` (`timestamptz '2026-10-21 10:00:00+02'`), `bytea`, `numeric`, `int8` beyond 2^53 comes back as the cells in the design's table.
+- [x] **Step 2:** Run, see them fail. Implement `encode [type v]` and `encode-row [types row]`; `exec/read-page` passes the type names it already reads. Run `lgx test-pg`: all pass.
+- [x] **Step 3: Commit** `"Encode dates, timestamps and binary values by column type"`.
+
+> Deviation: `encode` and `encode-row` keep their one-argument arities (an unknown type) beside the typed ones. pgx decodes timestamptz in the machine's local zone, so the test checks the instant via the offset, not a fixed `Z`.
 
 ### Task 8: Frontend and smoke
 
