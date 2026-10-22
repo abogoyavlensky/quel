@@ -24,6 +24,9 @@ export default defineConfig({
   build: {
     outDir: "../resources/public",
     emptyOutDir: true,
+    // The bundle is embedded in the app and loads from disk, so its size
+    // costs little; CodeMirror alone passes Vite's 500 KB default.
+    chunkSizeWarningLimit: 1500,
   },
   // Unit tests only; e2e/*.spec.ts are Playwright's.
   test: {
