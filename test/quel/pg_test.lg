@@ -233,3 +233,20 @@
         (is (= {} @execs))
         (is (= 0 (first-cell execs conns id "select count(*) from kept2"))
             "the session survived")))))
+
+(deftest a-run-is-cancellable-while-the-previous-cursor-drains
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "create temp table kept3 (x int)")
+        (is (true? (:has-more (run-q execs conns id "big" "select * from generate_series(1, 10000000)"))))
+        ;; This run first drains "big" for up to drain-ms; it is registered
+        ;; meanwhile, so the cancel finds it and it never starts.
+        (let [next-run (future (try (run-q execs conns id "next" "select pg_sleep(30)")
+                                    (catch e (ex-message e))))]
+          (is (until #(= :running (get-in @execs ["next" :state]))))
+          (is (true? (exec/cancel! execs "next")))
+          (is (= "Query canceled." (deref next-run 5000 :timeout))))
+        (is (= {} @execs))
+        (is (= 0 (first-cell execs conns id "select count(*) from kept3"))
+            "the session survived")))))

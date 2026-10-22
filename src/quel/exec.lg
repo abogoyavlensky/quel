@@ -40,22 +40,30 @@
 
 (defn- register!
   "Add the query's entry, refusing a reused query-id and a second query in
-   a session: one connection cannot run two statements at once."
+   a session: one connection cannot run two statements at once. The
+   session's open cursor, if it has one, is taken in the same swap and
+   returned: the caller disposes of it. Registering first means a cancel
+   finds the new query even while that cursor drains."
   [execs query-id conn-id session-id engine ctx]
-  (let [busy? (fn [m] (some #(same-session? conn-id session-id %) (vals m)))
+  (let [mine? #(same-session? conn-id session-id %)
+        busy? (fn [m] (some #(and (mine? %) (not= :open (:state %))) (vals m)))
         [old _] (swap-vals! execs
                             (fn [m]
                               (if (or (contains? m query-id) (busy? m))
                                 m
-                                (assoc m query-id {:query-id query-id :ctx ctx :conn-id conn-id
-                                                   :session-id session-id
-                                                   :engine engine :state :running}))))]
+                                (-> (into {} (remove (fn [[_ e]] (mine? e)) m))
+                                    (assoc query-id {:query-id query-id :ctx ctx :conn-id conn-id
+                                                     :session-id session-id
+                                                     :engine engine :state :running})))))]
     (cond
       (contains? old query-id)
       (throw (ex-info (str "Query " query-id " is already running.") {:query-id query-id}))
 
       (busy? old)
-      (throw (ex-info "A query is already running in this session." {:conn-id conn-id})))))
+      (throw (ex-info "A query is already running in this session." {:conn-id conn-id}))
+
+      :else
+      (filterv #(and (mine? %) (= :open (:state %))) (vals old)))))
 
 (defn- take-entries!
   "Remove the entries pred matches and return them: the caller owns them
@@ -97,13 +105,6 @@
       (future (sleep drain-ms) (when-not @done (.Cancel ctx)))
       (try (.Close rows) (finally (reset! done true) (.Cancel ctx)))))
   nil)
-
-(defn- close-open-cursor!
-  "Close the session's open cursor, if it has one."
-  [execs conn-id session-id]
-  (doseq [e (take-entries! execs #(and (= :open (:state %))
-                                       (same-session? conn-id session-id %)))]
-    (dispose! e)))
 
 ;; Tokens of a statement - words (lower-cased) and parentheses - past
 ;; string literals, quoted identifiers and comments: those alternatives are
@@ -289,28 +290,34 @@
   (let [ctx (shim/NewCtx)
         engine (conn/engine conns conn-id)
         kept (atom false)]
-    (close-open-cursor! execs conn-id session-id)
     ;; Registered before the session is taken: a tab closing meanwhile
     ;; either finds this entry and cancels it, or has retired the
     ;; session-id, and session! refuses it.
-    (register! execs query-id conn-id session-id engine ctx)
-    (try
-      (let [session (conn/session! conns conn-id session-id)
-            t0 (System/nanoTime)
-            {:keys [result rows types]} (if (rows? sql)
-                                          (run-rows session ctx sql page-size)
-                                          {:result (run-exec session ctx sql)})]
-        (when rows
-          (if (open-cursor! execs query-id ctx rows types)
-            (reset! kept true)
-            (dispose! {:engine engine :ctx ctx :rows rows})))
-        (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
-      (catch e
-        (fail! conns conn-id session-id (.Canceled ctx) query-id e))
-      (finally
-        (when-not @kept
-          (.Cancel ctx)
-          (swap! execs dissoc query-id))))))
+    (let [previous (register! execs query-id conn-id session-id engine ctx)]
+      (try
+        ;; The session's open cursor goes first (a connection with open
+        ;; rows cannot run another statement). On pgx that can drain for
+        ;; up to drain-ms; a cancel meanwhile stops this run before it
+        ;; starts.
+        (doseq [e previous] (dispose! e))
+        (when (.Canceled ctx)
+          (throw (ex-info "Query canceled." {:query-id query-id})))
+        (let [session (conn/session! conns conn-id session-id)
+              t0 (System/nanoTime)
+              {:keys [result rows types]} (if (rows? sql)
+                                            (run-rows session ctx sql page-size)
+                                            {:result (run-exec session ctx sql)})]
+          (when rows
+            (if (open-cursor! execs query-id ctx rows types)
+              (reset! kept true)
+              (dispose! {:engine engine :ctx ctx :rows rows})))
+          (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
+        (catch e
+          (fail! conns conn-id session-id (.Canceled ctx) query-id e))
+        (finally
+          (when-not @kept
+            (.Cancel ctx)
+            (swap! execs dissoc query-id)))))))
 
 (def ^:private closed-page {:rows [] :has-more false :closed true})
 
