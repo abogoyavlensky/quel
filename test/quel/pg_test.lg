@@ -128,15 +128,18 @@
           (is (= pid (first-cell execs conns id "select pg_backend_pid()"))
               "the same connection throughout"))))))
 
-(defn- utc-hour
-  "The UTC hour of an ISO-8601 timestamp with a whole-hour offset (Z or
-   +HH:MM / -HH:MM), or nil if it is not one."
+(defn- utc-minute-of-day
+  "Minutes past midnight UTC of an ISO-8601 timestamp with an offset (Z, or
+   +HH:MM / -HH:MM, fractional-hour zones included), or nil if s is not
+   one."
   [s]
-  (when-let [[_ h zone sign oh] (re-matches #"\d{4}-\d\d-\d\dT(\d\d):\d\d:\d\d(?:\.\d+)?(Z|([+-])(\d\d):00)" (str s))]
-    (let [h (parse-long h)]
-      (if (= "Z" zone)
-        h
-        (mod (- h (* (if (= "+" sign) 1 -1) (parse-long oh))) 24)))))
+  (when-let [[_ h m zone sign oh om]
+             (re-matches #"\d{4}-\d\d-\d\dT(\d\d):(\d\d):\d\d(?:\.\d+)?(Z|([+-])(\d\d):(\d\d))" (str s))]
+    (let [local (+ (* 60 (parse-long h)) (parse-long m))
+          offset (if (= "Z" zone)
+                   0
+                   (* (if (= "+" sign) 1 -1) (+ (* 60 (parse-long oh)) (parse-long om))))]
+      (mod (- local offset) 1440))))
 
 (deftest dates-timestamps-and-binary-become-cells
   (with-pg
@@ -157,7 +160,7 @@
           (let [[d ts tz b n big nd] (first (:rows r))]
             (is (= "2026-10-21" d))
             (is (= "2026-10-21T10:00:00.5" ts))
-            (is (= 8 (utc-hour tz)) (str "got " tz))
+            (is (= (* 8 60) (utc-minute-of-day tz)) (str "got " tz))
             (is (= "(binary)" b))
             (is (= "1.50" n))
             (is (= "9007199254740993" big))
