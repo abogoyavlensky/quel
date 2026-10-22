@@ -81,8 +81,11 @@
    select's cursor. So drain, and cancel only if that takes longer than
    drain-ms: then a cursor with a lot left unread is cancelled after all,
    as after a cancel in psql. Outside a transaction the cancel costs
-   nothing."
-  [{:keys [engine ctx rows]}]
+   nothing. A page being read is cancelled at once, whatever the engine."
+  [{:keys [engine ctx rows state]}]
+  ;; A page being read is stopped first: Rows.Close waits for the .Next in
+  ;; progress, which on SQLite can compute for minutes.
+  (when (= :fetching state) (.Cancel ctx))
   (cond
     (nil? rows) (.Cancel ctx)
 
