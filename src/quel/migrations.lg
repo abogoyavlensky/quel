@@ -26,4 +26,29 @@
           ;; quel.profiles/validate: two saves at once can both pass the
           ;; check, and only one may land.
           "create unique index profiles_name on profiles (name collate nocase)"]
-     :down ["drop table profiles"]})])
+     :down ["drop table profiles"]})
+
+   (rt/sql-migration
+    {:id "002-create-editor-tabs"
+     ;; Each profile's editor tabs (quel.workspace): the open ones, in
+     ;; position order, and the recently closed ones, closed_at set.
+     ;; Deleting the profile deletes its tabs and its workspaces row
+     ;; (foreign_keys is on for every connection, see quel.store).
+     :up ["create table editor_tabs (
+             id          text primary key,
+             profile_id  text not null references profiles(id) on delete cascade,
+             title       text not null,
+             body        text not null default '',
+             pinned      integer not null default 0,
+             position    integer not null default 0,
+             sel_from    integer not null default 0,
+             sel_to      integer not null default 0,
+             closed_at   integer)"
+          "create index editor_tabs_profile on editor_tabs (profile_id, closed_at)"
+          "create table workspaces (
+             profile_id      text primary key references profiles(id) on delete cascade,
+             active_tab      text,
+             next_tab_number integer not null default 1)"
+          ;; App-wide values: the selected profile.
+          "create table settings (key text primary key, value text)"]
+     :down ["drop table settings" "drop table workspaces" "drop table editor_tabs"]})])

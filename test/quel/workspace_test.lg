@@ -1,0 +1,183 @@
+(ns quel.workspace-test
+  (:require [integrant.core :as ig]
+            [quel.profiles :as profiles]
+            [quel.store-test :refer [with-store]]
+            [quel.workspace :as workspace]
+            [sql.core :as sql]
+            [clojure.test :refer [deftest is]]))
+
+(def s (ig/init-key :quel.secrets/store {:backend :memory}))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(defn- profile! [db n]
+  (:id (profiles/save! db s {"name" n "engine" "postgres" "host" "h"})))
+
+(defn- tab [id body & {:as more}]
+  (merge {"id" id "title" (str "T " id) "body" body "pinned" false "sel-from" 0 "sel-to" 0} more))
+
+(defn- save! [db pid tabs & {:as more}]
+  (workspace/save! db pid (merge {"tabs" tabs "active-tab" (get (first tabs) "id") "next-tab-number" 1} more)))
+
+(deftest a-fresh-profile-has-nothing-saved
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (is (= {:tabs [] :active-tab nil :next-tab-number 1 :closed []}
+               (workspace/load db pid)))))))
+
+(deftest save-then-load-round-trips
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "b" "select 2" "pinned" true "sel-from" 3 "sel-to" 5.0)
+                       (tab "a" "select 1")]
+               "active-tab" "a" "next-tab-number" 3)
+        (is (= {:tabs [{:id "b" :title "T b" :body "select 2" :pinned true :sel-from 3 :sel-to 5}
+                       {:id "a" :title "T a" :body "select 1" :pinned false :sel-from 0 :sel-to 0}]
+                :active-tab "a" :next-tab-number 3 :closed []}
+               (workspace/load db pid)))
+        ;; A later save reorders and keeps the text exactly, spaces and all.
+        (save! db pid [(tab "a" "  select 1\n") (tab "b" "select 2" "title" "Renamed")])
+        (is (= [["a" "  select 1\n"] ["b" "Renamed"]]
+               (mapv (juxt :id #(if (= "a" (:id %)) (:body %) (:title %)))
+                     (:tabs (workspace/load db pid)))))))))
+
+(deftest keyword-keys-work-too
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (workspace/save! db pid {:tabs [{:id "a" :title "A" :body "x"}] :active-tab "a" :next-tab-number 2})
+        (is (= [{:id "a" :title "A" :body "x" :pinned false :sel-from 0 :sel-to 0}]
+               (:tabs (workspace/load db pid))))))))
+
+(deftest a-tab-left-out-of-a-save-is-closed
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "a" "select 1") (tab "b" "select 2") (tab "c" "  ")])
+        (save! db pid [(tab "a" "select 1")])
+        (let [w (workspace/load db pid)]
+          (is (= ["a"] (mapv :id (:tabs w))))
+          ;; The blank one is gone, not closed.
+          (is (= [["b" "T b" "select 2"]] (mapv (juxt :id :title :body) (:closed w))))
+          (is (integer? (:closed-at (first (:closed w))))))
+        (is (nil? (sql/execute-one! db ["select id from editor_tabs where id = 'c'"])))))))
+
+(deftest close-stores-the-given-text
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "a" "old") (tab "b" "x")])
+        (let [entry (workspace/close! db pid {"id" "a" "title" "New title" "body" "newer"})]
+          (is (= {:id "a" :title "New title" :body "newer"} (dissoc entry :closed-at)))
+          (is (integer? (:closed-at entry))))
+        ;; A tab never saved is inserted, closed.
+        (workspace/close! db pid {"id" "n" "title" "Never" "body" "typed"})
+        (let [w (workspace/load db pid)]
+          (is (= ["b"] (mapv :id (:tabs w))))
+          (is (= [["n" "typed"] ["a" "newer"]] (mapv (juxt :id :body) (:closed w)))))))))
+
+(deftest close-of-a-blank-tab-deletes-it
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "a" "x") (tab "b" "y")])
+        (is (nil? (workspace/close! db pid {"id" "a" "title" "T" "body" " \n "})))
+        (is (nil? (workspace/close! db pid {"id" "z" "title" "T" "body" ""})))
+        (let [w (workspace/load db pid)]
+          (is (= ["b"] (mapv :id (:tabs w))))
+          (is (= [] (:closed w))))))))
+
+(deftest only-twenty-closed-are-kept-newest-first
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (doseq [i (range 25)]
+          (workspace/close! db pid {"id" (str "t" i) "title" (str i) "body" (str "select " i)}))
+        (let [closed (:closed (workspace/load db pid))]
+          (is (= (mapv #(str "t" %) (range 24 4 -1)) (mapv :id closed))))
+        (is (= 20 (:n (sql/execute-one! db ["select count(*) as n from editor_tabs"]))))
+        ;; The trim after a save, too.
+        (save! db pid [(tab "x" "x")])
+        (save! db pid [(tab "y" "y")])
+        (is (= ["x" "t24"] (mapv :id (take 2 (:closed (workspace/load db pid))))))
+        (is (= 21 (:n (sql/execute-one! db ["select count(*) as n from editor_tabs"]))))))))
+
+(deftest reopen-gives-a-new-id
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "a" "x")])
+        (workspace/close! db pid {"id" "b" "title" "Bee" "body" "select b"})
+        (let [t (workspace/reopen! db pid "b")]
+          (is (not= "b" (:id t)))
+          (is (= 36 (count (:id t))))
+          (is (= {:title "Bee" :body "select b" :pinned false :sel-from 0 :sel-to 0} (dissoc t :id)))
+          (let [w (workspace/load db pid)]
+            (is (= [] (:closed w)))
+            ;; Open at the end, saved already: a quit before the next save keeps it.
+            (is (= ["a" (:id t)] (mapv :id (:tabs w))))))
+        (is (= "That tab is no longer in the closed list."
+               (message-of #(workspace/reopen! db pid "b"))))))))
+
+(deftest a-profile-keeps-its-own-tabs
+  (with-store
+    (fn [db _]
+      (let [a (profile! db "A")
+            b (profile! db "B")]
+        (save! db a [(tab "a1" "x")])
+        (save! db b [(tab "b1" "y")])
+        (workspace/close! db b {"id" "b2" "title" "T" "body" "z"})
+        (is (= ["a1"] (mapv :id (:tabs (workspace/load db a)))))
+        (is (= [] (:closed (workspace/load db a))))
+        (is (= "That tab is no longer in the closed list."
+               (message-of #(workspace/reopen! db a "b2"))))))))
+
+(deftest deleting-the-profile-deletes-its-tabs
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")]
+        (save! db pid [(tab "a" "x")])
+        (workspace/close! db pid {"id" "b" "title" "T" "body" "y"})
+        (workspace/select-profile! db pid)
+        (profiles/delete! db s pid)
+        (is (= 0 (:n (sql/execute-one! db ["select count(*) as n from editor_tabs"]))))
+        (is (= 0 (:n (sql/execute-one! db ["select count(*) as n from workspaces"]))))
+        (is (nil? (workspace/selected-profile db)))))))
+
+(deftest an-unknown-profile-is-refused
+  (with-store
+    (fn [db _]
+      (is (= "This connection no longer exists." (message-of #(save! db "nope" [(tab "a" "x")]))))
+      (is (= "This connection no longer exists."
+             (message-of #(workspace/close! db "nope" {"id" "a" "title" "T" "body" "x"})))))))
+
+(deftest concurrent-saves-stay-consistent
+  (with-store
+    (fn [db _]
+      (let [pid (profile! db "A")
+            fs (doall (for [i (range 8)]
+                        (future (save! db pid [(tab "a" (str "v" i)) (tab (str "t" i) "x")]))))]
+        (doseq [f fs] @f)
+        (let [w (workspace/load db pid)
+              open (mapv :id (:tabs w))]
+          ;; Whichever save landed last: a and its own second tab, the
+          ;; other seven second tabs closed.
+          (is (= 2 (count open)))
+          (is (= "a" (first open)))
+          (is (= 7 (count (:closed w))))
+          (is (not (some #{(second open)} (map :id (:closed w))))))))))
+
+(deftest the-selected-profile-round-trips
+  (with-store
+    (fn [db _]
+      (let [a (profile! db "A")
+            b (profile! db "B")]
+        (is (nil? (workspace/selected-profile db)))
+        (workspace/select-profile! db a)
+        (workspace/select-profile! db b)
+        (is (= b (workspace/selected-profile db)))
+        (workspace/select-profile! db nil)
+        (is (nil? (workspace/selected-profile db)))))))

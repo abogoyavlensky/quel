@@ -1,0 +1,198 @@
+(ns quel.workspace
+  (:refer-clojure :exclude [load close!])
+  (:require [async :as a]
+            [quel.conn :as conn]
+            [sql.core :as sql]
+            [string :as str]))
+
+;; Each profile's editor tabs, saved in the app database so they come back
+;; on the next launch: the open tabs (title, text, pinned, position, the
+;; selection), the active tab, the next "Query N" number, and the most
+;; recent closed tabs, for reopening. Results, messages and undo history
+;; are not saved. App-wide, the settings table keeps the selected profile.
+;;
+;; A tab from the frontend arrives with string keys:
+;;
+;;   {"id" "6f1c…" "title" "Query 1" "body" "select 1" "pinned" false
+;;    "sel-from" 0 "sel-to" 8}
+;;
+;; and goes back as {:id :title :body :pinned :sel-from :sel-to}.
+
+(def max-closed 20)
+
+(defn- field
+  "m's value for k, under the string key the bridge sends or the keyword."
+  [m k]
+  (let [s (name k)]
+    (if (contains? m s) (get m s) (get m k))))
+
+(defn- string-of [v]
+  (if (string? v) v ""))
+
+(defn- offset-of
+  "A selection offset: JavaScript numbers may arrive as floats."
+  [v]
+  (if (number? v) (max 0 (long v)) 0))
+
+(defn- row->tab [r]
+  {:id (:id r) :title (:title r) :body (:body r) :pinned (= 1 (:pinned r))
+   :sel-from (:sel_from r) :sel-to (:sel_to r)})
+
+(defn- row->closed [r]
+  {:id (:id r) :title (:title r) :body (:body r) :closed-at (:closed_at r)})
+
+(defn- no-profile [id]
+  (ex-info "This connection no longer exists." {:id id}))
+
+(defn- check-profile! [tx profile-id]
+  (when-not (sql/execute-one! tx ["select id from profiles where id = ?" (str profile-id)])
+    (throw (no-profile profile-id))))
+
+(defn load
+  "Profile id's saved workspace: its open tabs by position, the active tab,
+   the next tab number, and its closed tabs, newest first. A profile with
+   nothing saved has no tabs."
+  [db profile-id]
+  (let [pid (str profile-id)
+        w (sql/execute-one! db ["select active_tab, next_tab_number from workspaces where profile_id = ?" pid])]
+    {:tabs (mapv row->tab
+                 (sql/execute! db [(str "select id, title, body, pinned, sel_from, sel_to from editor_tabs"
+                                        " where profile_id = ? and closed_at is null order by position, rowid")
+                                   pid]))
+     :active-tab (:active_tab w)
+     :next-tab-number (or (:next_tab_number w) 1)
+     :closed (mapv row->closed
+                   (sql/execute! db [(str "select id, title, body, closed_at from editor_tabs"
+                                          " where profile_id = ? and closed_at is not null"
+                                          " order by closed_at desc limit ?")
+                                     pid max-closed]))}))
+
+;; Saves read then write, and bridge calls run concurrently: they take this
+;; lock (a channel holding one token, as in quel.profiles).
+(def ^:private lock (doto (a/chan 1) (a/>!! :token)))
+
+(defn- locked [f]
+  (a/<!! lock)
+  (try (f) (finally (a/>!! lock :token))))
+
+(defn- close-time
+  "Now in ms, but later than every closed tab of the profile: the closed
+   list orders by it, and two closes in one millisecond must not tie."
+  [tx pid]
+  (let [latest (:t (sql/execute-one! tx ["select max(closed_at) as t from editor_tabs where profile_id = ?" pid]))]
+    (max (System/currentTimeMillis) (inc (or latest 0)))))
+
+(defn- trim-closed! [tx pid]
+  (sql/execute! tx [(str "delete from editor_tabs where profile_id = ? and closed_at is not null"
+                         " and id not in (select id from editor_tabs where profile_id = ?"
+                         " and closed_at is not null order by closed_at desc limit ?)")
+                    pid pid max-closed]))
+
+(defn- upsert-open! [tx pid position t]
+  (sql/execute! tx [(str "insert into editor_tabs (id, profile_id, title, body, pinned, position, sel_from, sel_to, closed_at)"
+                         " values (?, ?, ?, ?, ?, ?, ?, ?, null)"
+                         " on conflict (id) do update set title = excluded.title, body = excluded.body,"
+                         " pinned = excluded.pinned, position = excluded.position, sel_from = excluded.sel_from,"
+                         " sel_to = excluded.sel_to, closed_at = null"
+                         " where editor_tabs.profile_id = excluded.profile_id")
+                    (str (field t :id)) pid (string-of (field t :title)) (string-of (field t :body))
+                    (if (true? (field t :pinned)) 1 0) position
+                    (offset-of (field t :sel-from)) (offset-of (field t :sel-to))]))
+
+(defn save!
+  "Save profile id's workspace m: {\"tabs\" [...] \"active-tab\" id
+   \"next-tab-number\" n}. Every listed tab is saved open, in list order.
+   An open tab not listed is closed (a blank one deleted): the frontend
+   closes tabs with close!, so this is only a safety net. Returns nil."
+  [db profile-id m]
+  (let [pid (str profile-id)
+        tabs (vec (field m :tabs))
+        ids (set (map #(str (field % :id)) tabs))
+        n (field m :next-tab-number)]
+    (locked
+     (fn []
+       (sql/with-transaction [tx db]
+         (check-profile! tx pid)
+         (doseq [[i t] (map-indexed vector tabs)]
+           (upsert-open! tx pid i t))
+         (let [left (remove #(contains? ids (:id %))
+                            (sql/execute! tx ["select id, body from editor_tabs where profile_id = ? and closed_at is null" pid]))]
+           (doseq [{:keys [id body]} left]
+             (if (str/blank? body)
+               (sql/execute! tx ["delete from editor_tabs where id = ?" id])
+               (sql/execute! tx ["update editor_tabs set closed_at = ? where id = ?" (close-time tx pid) id]))))
+         (trim-closed! tx pid)
+         (sql/execute! tx [(str "insert into workspaces (profile_id, active_tab, next_tab_number) values (?, ?, ?)"
+                                " on conflict (profile_id) do update set active_tab = excluded.active_tab,"
+                                " next_tab_number = excluded.next_tab_number")
+                           pid (some-> (field m :active-tab) str) (if (number? n) (max 1 (long n)) 1)]))
+       nil))))
+
+(defn close!
+  "Close tab t ({\"id\" \"title\" \"body\"}) of profile id, keeping the
+   title and text given: they are newer than the last save. A tab never
+   saved is added, closed. A blank one is deleted instead. Returns the
+   closed entry {:id :title :body :closed-at}, or nil for a blank tab."
+  [db profile-id t]
+  (let [pid (str profile-id)
+        id (str (field t :id))
+        title (string-of (field t :title))
+        body (string-of (field t :body))]
+    (locked
+     (fn []
+       (sql/with-transaction [tx db]
+         (check-profile! tx pid)
+         (if (str/blank? body)
+           (do (sql/execute! tx ["delete from editor_tabs where id = ? and profile_id = ?" id pid])
+               nil)
+           (let [at (close-time tx pid)]
+             (sql/execute! tx [(str "insert into editor_tabs (id, profile_id, title, body, closed_at)"
+                                    " values (?, ?, ?, ?, ?)"
+                                    " on conflict (id) do update set title = excluded.title, body = excluded.body,"
+                                    " closed_at = excluded.closed_at"
+                                    " where editor_tabs.profile_id = excluded.profile_id")
+                               id pid title body at])
+             (trim-closed! tx pid)
+             {:id id :title title :body body :closed-at at})))))))
+
+(defn reopen!
+  "Take closed tab closed-id of profile id out of the closed list and open
+   it again, last, under a new id: the old one may be a retired session id
+   on a connection still open (quel.conn refuses those). Returns the tab."
+  [db profile-id closed-id]
+  (let [pid (str profile-id)]
+    (locked
+     (fn []
+       (sql/with-transaction [tx db]
+         (let [r (or (sql/execute-one! tx [(str "select title, body from editor_tabs"
+                                                " where id = ? and profile_id = ? and closed_at is not null")
+                                           (str closed-id) pid])
+                     (throw (ex-info "That tab is no longer in the closed list." {:id closed-id})))
+               id (conn/new-id)
+               position (:p (sql/execute-one! tx [(str "select coalesce(max(position), -1) + 1 as p from editor_tabs"
+                                                       " where profile_id = ? and closed_at is null")
+                                                  pid]))]
+           (sql/execute! tx ["delete from editor_tabs where id = ?" (str closed-id)])
+           ;; Saved open at once: a quit before the frontend's next save
+           ;; still finds it.
+           (sql/execute! tx [(str "insert into editor_tabs (id, profile_id, title, body, position)"
+                                  " values (?, ?, ?, ?, ?)")
+                             id pid (:title r) (:body r) position])
+           {:id id :title (:title r) :body (:body r) :pinned false :sel-from 0 :sel-to 0}))))))
+
+(defn selected-profile
+  "The id of the profile selected when the app last ran, or nil (none, or
+   it was deleted since)."
+  [db]
+  (:id (sql/execute-one! db [(str "select p.id from settings s join profiles p on p.id = s.value"
+                                  " where s.key = 'selected-profile'")])))
+
+(defn select-profile!
+  "Remember profile id as the selected one; nil forgets it."
+  [db id]
+  (if (nil? id)
+    (sql/execute! db ["delete from settings where key = 'selected-profile'"])
+    (sql/execute! db [(str "insert into settings (key, value) values ('selected-profile', ?)"
+                           " on conflict (key) do update set value = excluded.value")
+                      (str id)]))
+  nil)
