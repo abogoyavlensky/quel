@@ -55,7 +55,7 @@ test("a pinned result stays when the tab runs again", async ({ page }) => {
   await write(page, "select id from t order by id;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByText("500 rows loaded, more available")).toBeVisible();
-  await page.getByRole("button", { name: "Pin result" }).click();
+  await page.getByRole("button", { name: "Keep result" }).click();
 
   await write(page, "select name from t limit 1;");
   await page.keyboard.press("ControlOrMeta+Enter");

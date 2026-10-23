@@ -746,3 +746,44 @@ describe("closing and reopening", () => {
     expect(api.reopenTab).not.toHaveBeenCalled();
   });
 });
+
+describe("rename and pin", () => {
+  it("renames a tab; a blank name keeps the old one", () => {
+    const id = tabId();
+    runner.renameTab(id, "  Orders  ");
+    expect(tab().title).toBe("Orders");
+    runner.renameTab(id, "   ");
+    expect(tab().title).toBe("Orders");
+  });
+
+  it("pinned tabs come first, in the order they were pinned", () => {
+    runner.newTab();
+    runner.newTab();
+    runner.newTab();
+    const [a, b, c, d] = ws().tabs.map((t) => t.id);
+    runner.togglePin(c);
+    runner.togglePin(a);
+    expect(ws().tabs.map((t) => t.id)).toEqual([c, a, b, d]);
+    expect(ws().tabs.map((t) => t.pinned)).toEqual([true, true, false, false]);
+    // Unpinned, it goes first among the unpinned.
+    runner.togglePin(c);
+    expect(ws().tabs.map((t) => t.id)).toEqual([a, c, b, d]);
+    expect(ws().tabs.map((t) => t.pinned)).toEqual([true, false, false, false]);
+    // A new tab goes last, after the pinned ones.
+    runner.newTab();
+    expect(ws().tabs[4].pinned).toBe(false);
+  });
+
+  it("rename and pin schedule a save", async () => {
+    vi.useFakeTimers();
+    try {
+      runner.renameTab(tabId(), "Orders");
+      runner.togglePin(tabId());
+      await vi.advanceTimersByTimeAsync(800);
+      expect(api.saveWorkspace).toHaveBeenCalledTimes(1);
+      expect(api.saveWorkspace.mock.calls[0][1].tabs[0]).toMatchObject({ title: "Orders", pinned: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

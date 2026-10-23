@@ -253,6 +253,33 @@ export function selectTab(tabId: string): void {
   scheduleSave(w.profileId);
 }
 
+// Rename a tab. A blank name keeps the old one; names need not be unique.
+export function renameTab(tabId: string, title: string): void {
+  const w = workspaceOfTab(tabId);
+  const name = title.trim();
+  if (!w || w.loadError || !name || findTab(tabId)?.title === name) return;
+  updateTab(tabId, (t) => ({ ...t, title: name }));
+  scheduleSave(w.profileId);
+}
+
+// Pin or unpin a tab. Pinned tabs come first and cannot be closed: a tab
+// pinned goes last among them, one unpinned first among the others (the
+// same place, between the two groups).
+export function togglePin(tabId: string): void {
+  const w = workspaceOfTab(tabId);
+  const tab = w?.tabs.find((t) => t.id === tabId);
+  if (!w || !tab || w.loadError) return;
+  updateWorkspace(w.profileId, (w) => {
+    const others = w.tabs.filter((t) => t.id !== tabId);
+    return {
+      ...w,
+      tabs: [...others.filter((t) => t.pinned), { ...tab, pinned: !tab.pinned }, ...others.filter((t) => !t.pinned)],
+    };
+  });
+  if (!tab.pinned && store.getState().notice === "Unpin the tab to close it.") store.setState({ notice: null });
+  scheduleSave(w.profileId);
+}
+
 // Close an editor tab. A pinned one stays (the status bar says so). Its
 // title and text are taken first, then it leaves the store, so its runner
 // stops; a workspace's last tab is replaced by a fresh one. Then, on the
