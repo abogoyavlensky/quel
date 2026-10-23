@@ -60,7 +60,9 @@ export function ProfileDialog() {
   // from a fresh form.
   return (
     <Dialog open={!!dialog} onOpenChange={(open) => !open && closeProfileDialog()}>
-      <DialogContent className="sm:max-w-md">{dialog && <ProfileEditor editing={editing} />}</DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
+        {dialog && <ProfileEditor editing={editing} />}
+      </DialogContent>
     </Dialog>
   );
 }
@@ -70,6 +72,7 @@ function ProfileEditor({ editing }: { editing: Profile | undefined }) {
   const [test, setTest] = useState<TestState>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const switching = useApp((s) => s.switching);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Bumped on every edit: a Test that finishes after the form changed
@@ -331,7 +334,8 @@ function ProfileEditor({ editing }: { editing: Profile | undefined }) {
                 type="button"
                 variant="ghost"
                 className="text-destructive"
-                disabled={busy}
+                disabled={busy || switching}
+                title={switching ? "Wait for the connection to finish opening" : undefined}
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete

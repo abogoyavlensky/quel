@@ -32,8 +32,11 @@ export async function saveProfile(input: ProfileInput): Promise<Profile> {
   return saved;
 }
 
-// Delete a profile, disconnecting first if it is the open one.
+// Delete a profile, disconnecting first if it is the open one. Refused
+// while a database is opening: the one opening may be this profile, and
+// it would land connected after the delete.
 export async function deleteProfile(id: string): Promise<void> {
+  if (store.getState().switching) throw new Error("Wait for the connection to finish opening.");
   if (store.getState().conn?.profileId === id) await closeDb();
   await api.deleteProfile(id);
   await loadProfiles();

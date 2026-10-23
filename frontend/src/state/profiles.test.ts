@@ -72,6 +72,12 @@ describe("profiles", () => {
     expect(store.getState().conn).toBeNull();
   });
 
+  it("deleting is refused while a database is opening", async () => {
+    store.setState({ switching: true });
+    await expect(profiles.deleteProfile("a")).rejects.toThrow("Wait for the connection to finish opening.");
+    expect(api.deleteProfile).not.toHaveBeenCalled();
+  });
+
   it("deleting another profile leaves the connection open", async () => {
     store.setState({ conn: { connId: "c1", engine: "postgres", label: "P a", profileId: "a", color: "green" } });
     api.listProfiles.mockResolvedValue([]);
