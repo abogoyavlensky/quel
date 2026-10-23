@@ -31,6 +31,48 @@ export type Engine = "sqlite" | "postgres" | "redshift";
 export interface OpenResult {
   "conn-id": string;
   engine: Engine;
-  // The file path, or the URL without its password and query string.
+  // The file path, or the URL without its password and query string; for
+  // a profile, its name.
   label: string;
+  // Set when a profile was connected (`connect`).
+  "profile-id"?: string;
+}
+
+export type Color = "none" | "red" | "orange" | "yellow" | "green" | "blue" | "purple";
+
+export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full";
+
+// A saved connection profile, as `list-profiles` and `save-profile` return
+// it. The password is never here: it lives in the Keychain, and
+// "has-password" says whether one is saved.
+export interface Profile {
+  id: string;
+  name: string;
+  engine: Engine;
+  host: string | null;
+  port: number | null;
+  database: string | null;
+  user: string | null;
+  "ssl-mode": SslMode | null;
+  path: string | null; // SQLite only
+  color: Color;
+  "has-password": boolean;
+}
+
+// What `save-profile` and `test-connection` take. No id: a new profile.
+// password: absent keeps the saved one, a string replaces it.
+// "forget-password": deletes the saved one (and wins over password).
+export interface ProfileInput {
+  id?: string;
+  name: string;
+  engine: Engine;
+  host: string | null;
+  port: number | null;
+  database: string | null;
+  user: string | null;
+  "ssl-mode": SslMode | null;
+  path: string | null;
+  color: Color;
+  password?: string;
+  "forget-password"?: boolean;
 }

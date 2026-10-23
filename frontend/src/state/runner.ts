@@ -1,4 +1,5 @@
 import * as api from "@/lib/api";
+import type { OpenResult } from "@/lib/types";
 import { currentInput, dropState } from "@/editor/states";
 import type { Statement } from "@/sql/split";
 import { type RunMode, toRun } from "@/sql/target";
@@ -254,18 +255,17 @@ export function closeResult(tabId: string, resultId: string): void {
   });
 }
 
-// Open a database (a file path or a postgres:// URL) in place of the
-// current one. Opening and closing are serialized: a request while one is
-// in flight is dropped.
-export async function openDb(target: string): Promise<void> {
-  await switchDb(target);
+// Connect a saved profile in place of the current database. Connecting
+// and closing are serialized: a request while one is in flight is dropped.
+export async function connectProfile(id: string): Promise<void> {
+  await switchDb(() => api.connect(id));
 }
 
 export async function closeDb(): Promise<void> {
   await switchDb(null);
 }
 
-async function switchDb(next: string | null): Promise<void> {
+async function switchDb(open: (() => Promise<OpenResult>) | null): Promise<void> {
   if (store.getState().switching) return;
   store.setState({ switching: true, dbError: null });
   try {
@@ -275,9 +275,13 @@ async function switchDb(next: string | null): Promise<void> {
       closeAllCursors();
       await api.closeDb(current.connId);
     }
-    if (next !== null) {
-      const opened = await api.openDb(next);
-      store.setState({ conn: { connId: opened["conn-id"], engine: opened.engine, label: opened.label } });
+    if (open !== null) {
+      const opened = await open();
+      const profileId = opened["profile-id"] ?? "";
+      const color = store.getState().profiles.find((p) => p.id === profileId)?.color ?? "none";
+      store.setState({
+        conn: { connId: opened["conn-id"], engine: opened.engine, label: opened.label, profileId, color },
+      });
     }
   } catch (e) {
     store.setState({ dbError: errorText(e) });

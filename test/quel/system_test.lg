@@ -7,7 +7,8 @@
 ;; check the config's shape.
 
 (deftest the-config-names-every-component
-  (is (= #{:quel.conn/registry :quel.exec/registry :quel.exec/sweeper :quel.api/handlers
+  (is (= #{:quel.store/db :quel.secrets/store
+           :quel.conn/registry :quel.exec/registry :quel.exec/sweeper :quel.api/handlers
            :quel.shell/app :quel.shell/window :quel.menu/menu :quel.dev/loop}
          (set (keys (system/config))))))
 
@@ -35,3 +36,14 @@
     (is (= [::fine] @halted))
     ;; Nothing is left running, so the next start is allowed.
     (is (nil? (system/stop!)))))
+
+(deftest the-handlers-see-the-store-secrets-and-app
+  (let [h (:quel.api/handlers (system/config))]
+    (is (= (ig/ref :quel.store/db) (:store h)))
+    (is (= (ig/ref :quel.secrets/store) (:secrets h)))
+    (is (= (ig/ref :quel.shell/app) (:app h)))))
+
+;; The tests run without QUEL_SECRETS, so the real keyring is the default.
+(deftest the-keychain-unless-told-otherwise
+  (is (= (if (= "memory" (os/getenv "QUEL_SECRETS")) :memory :system)
+         (get-in (system/config) [:quel.secrets/store :backend]))))

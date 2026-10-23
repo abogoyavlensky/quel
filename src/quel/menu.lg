@@ -12,7 +12,7 @@
 ;;
 ;; The items emit events; the frontend does the work.
 
-(def ^:private db-filters
+(def db-filters
   [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
 
 (defn- reporting
@@ -38,6 +38,7 @@
     (reporting app what (fn [] (w/emit! app event {})))))
 
 (def new-tab! (emitter "New Tab" "menu:new-tab"))
+(def new-connection! (emitter "New Connection" "menu:new-connection"))
 (def close-tab! (emitter "Close Tab" "menu:close-tab"))
 (def run! (emitter "Run" "menu:run"))
 (def run-script! (emitter "Run Script" "menu:run-script"))
@@ -52,6 +53,8 @@
    {:label "File"
     :items [{:label "New Tab" :accelerator "CmdOrCtrl+T"
              :on-click (partial #'new-tab! env)}
+            {:label "New Connection…"
+             :on-click (partial #'new-connection! env)}
             {:label "Open Database…" :accelerator "CmdOrCtrl+O"
              :on-click (partial #'open-db! env)}
             {:separator true}

@@ -1,18 +1,14 @@
 import { type Page, expect, test } from "@playwright/test";
+import { connectFixture } from "./connect";
 
-// The query loop through the UI: open a SQLite file (2,000 rows in t,
-// made by scripts/e2e.sh), run, page, pin, cancel, and one session per tab.
+// The query loop through the UI: connect a SQLite file (2,000 rows in t,
+// made by scripts/e2e.sh) through a saved profile, run, page, pin, cancel, and one session per tab.
 
 const db = process.env.QUEL_E2E_DB ?? "/tmp/quel-e2e.db";
 const runaway =
   "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 1000000000) SELECT count(*) FROM c";
 
-async function open(page: Page) {
-  await page.goto("/");
-  await page.getByLabel("File path or postgres:// URL").fill(db);
-  await page.getByRole("button", { name: "Open" }).click();
-  await expect(page.getByRole("contentinfo")).toContainText(db);
-}
+const open = (page: Page) => connectFixture(page, db);
 
 // Replace the active editor's text. insertText, not typing: no
 // autocompletion popup can swallow a key.

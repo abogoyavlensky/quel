@@ -1,5 +1,6 @@
 (ns quel.pg-test
   (:require [integrant.core :as ig]
+            [quel.api :as api]
             [quel.conn :as conn]
             [quel.exec :as exec]
             [sql.core :as sql]
@@ -250,3 +251,71 @@
         (is (= {} @execs))
         (is (= 0 (first-cell execs conns id "select count(*) from kept3"))
             "the session survived")))))
+
+(defn pg-parts
+  "QUEL_PG_URL's parts, as a profile's fields: postgres://user:pw@host:port/db."
+  []
+  (let [[_ user pw host port db] (re-find #"^postgres(?:ql)?://([^:]+):([^@]*)@([^:/]+):(\d+)/([^?]+)" pg-url)]
+    {:user user :password pw :host host :port (parse-long port) :database db}))
+
+(deftest open-a-dsn-target
+  (with-pg
+    (with-registry
+      (fn [registry]
+        (let [{:keys [user password host port database]} (pg-parts)
+              dsn (str "host=" (conn/dsn-quote host) " port=" (conn/dsn-quote (str port))
+                       " dbname=" (conn/dsn-quote database) " user=" (conn/dsn-quote user)
+                       " password=" (conn/dsn-quote password) " sslmode='disable'")
+              t {:engine :postgres :dsn dsn :label "Local" :secret password}
+              {:keys [conn-id] :as r} (conn/open-target! registry t)]
+          (is (= {:engine :postgres :label "Local"} (dissoc r :conn-id)))
+          (is (= [{:one 1}] (sql/execute! (conn/db registry conn-id) ["select 1 as one"])))
+          (is (nil? (conn/check! t)))
+          (conn/close! registry conn-id))))))
+
+(defn- with-api-env [f]
+  (let [conns (ig/init-key :quel.conn/registry {})
+        execs (ig/init-key :quel.exec/registry {:conns conns})
+        dir (str/trim (:out (os/sh "mktemp" "-d")))
+        store (ig/init-key :quel.store/db {:dir dir})
+        secrets (ig/init-key :quel.secrets/store {:backend :memory})]
+    (try
+      (f {:conns conns :execs execs :store store :secrets secrets :app nil})
+      (finally
+        (ig/halt-key! :quel.exec/registry execs)
+        (ig/halt-key! :quel.conn/registry conns)
+        (ig/halt-key! :quel.store/db store)
+        (os/sh "rm" "-rf" dir)))))
+
+(defn- pg-form []
+  (let [{:keys [user password host port database]} (pg-parts)]
+    {"name" "Local PG" "engine" "postgres" "host" host "port" port "database" database
+     "user" user "password" password "ssl-mode" "disable"}))
+
+(deftest a-postgres-profile
+  (with-pg
+    (with-api-env
+      (fn [env]
+        (let [form (pg-form)
+              p (api/save-profile env form)]
+          (is (:has-password p))
+          (is (= {:ok true :label "Local PG"} (api/test-connection env form)) "the typed password")
+          (is (= {:ok true :label "Local PG"} (api/test-connection env (-> form (dissoc "password") (assoc "id" (:id p)))))
+              "the saved password")
+          ;; Forget wins over the saved password, so the test fails though
+          ;; the saved one works.
+          (let [msg (message-of #(api/test-connection env (-> form (dissoc "password")
+                                                               (assoc "id" (:id p) "forget-password" true))))]
+            (is (str/includes? (str msg) "password") (str "got " (pr-str msg))))
+          (let [{:keys [conn-id]} (api/connect env (:id p))]
+            (is (= [[1]] (:rows (api/run env conn-id "s1" "q1" "select 1"))))
+            (api/close-db env conn-id)))))))
+
+(deftest a-wrong-profile-password-is-redacted
+  (with-pg
+    (with-api-env
+      (fn [env]
+        (let [bad "wr0ng' \\pw"
+              msg (message-of #(api/test-connection env (assoc (pg-form) "password" bad)))]
+          (is (str/includes? (str msg) "password authentication failed") (str "got " (pr-str msg)))
+          (is (not (str/includes? (str msg) "wr0ng")) msg))))))

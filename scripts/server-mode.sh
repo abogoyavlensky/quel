@@ -17,7 +17,9 @@ fail() { echo "${FAIL_PREFIX:-server-mode}: FAIL: $1" >&2; [[ -n "${log:-}" ]] &
 
 # start_app: run the app under `lgx run` in server mode on a free port and
 # wait until it serves / and has written .nrepl-port. Sets $base (its URL),
-# $log and $app_pid. The app runs in its own process group (`set -m`;
+# $log, $app_pid and $data_dir. The app keeps its database in $data_dir, a
+# fresh temp dir, and profile passwords in memory (QUEL_SECRETS=memory): a
+# run never touches the real profiles or Keychain. The app runs in its own process group (`set -m`;
 # setsid is not on macOS), and an EXIT trap stops lgx and the lg it starts
 # together; callers with their own cleanup call stop_app from it.
 start_app() {
@@ -25,12 +27,14 @@ start_app() {
     port="$(free_port)"
     base="http://localhost:$port"
     log="$(mktemp)"
+    data_dir="$(mktemp -d)"
     cd "$SERVER_MODE_ROOT"
     rm -f .nrepl-port
     # Both vars are needed (a few Wails packages gate on `linux && cgo`
     # without a `!server` guard).
     set -m
     CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT="$port" LGX_RUN=1 \
+        QUEL_SECRETS=memory QUEL_DATA_DIR="$data_dir" \
         "$LGX" run >"$log" 2>&1 &
     app_pid=$!
     set +m
@@ -47,6 +51,7 @@ start_app() {
 stop_app() {
     if [[ -n "${app_pid:-}" ]]; then kill -- -"$app_pid" 2>/dev/null || true; fi
     rm -f "$SERVER_MODE_ROOT/.nrepl-port" "${log:-}"
+    if [[ -n "${data_dir:-}" ]]; then rm -rf "$data_dir"; fi
 }
 
 # call NAME JSON-ARGS: the handler's reply body, success or not (a thrown

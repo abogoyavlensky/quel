@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FetchResult, RunResult } from "@/lib/types";
 
 const api = vi.hoisted(() => ({
-  openDb: vi.fn(),
+  connect: vi.fn(),
   closeDb: vi.fn(),
   run: vi.fn(),
   fetchPage: vi.fn(),
@@ -69,7 +69,7 @@ beforeEach(() => {
   api.cancel.mockResolvedValue({ canceled: true });
   editor.dropped = [];
   store.setState(initialState(), true);
-  store.setState({ conn: { connId: "c1", engine: "sqlite", label: "/x.db" } });
+  store.setState({ conn: { connId: "c1", engine: "sqlite", label: "Local", profileId: "p1", color: "none" } });
 });
 
 describe("runStatements", () => {
@@ -347,19 +347,25 @@ describe("tabs", () => {
 });
 
 describe("databases", () => {
-  it("opening another database closes the current one and every open result", async () => {
+  it("connecting another profile closes the current database and every open result", async () => {
     api.run.mockResolvedValue(rowsResult(500, true));
     await runner.runStatements(tabId(), stmts("select 1"));
-    api.openDb.mockResolvedValue({ "conn-id": "c2", engine: "postgres", label: "postgres://h/db" });
-    await runner.openDb("postgres://h/db");
+    api.connect.mockResolvedValue({ "conn-id": "c2", engine: "postgres", label: "Warehouse", "profile-id": "p2" });
+    await runner.connectProfile("p2");
     expect(api.closeDb).toHaveBeenCalledWith("c1");
-    expect(store.getState().conn).toEqual({ connId: "c2", engine: "postgres", label: "postgres://h/db" });
+    expect(store.getState().conn).toEqual({
+      connId: "c2",
+      engine: "postgres",
+      label: "Warehouse",
+      profileId: "p2",
+      color: "none",
+    });
     expect(tab().results[0].cursor).toBe("closed");
   });
 
-  it("a failed open leaves no database and says why", async () => {
-    api.openDb.mockRejectedValue(new Error("password authentication failed"));
-    await runner.openDb("postgres://h/db");
+  it("a failed connect leaves no database and says why", async () => {
+    api.connect.mockRejectedValue(new Error("password authentication failed"));
+    await runner.connectProfile("p2");
     expect(store.getState().conn).toBeNull();
     expect(store.getState().dbError).toBe("password authentication failed");
   });

@@ -1,0 +1,29 @@
+(ns quel.migrations
+  (:require [ragtime.letgo :as rt]))
+
+;; The app database's history, oldest first. The SQL is inline, not in
+;; resource files, so a :target :native build keeps it. Never edit an
+;; applied migration: add the next one.
+
+(def migrations
+  [(rt/sql-migration
+    {:id "001-create-profiles"
+     ;; A profile's password is not here: it lives in the Keychain under
+     ;; the profile's id (quel.secrets); has_password says whether one is.
+     :up ["create table profiles (
+             id           text primary key,
+             name         text not null,
+             engine       text not null,
+             host         text,
+             port         integer,
+             database     text,
+             user_name    text,
+             ssl_mode     text,
+             path         text,
+             color        text not null default 'none',
+             has_password integer not null default 0)"
+          ;; Names are unique ignoring case, here as well as in
+          ;; quel.profiles/validate: two saves at once can both pass the
+          ;; check, and only one may land.
+          "create unique index profiles_name on profiles (name collate nocase)"]
+     :down ["drop table profiles"]})])

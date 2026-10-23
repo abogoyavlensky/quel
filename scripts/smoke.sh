@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test the app headless, in Wails' server mode: the frontend is
-# served, the handlers answer over the real bridge, a runaway query is
+# served, the handlers answer over the real bridge, profiles save and
+# connect, a runaway query is
 # cancelled (on Postgres too, when QUEL_PG_URL is set), and redefining a
 # handler over the in-app nREPL changes the running app with no restart.
 #
@@ -79,6 +80,16 @@ r="$(call close-session "[\"$conn\",\"s1\"]")"; nothing "$r" || fail "close-sess
 
 call close-db "[\"$conn\"]" >/dev/null
 
+# A SQLite profile: save, list, connect, run.
+saved="$(call save-profile "[{\"name\":\"Smoke file\",\"engine\":\"sqlite\",\"path\":\"$db\"}]")"
+profile="$(json "$saved" "['id']")" || fail "save-profile: $saved"
+[[ "$(call list-profiles '[]')" == *"\"$profile\""* ]] || fail "list-profiles misses $profile"
+connected="$(call connect "[\"$profile\"]")"
+pconn="$(json "$connected" "['conn-id']")" || fail "connect: $connected"
+[[ "$connected" == *'"label":"Smoke file"'* ]] || fail "connect label: $connected"
+[[ "$(call run "[\"$pconn\",\"s1\",\"q-p\",\"select 1\"]")" == *'"rows":[[1]]'* ]] || fail "run on a profile's connection"
+call close-db "[\"$pconn\"]" >/dev/null
+
 # Postgres, when one is configured (lgx smoke-pg, or CI): open the URL,
 # run, cancel, and run again on the same session.
 if [[ -n "${QUEL_PG_URL:-}" ]]; then
@@ -101,6 +112,24 @@ if [[ -n "${QUEL_PG_URL:-}" ]]; then
     after="$(call run "[\"$pg\",\"s1\",\"pg-after\",\"select count(*) from kept\"]")"
     [[ "$after" == *'"rows":[[0]]'* ]] || fail "the postgres session did not survive the cancel: $after"
     call close-db "[\"$pg\"]" >/dev/null
+
+    # A Postgres profile, its password in the memory store: the reply says
+    # one is saved and never carries it.
+    pg_form="$(python3 -c '
+import json, sys, urllib.parse as u
+p = u.urlparse(sys.argv[1])
+print(json.dumps({"name": "Smoke PG", "engine": "postgres", "host": p.hostname, "port": p.port,
+                  "database": p.path.lstrip("/"), "user": u.unquote(p.username),
+                  "password": u.unquote(p.password), "ssl-mode": "disable"}))' "$QUEL_PG_URL")"
+    pg_password="$(python3 -c 'import sys, urllib.parse as u; print(u.unquote(u.urlparse(sys.argv[1]).password))' "$QUEL_PG_URL")"
+    pg_saved="$(call save-profile "[$pg_form]")"
+    pg_profile="$(json "$pg_saved" "['id']")" || fail "save-profile (postgres): $pg_saved"
+    [[ "$pg_saved" == *'"has-password":true'* ]] || fail "has-password: $pg_saved"
+    [[ "$pg_saved" != *"\"$pg_password\""* ]] || fail "save-profile returned the password"
+    pg_connected="$(call connect "[\"$pg_profile\"]")"
+    pgp="$(json "$pg_connected" "['conn-id']")" || fail "connect (postgres): $pg_connected"
+    [[ "$(call run "[\"$pgp\",\"s1\",\"pg-p\",\"select 1\"]")" == *'"rows":[[1]]'* ]] || fail "run on the postgres profile"
+    call close-db "[\"$pgp\"]" >/dev/null
 else
     echo "smoke: postgres step skipped (QUEL_PG_URL is unset; lgx smoke-pg sets it)"
 fi

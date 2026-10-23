@@ -2,6 +2,9 @@
   (:require [integrant.core :as ig]
             [quel.api :as api]
             [quel.conn-test :refer [temp-path]]
+            [quel.secrets :as secrets]
+            [quel.store-test :refer [temp-dir]]
+            [string :as str]
             [clojure.test :refer [deftest is]]))
 
 ;; The handlers as plain fns: what the frontend calls, minus the bridge
@@ -10,19 +13,27 @@
 (defn- with-env [f]
   (let [conns (ig/init-key :quel.conn/registry {})
         execs (ig/init-key :quel.exec/registry {:conns conns})
+        dir (temp-dir)
+        store (ig/init-key :quel.store/db {:dir dir})
+        secrets (ig/init-key :quel.secrets/store {:backend :memory})
         path (temp-path)]
     (try
-      (f {:conns conns :execs execs} path)
+      ;; :app stays nil: choose-file, the one handler that needs it, opens
+      ;; a dialog and is not called here.
+      (f {:conns conns :execs execs :store store :secrets secrets :app nil} path)
       (finally
         (ig/halt-key! :quel.exec/registry execs)
         (ig/halt-key! :quel.conn/registry conns)
+        (ig/halt-key! :quel.store/db store)
+        (os/sh "rm" "-rf" dir)
         (os/sh "rm" "-f" path)))))
 
 (deftest ping-answers
   (is (= {:ok true} (api/ping {}))))
 
 (deftest every-handler-is-a-var
-  (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"}
+  (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
+           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 
@@ -67,3 +78,45 @@
         (is (nil? (api/close-db env conn-id)))
         (is (empty? @(:execs env)))
         (is (empty? @(:conns env)))))))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(deftest a-profile-from-save-to-run
+  (with-env
+    (fn [env path]
+      (spit path "")
+      (let [form {"name" "Local file" "engine" "sqlite" "path" path "color" "green"}
+            p (api/save-profile env form)]
+        (is (= [p] (api/list-profiles env)))
+        (is (= {:ok true :label "Local file"} (api/test-connection env form)))
+        (let [{:keys [conn-id] :as c} (api/connect env (:id p))]
+          (is (= {:engine :sqlite :label "Local file" :profile-id (:id p)} (dissoc c :conn-id)))
+          (is (= [[1]] (:rows (api/run env conn-id "s1" "q1" "select 1"))))
+          (api/close-db env conn-id))
+        (is (nil? (api/delete-profile env (:id p))))
+        (is (= [] (api/list-profiles env)))
+        (is (= "This connection no longer exists." (message-of #(api/connect env (:id p)))))))))
+
+(deftest test-connection-saves-nothing
+  (with-env
+    (fn [env path]
+      (let [missing {"name" "Nope" "engine" "sqlite" "path" (str path ".missing")}]
+        (is (str/starts-with? (message-of #(api/test-connection env missing)) "No such file: "))
+        (is (= [] (api/list-profiles env)))))))
+
+(deftest a-duplicate-name-is-refused
+  (with-env
+    (fn [env path]
+      (spit path "")
+      (api/save-profile env {"name" "One" "engine" "sqlite" "path" path})
+      (is (= "A connection named one already exists."
+             (message-of #(api/save-profile env {"name" "one" "engine" "sqlite" "path" path})))))))
+
+(deftest no-handler-returns-a-password
+  (with-env
+    (fn [env _]
+      (let [p (api/save-profile env {"name" "W" "engine" "postgres" "host" "h" "password" "s3cret"})]
+        (is (not (str/includes? (pr-str p) "s3cret")))
+        (is (not (str/includes? (pr-str (api/list-profiles env)) "s3cret")))
+        (is (= "s3cret" (secrets/password (:secrets env) (:id p))))))))
