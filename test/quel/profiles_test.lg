@@ -231,3 +231,16 @@
             q (profiles/save! db s {"id" (:id p) "name" "Now a file" "engine" "sqlite" "path" path})]
         (is (false? (:has-password q)))
         (is (nil? (secrets/password s (:id p))))))))
+
+;; Saving and deleting a profile with no saved password never touch the
+;; keyring: an entry planted behind its back survives both.
+(deftest no-saved-password-no-keyring-writes
+  (with-store
+    (fn [db dir]
+      (let [p (profiles/save! db s {"name" "F" "engine" "sqlite" "path" (sqlite-file dir)})]
+        (secrets/set-password! s (:id p) "planted")
+        (profiles/save! db s {"id" (:id p) "name" "F2" "engine" "sqlite" "path" (sqlite-file dir)})
+        (is (= "planted" (secrets/password s (:id p))))
+        (profiles/delete! db s (:id p))
+        (is (= "planted" (secrets/password s (:id p))))
+        (secrets/delete-password! s (:id p))))))

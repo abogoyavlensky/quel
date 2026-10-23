@@ -212,16 +212,21 @@
         id (or (:id p) (conn/new-id))
         p (assoc p :id id)
         [op pw] (password-change p)
-        old (when (and existing (not= :keep op)) (secrets/password secrets id))
-        has-password (case op :set true :forget false :keep (boolean (:has-password existing)))]
-    (case op
-      :set (secrets/set-password! secrets id pw)
-      :forget (when existing (secrets/delete-password! secrets id))
-      :keep nil)
+        ;; The Keychain is touched only to set a password or to remove one
+        ;; that is saved: a profile without one must save where no keyring
+        ;; is reachable.
+        had? (boolean (:has-password existing))
+        touches? (or (= :set op) (and (= :forget op) had?))
+        old (when (and touches? had?) (secrets/password secrets id))
+        has-password (case op :set true :forget false :keep had?)]
+    (when touches?
+      (if (= :set op)
+        (secrets/set-password! secrets id pw)
+        (secrets/delete-password! secrets id)))
     (try
       (write-row! db new? p has-password)
       (catch e
-        (when-not (= :keep op)
+        (when touches?
           (restore-password! secrets id old))
         (if (unique-violation? e)
           (throw (duplicate-name (:name p)))
@@ -234,11 +239,13 @@
   [db secrets id]
   (locked
    (fn []
-     (sql/execute! db ["delete from profiles where id = ?" (str id)])
-     (try
-       (secrets/delete-password! secrets id)
+     (let [had? (:has-password (fetch db id))]
+       (sql/execute! db ["delete from profiles where id = ?" (str id)])
+       (when had?
+         (try
+           (secrets/delete-password! secrets id)
        (catch e
-         (write! *err* (str "quel: could not delete the saved password of " id ": " (ex-message e) "\n"))))
+         (write! *err* (str "quel: could not delete the saved password of " id ": " (ex-message e) "\n"))))))
      nil)))
 
 (defn- dsn
