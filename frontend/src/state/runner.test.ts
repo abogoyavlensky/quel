@@ -769,6 +769,11 @@ describe("rename and pin", () => {
     runner.togglePin(c);
     expect(ws().tabs.map((t) => t.id)).toEqual([a, c, b, d]);
     expect(ws().tabs.map((t) => t.pinned)).toEqual([true, false, false, false]);
+    // Unpinning clears the hint to unpin.
+    store.setState({ notice: "Unpin the tab to close it." });
+    runner.togglePin(a);
+    expect(store.getState().notice).toBeNull();
+    runner.togglePin(a);
     // A new tab goes last, after the pinned ones.
     runner.newTab();
     expect(ws().tabs[4].pinned).toBe(false);

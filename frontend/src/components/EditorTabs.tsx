@@ -28,6 +28,9 @@ import type { EditorTab, Workspace } from "@/state/store";
 export function EditorTabs({ workspace }: { workspace: Workspace }) {
   const { tabs, activeTab: active, closed } = workspace;
   const [editing, setEditing] = useState<string | null>(null);
+  // Rename chosen in a tab's menu: the input appears once the menu has
+  // closed and let go of focus, or it would not keep it.
+  const renameAfterMenu = useRef<string | null>(null);
 
   return (
     <div role="tablist" aria-label="Editor tabs" className="flex h-9 shrink-0 items-end gap-px border-b bg-muted/30 px-1">
@@ -81,9 +84,15 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
               )}
             </div>
           </ContextMenuTrigger>
-          {/* Focus stays off the tab, so the rename input keeps it. */}
-          <ContextMenuContent onCloseAutoFocus={(e) => e.preventDefault()}>
-            <ContextMenuItem onSelect={() => setEditing(t.id)}>Rename</ContextMenuItem>
+          <ContextMenuContent
+            onCloseAutoFocus={(e) => {
+              if (renameAfterMenu.current !== t.id) return;
+              e.preventDefault();
+              renameAfterMenu.current = null;
+              setEditing(t.id);
+            }}
+          >
+            <ContextMenuItem onSelect={() => (renameAfterMenu.current = t.id)}>Rename</ContextMenuItem>
             <ContextMenuItem onSelect={() => togglePin(t.id)}>{t.pinned ? "Unpin" : "Pin"}</ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem disabled={t.pinned} onSelect={() => void closeTab(t.id)}>

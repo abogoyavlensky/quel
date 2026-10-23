@@ -276,7 +276,7 @@ export function togglePin(tabId: string): void {
       tabs: [...others.filter((t) => t.pinned), { ...tab, pinned: !tab.pinned }, ...others.filter((t) => !t.pinned)],
     };
   });
-  if (!tab.pinned && store.getState().notice === "Unpin the tab to close it.") store.setState({ notice: null });
+  if (tab.pinned && store.getState().notice === "Unpin the tab to close it.") store.setState({ notice: null });
   scheduleSave(w.profileId);
 }
 
