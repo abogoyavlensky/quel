@@ -316,7 +316,7 @@ export async function closeTab(tabId: string): Promise<void> {
       const tabs = w.tabs.filter((t) => t.id !== stale);
       tabs.splice(Math.min(i, tabs.length), 0, back);
       const activeTab = wasActive || !tabs.some((t) => t.id === w.activeTab) ? tabId : w.activeTab;
-      return { ...w, tabs, activeTab, nextTabNumber: stale ? w.nextTabNumber - 1 : w.nextTabNumber };
+      return { ...w, tabs, activeTab };
     });
     store.setState({ notice: `Could not close the tab: ${errorText(e)}` });
     scheduleSave(profileId);
@@ -428,25 +428,39 @@ async function loadWorkspace(profileId: string): Promise<Workspace> {
   const made = await readWorkspace(profileId);
   const existing = store.getState().workspaces[profileId];
   if (existing) {
-    for (const t of made.tabs) dropState(t.id);
+    dropUnused(made, existing);
     return existing;
   }
   store.setState((s) => ({ workspaces: { ...s.workspaces, [profileId]: made } }));
   return made;
 }
 
-// Load a workspace whose load failed again. Its connection, which may
-// have been opened meanwhile, stays as it is.
+// A workspace read but not installed (another got there first): the
+// editor state of its tabs goes, except where the installed one has the
+// same tab (it was seeded from the same rows).
+function dropUnused(unused: Workspace, installed: Workspace): void {
+  for (const t of unused.tabs) if (!installed.tabs.some((x) => x.id === t.id)) dropState(t.id);
+}
+
+// Load a workspace whose load failed again (once, however often Retry is
+// pressed meanwhile). Its connection, which may have been opened
+// meanwhile, stays as it is.
 export async function retryLoad(profileId: string): Promise<void> {
   if (!store.getState().workspaces[profileId]?.loadError) return;
-  const loaded = await readWorkspace(profileId);
-  let replaced = false;
-  updateWorkspace(profileId, (w) => {
-    if (!w.loadError) return w;
-    replaced = true;
-    return { ...loaded, status: w.status, connId: w.connId, error: w.error };
-  });
-  if (!replaced) for (const t of loaded.tabs) dropState(t.id);
+  let p = loading.get(profileId);
+  if (!p) {
+    p = (async () => {
+      const loaded = await readWorkspace(profileId);
+      updateWorkspace(profileId, (w) =>
+        w.loadError ? { ...loaded, status: w.status, connId: w.connId, error: w.error } : w,
+      );
+      const now = store.getState().workspaces[profileId];
+      if (now && now.tabs !== loaded.tabs) dropUnused(loaded, now);
+      return now ?? loaded;
+    })().finally(() => loading.delete(profileId));
+    loading.set(profileId, p);
+  }
+  await p;
 }
 
 // Show the profile's workspace, loaded on first select. Never connects.

@@ -579,6 +579,22 @@ describe("retrying a failed load", () => {
   });
 });
 
+describe("retrying twice at once", () => {
+  it("loads once and keeps the tabs' text", async () => {
+    api.loadWorkspace.mockRejectedValueOnce(new Error("disk I/O error"));
+    await runner.ensureWorkspace("p3");
+    const held = deferred<SavedWorkspace>();
+    api.loadWorkspace.mockReturnValueOnce(held.promise);
+    const one = runner.retryLoad("p3");
+    const two = runner.retryLoad("p3");
+    held.resolve(saved({ tabs: [savedTab("a", "select a")] }));
+    await Promise.all([one, two]);
+    expect(api.loadWorkspace).toHaveBeenCalledTimes(2);
+    expect(editor.dropped).not.toContain("a");
+    expect(ws("p3").activeTab).toBe("a");
+  });
+});
+
 describe("the selected profile", () => {
   it("is saved one write at a time, the last click winning", async () => {
     const first = deferred<void>();
@@ -675,7 +691,8 @@ describe("closing and reopening", () => {
     await runner.closeTab(id);
     expect(api.cancel).toHaveBeenCalledWith(running);
     expect(ws().tabs.map((t) => t.id)).toEqual([id]);
-    expect(ws().nextTabNumber).toBe(2);
+    // The number the stand-in took is not handed out again.
+    expect(ws().nextTabNumber).toBe(3);
     expect(tab().id).toBe(id);
     expect(tab()).toMatchObject({ runningQueryId: null, stopping: false });
     expect(tab().results).toEqual(pinnedBefore);
