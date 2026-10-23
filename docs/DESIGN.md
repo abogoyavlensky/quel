@@ -125,6 +125,7 @@ waiting on the network inside Go, not in bytecode.
 | `quel.shell` | The Wails app and window components. |
 | `quel.system` | The integrant config and the running system (`defonce`). |
 | `quel.store` | App database: connection profiles, query history, saved workspace. Migrations in `quel.migrations`. |
+| `quel.workspace` | Each profile's saved editor tabs and recently closed tabs, and the selected profile, in the app database. |
 | `quel.secrets` | Passwords in the macOS Keychain, keyed by profile id. Never in the app database. |
 | `quel.conn` | Opens a pool per connected profile, hands out sessions, tracks connection state. |
 | `quel.exec` | Runs statements, owns the result registry, paging and cancellation. |
@@ -177,6 +178,13 @@ Profile saves and deletes are serialised, since each changes the Keychain
 and the table together. `QUEL_SECRETS=memory` swaps the Keychain for an
 in-memory store; the smoke and e2e runs set it, with a temporary
 `QUEL_DATA_DIR`.
+
+Besides `profiles`, it has `editor_tabs` (each profile's tabs: title,
+text, pinned, position, selection, and `closed_at`, set while the tab is
+in the recently closed list), `workspaces` (each profile's active tab and
+next "Query N" number) and `settings` (app-wide values: the selected
+profile). Tabs and the workspace row go with their profile (`on delete
+cascade`). See [Saved tabs](#saved-tabs).
 
 Connecting a profile opens one `database/sql` pool. Two kinds of work use
 it:
@@ -423,8 +431,8 @@ and the bodies of SQLite triggers and `BEGIN ATOMIC` functions, where a
 - Context menus on the grid: copy cell / row / column, copy as CSV, JSON
   or `INSERT`.
 - Workspace state - open tabs, their text, the selected profile - is
-  saved to the app database (debounced) and restored on launch (planned:
-  `docs/plans/2026-10-23-1055-persisted-tabs.md`).
+  saved to the app database (debounced) and restored on launch; see
+  [Saved tabs](#saved-tabs).
 - The schema tree is built with a headless tree on shadcn primitives;
   shadcn has no tree component.
 
@@ -432,8 +440,10 @@ and the bodies of SQLite triggers and `BEGIN ATOMIC` functions, where a
 
 Each profile has a **workspace**: its connection status and conn-id, its
 editor tabs, and each tab's results and messages. Workspaces live in
-memory for the app's run; a profile's is made the first time it is
-selected and dropped when the profile is deleted.
+memory for the app's run; a profile's is loaded from the app database the
+first time it is selected and dropped when the profile is deleted. Its
+tabs are saved as they change (see [Saved tabs](#saved-tabs)); its
+results, messages and connection are not.
 
 - **Select** (a click on a profile row) shows that workspace, connected
   or not; it never connects. The editor's dialect comes from the
@@ -461,6 +471,40 @@ Every editor tab that has run something holds one backend session, and
 so one connection, per connected profile. Disconnecting a profile
 releases all of them; there is no idle release yet.
 
+### Saved tabs
+
+Per profile, `quel.workspace` keeps each open tab's id, title, text,
+pinned flag, position and selection; the active tab; the next "Query N"
+number; and the 20 most recently closed tabs. App-wide, it keeps the
+selected profile. Results, messages, undo history and running state are
+not saved, and nothing connects on launch: the last selected profile's
+workspace shows, disconnected (the first profile when that one is gone).
+
+- **Loading.** A workspace's tabs are read the first time its profile is
+  selected; each is seeded with its text and selection, which become its
+  CodeMirror state when it is first shown. If the read fails, the
+  workspace shows the error and a Retry, and is never saved, so a failed
+  read cannot overwrite the saved tabs.
+- **Saving.** Each profile has a queue of operations (save, close,
+  reopen) that run in order, one at a time. An edit, a selection change
+  or any tab change schedules a save 800 ms later; the save is built from
+  the state when it runs. Pending saves go out at once when the window
+  hides or the page goes away. A failed save shows in the status bar and
+  is retried on the next change. The selected profile is written only on
+  a user's click, never by the start-up fallback.
+- **Closing** sends the tab's title and text as they are at that moment
+  (`close-tab`), after any pending save, so the text typed just before
+  closing is what is kept; a blank tab is deleted rather than kept. A run
+  in flight is cancelled, and the tab's session closes only once the
+  close has worked: if it fails, the tab comes back as it was.
+- **Reopening** (the history menu at the end of the tab bar, or ⌘⇧T for
+  the most recent) runs on the same queue, after the close that listed
+  the tab. The backend gives the tab a new id: the old one is a retired
+  session id on a connection that may still be open.
+- **Pinned** tabs come first and cannot be closed (⌘W, the middle click
+  and Close say "Unpin the tab to close it."). Tabs are renamed by a
+  double-click or the tab's context menu; names need not be unique.
+
 ### Diagrams
 
 The diagram view takes a schema (or a selection of tables), loads
@@ -482,7 +526,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-ddl`, `export-result` (both open a save dialog) |
 | History | `list-history`, `clear-history` |
-| Workspace | `load-workspace`, `save-workspace` |
+| Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
 
 Backend-to-frontend events: menu actions (`menu:new-tab`, `menu:run`,
 ...), `connection-lost`, `query-finished` for runs the user navigated
@@ -578,7 +622,10 @@ package feature, not app glue.
    2026-10-23: connection profiles in the app database, their passwords
    in the Keychain, created, tested, edited and connected from the
    database panel. Then structure tree (schemas, tables, views,
-   columns) and schema completion; history; workspace restore.
+   columns) and schema completion; history. Workspace restore done
+   2026-10-23: each profile's editor tabs, their names, pins and text,
+   and recently closed tabs, saved as they change and restored on
+   launch with the selected profile.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
    procedures, table info; DDL view and export; write confirmation and
    read-only profiles; `Cmd+K`.
