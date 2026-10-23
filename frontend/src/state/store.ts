@@ -1,18 +1,19 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { Cell, Color, Column, Engine, Profile } from "@/lib/types";
+import type { Cell, Column, Profile } from "@/lib/types";
 
-// The app's state: the open database, the saved profiles, the editor tabs, and each tab's
-// results and messages. Plain data in a zustand store: the runner
-// (state/runner.ts) changes it from async code and menu events through
-// store.getState()/setState(), and components read it with useApp and a
-// selector, so the grid re-renders only when its own result changes.
+// The app's state: the saved profiles and a workspace per profile (its
+// connection, its editor tabs, and each tab's results and messages).
+// Plain data in a zustand store: the runner (state/runner.ts) changes it
+// from async code and menu events through store.getState()/setState(), and
+// components read it with useApp and a selector, so the grid re-renders
+// only when its own result changes.
 //
 // Editor documents are not here: editor/states.ts keeps a CodeMirror
 // EditorState per tab.
 
 // open: more rows on the server; done: all read; closed: the server
-// closed it (a newer run in its tab, idle, an error, the database closed);
+// closed it (a newer run in its tab, idle, an error, a disconnect);
 // capped: MAX_ROWS loaded, closed by us.
 export type CursorState = "open" | "done" | "closed" | "capped";
 
@@ -46,12 +47,20 @@ export interface EditorTab {
   messages: Message[]; // newest last, capped at MAX_MESSAGES
 }
 
-export interface Conn {
-  connId: string;
-  engine: Engine;
-  label: string; // the profile's name
+// A workspace's connection: connecting and disconnecting are in flight
+// while the backend opens or closes the database.
+export type ConnStatus = "disconnected" | "connecting" | "connected" | "disconnecting";
+
+// One profile's editor tabs and its connection. Made the first time the
+// profile is selected; it lives as long as the app runs, connected or not.
+export interface Workspace {
   profileId: string;
-  color: Color; // the profile's colour tag
+  status: ConnStatus;
+  connId: string | null; // set while connected (and while disconnecting)
+  error: string | null; // the last connect error, shown under the profile
+  tabs: EditorTab[]; // never empty
+  activeTab: string;
+  nextTabNumber: number;
 }
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
@@ -59,15 +68,12 @@ export interface Conn {
 export type ProfileDialog = { mode: "new"; path?: string } | { mode: "edit"; id: string } | null;
 
 export interface AppState {
-  conn: Conn | null;
-  switching: boolean; // opening or closing a database
-  dbError: string | null;
   profiles: Profile[]; // by name, as the backend lists them
   profilesError: string | null;
   profileDialog: ProfileDialog;
-  tabs: EditorTab[];
-  activeTab: string;
-  nextTabNumber: number;
+  selected: string | null; // the profile whose workspace shows
+  workspaces: Record<string, Workspace>; // by profile id
+  notice: string | null; // a one-line hint for the status bar
 }
 
 export const MESSAGES = "messages";
@@ -85,18 +91,27 @@ export function newTabState(n: number): EditorTab {
   };
 }
 
-export function initialState(): AppState {
+export function newWorkspace(profileId: string): Workspace {
   const first = newTabState(1);
   return {
-    conn: null,
-    switching: false,
-    dbError: null,
-    profiles: [],
-    profilesError: null,
-    profileDialog: null,
+    profileId,
+    status: "disconnected",
+    connId: null,
+    error: null,
     tabs: [first],
     activeTab: first.id,
     nextTabNumber: 2,
+  };
+}
+
+export function initialState(): AppState {
+  return {
+    profiles: [],
+    profilesError: null,
+    profileDialog: null,
+    selected: null,
+    workspaces: {},
+    notice: null,
   };
 }
 
@@ -106,12 +121,43 @@ export function useApp<T>(selector: (s: AppState) => T): T {
   return useStore(store, selector);
 }
 
-export function findTab(id: string): EditorTab | undefined {
-  return store.getState().tabs.find((t) => t.id === id);
+export function selectedWorkspace(s: AppState): Workspace | undefined {
+  return s.selected === null ? undefined : s.workspaces[s.selected];
 }
 
-export function updateTab(id: string, f: (t: EditorTab) => EditorTab): void {
-  store.setState((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? f(t) : t)) }));
+export function activeTabOf(w: Workspace): EditorTab {
+  return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
+}
+
+// The profile's workspace, made on first use.
+export function ensureWorkspace(profileId: string): Workspace {
+  const w = store.getState().workspaces[profileId];
+  if (w) return w;
+  const made = newWorkspace(profileId);
+  store.setState((s) => ({ workspaces: { ...s.workspaces, [profileId]: made } }));
+  return made;
+}
+
+export function updateWorkspace(profileId: string, f: (w: Workspace) => Workspace): void {
+  store.setState((s) => {
+    const w = s.workspaces[profileId];
+    return w ? { workspaces: { ...s.workspaces, [profileId]: f(w) } } : {};
+  });
+}
+
+// Tab ids are unique across workspaces (they are backend session ids), so
+// a tab is found by its id alone.
+export function workspaceOfTab(tabId: string): Workspace | undefined {
+  return Object.values(store.getState().workspaces).find((w) => w.tabs.some((t) => t.id === tabId));
+}
+
+export function findTab(tabId: string): EditorTab | undefined {
+  return workspaceOfTab(tabId)?.tabs.find((t) => t.id === tabId);
+}
+
+export function updateTab(tabId: string, f: (t: EditorTab) => EditorTab): void {
+  const w = workspaceOfTab(tabId);
+  if (w) updateWorkspace(w.profileId, (w) => ({ ...w, tabs: w.tabs.map((t) => (t.id === tabId ? f(t) : t)) }));
 }
 
 export function updateResult(tabId: string, resultId: string, f: (r: ResultTab) => ResultTab): void {
@@ -125,11 +171,12 @@ export function addMessage(tabId: string, m: Omit<Message, "id" | "at">): void {
   }));
 }
 
-// Every open result in every tab becomes closed: the backend closed the
-// cursors (the database changed).
-export function closeAllCursors(): void {
-  store.setState((s) => ({
-    tabs: s.tabs.map((t) => ({
+// Every open result in the profile's tabs becomes closed: the backend
+// closed its cursors (the profile disconnected).
+export function closeCursors(profileId: string): void {
+  updateWorkspace(profileId, (w) => ({
+    ...w,
+    tabs: w.tabs.map((t) => ({
       ...t,
       results: t.results.map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
     })),

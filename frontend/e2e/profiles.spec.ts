@@ -40,24 +40,24 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await dialog(page).getByRole("button", { name: "Save" }).click();
   await expect(dialog(page)).toHaveCount(0);
 
-  // Listed; a click connects it, and the status bar shows its name.
-  await saved(page)
-    .getByRole("button", { name: /^E2E file/ })
-    .click();
+  // Listed and selected, not connected yet; its Connect button connects it.
+  await expect(saved(page).getByRole("button", { name: /^E2E file/ })).toHaveAttribute("aria-current", "true");
   await expect(page.getByRole("contentinfo")).toContainText("E2E file");
+  await expect(page.getByRole("status")).toHaveText("Not connected");
+  await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
+  await expect(page.getByRole("status")).toHaveText("Ready");
   await write(page, "select count(*) as n from t;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("gridcell", { name: "2000", exact: true })).toBeVisible();
 
-  // Disconnect, and connect again.
+  // Disconnect: the profile stays selected with its tab; connect again.
   await saved(page).getByRole("button", { name: "Disconnect E2E file" }).click();
-  await expect(page.getByRole("contentinfo")).toContainText("No database");
-  await saved(page)
-    .getByRole("button", { name: /^E2E file/ })
-    .click();
-  await expect(page.getByRole("contentinfo")).toContainText("E2E file");
+  await expect(page.getByRole("status")).toHaveText("Not connected");
+  await expect(page.getByLabel("SQL editor")).toHaveText("select count(*) as n from t;");
+  await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
+  await expect(page.getByRole("status")).toHaveText("Ready");
 
-  // Renamed: the list and the open connection follow.
+  // Renamed: the list and the status bar follow.
   await saved(page).getByRole("button", { name: "Edit E2E file" }).click();
   await dialog(page).getByLabel("Name").fill("E2E renamed");
   await dialog(page).getByRole("button", { name: "Save" }).click();
@@ -69,7 +69,7 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await dialog(page).getByRole("button", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("button", { name: /^E2E renamed/ })).toHaveCount(0);
-  await expect(page.getByRole("contentinfo")).toContainText("No database");
+  await expect(page.getByRole("contentinfo")).not.toContainText("E2E renamed");
 });
 
 test("a duplicate name is refused", async ({ page }) => {

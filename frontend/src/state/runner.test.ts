@@ -21,7 +21,7 @@ vi.mock("@/editor/states", () => ({
   dropState: (id: string) => editor.dropped.push(id),
 }));
 
-const { store, initialState, MESSAGES } = await import("./store");
+const { store, initialState, newWorkspace, activeTabOf, MESSAGES } = await import("./store");
 const runner = await import("./runner");
 const { split } = await import("@/sql/split");
 
@@ -57,8 +57,9 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-const tab = () => store.getState().tabs.find((t) => t.id === store.getState().activeTab)!;
-const tabId = () => store.getState().activeTab;
+const ws = (id = "p1") => store.getState().workspaces[id];
+const tab = (id = "p1") => activeTabOf(ws(id));
+const tabId = (id = "p1") => ws(id).activeTab;
 const stmts = (sql: string) => split(sql);
 
 beforeEach(() => {
@@ -68,8 +69,18 @@ beforeEach(() => {
   api.closeDb.mockResolvedValue(undefined);
   api.cancel.mockResolvedValue({ canceled: true });
   editor.dropped = [];
-  store.setState(initialState(), true);
-  store.setState({ conn: { connId: "c1", engine: "sqlite", label: "Local", profileId: "p1", color: "none" } });
+  // Two profiles, both connected; p1 is the one on screen.
+  store.setState(
+    {
+      ...initialState(),
+      selected: "p1",
+      workspaces: {
+        p1: { ...newWorkspace("p1"), status: "connected", connId: "c1" },
+        p2: { ...newWorkspace("p2"), status: "connected", connId: "c2" },
+      },
+    },
+    true,
+  );
 });
 
 describe("runStatements", () => {
@@ -156,8 +167,8 @@ describe("runStatements", () => {
     await running;
   });
 
-  it("does nothing without a database", async () => {
-    store.setState({ conn: null });
+  it("does nothing on a disconnected profile", async () => {
+    store.setState((s) => ({ workspaces: { ...s.workspaces, p1: { ...ws(), status: "disconnected", connId: null } } }));
     await runner.runStatements(tabId(), stmts("select 1"));
     expect(api.run).not.toHaveBeenCalled();
   });
@@ -168,11 +179,11 @@ describe("runStatements", () => {
     expect(tab().results[0].cursor).toBe("closed");
   });
 
-  it("does not open a cursor for a database that closed meanwhile", async () => {
+  it("does not open a cursor for a profile disconnected meanwhile", async () => {
     const first = deferred<RunResult>();
     api.run.mockReturnValueOnce(first.promise);
     const running = runner.runStatements(tabId(), stmts("select 1"));
-    await runner.closeDb();
+    await runner.disconnectProfile("p1");
     first.resolve(rowsResult(500, true));
     await running;
     expect(tab().results[0].cursor).toBe("closed");
@@ -211,6 +222,37 @@ describe("runCurrent", () => {
     editor.input = { text: "select 1;\nselect 2;", selection: { from: 0, to: 0 } };
     await runner.runCurrent("script");
     expect(api.run).toHaveBeenCalledTimes(2);
+  });
+
+  it("runs in the selected workspace", async () => {
+    api.run.mockResolvedValue(rowsResult(1, false));
+    editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
+    runner.selectProfile("p2");
+    await runner.runCurrent("statement");
+    expect(api.run).toHaveBeenCalledWith("c2", tabId("p2"), expect.any(String), "select 1");
+  });
+
+  it("sends nothing on a disconnected profile and says so", async () => {
+    await runner.disconnectProfile("p1");
+    editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
+    await runner.runCurrent("statement");
+    expect(api.run).not.toHaveBeenCalled();
+    expect(store.getState().notice).toBe("Not connected.");
+    runner.clearNotice();
+    expect(store.getState().notice).toBeNull();
+  });
+
+  it("drops a run while the profile connects", async () => {
+    await runner.disconnectProfile("p1");
+    const opening = deferred<{ "conn-id": string; engine: string; label: string }>();
+    api.connect.mockReturnValueOnce(opening.promise);
+    const connecting = runner.connectProfile("p1");
+    editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
+    await runner.runCurrent("statement");
+    expect(api.run).not.toHaveBeenCalled();
+    expect(store.getState().notice).toBeNull();
+    opening.resolve({ "conn-id": "c3", engine: "sqlite", label: "P1" });
+    await connecting;
   });
 });
 
@@ -260,12 +302,12 @@ describe("fetchMore", () => {
     expect(r.cursor).toBe("capped");
   });
 
-  it("does not reopen a result whose database closed during the fetch", async () => {
+  it("does not reopen a result whose profile disconnected during the fetch", async () => {
     const id = await openResult();
     const p = deferred<FetchResult>();
     api.fetchPage.mockReturnValueOnce(p.promise);
     const fetching = runner.fetchMore(tabId(), id);
-    await runner.closeDb();
+    await runner.disconnectProfile("p1");
     p.resolve(page(500, true));
     await fetching;
     expect(tab().results[0].cursor).toBe("closed");
@@ -299,9 +341,10 @@ describe("tabs", () => {
   it("opens numbered tabs and makes the new one active", () => {
     runner.newTab();
     runner.newTab();
-    const s = store.getState();
-    expect(s.tabs.map((t) => t.title)).toEqual(["Query 1", "Query 2", "Query 3"]);
-    expect(s.activeTab).toBe(s.tabs[2].id);
+    const w = ws();
+    expect(w.tabs.map((t) => t.title)).toEqual(["Query 1", "Query 2", "Query 3"]);
+    expect(w.activeTab).toBe(w.tabs[2].id);
+    expect(ws("p2").tabs).toHaveLength(1);
   });
 
   it("closing a tab closes its session and its editor state", async () => {
@@ -310,17 +353,25 @@ describe("tabs", () => {
     await runner.closeTab(id);
     expect(api.closeSession).toHaveBeenCalledWith("c1", id);
     expect(editor.dropped).toEqual([id]);
-    expect(store.getState().tabs).toHaveLength(1);
-    expect(store.getState().activeTab).toBe(store.getState().tabs[0].id);
+    expect(ws().tabs).toHaveLength(1);
+    expect(ws().activeTab).toBe(ws().tabs[0].id);
+  });
+
+  it("closing a tab of a disconnected profile closes no session", async () => {
+    await runner.disconnectProfile("p1");
+    const id = tabId();
+    await runner.closeTab(id);
+    expect(api.closeSession).not.toHaveBeenCalled();
+    expect(editor.dropped).toEqual([id]);
   });
 
   it("closing the last tab opens a fresh one", async () => {
     const id = tabId();
     await runner.closeTab(id);
-    const s = store.getState();
-    expect(s.tabs).toHaveLength(1);
-    expect(s.tabs[0].id).not.toBe(id);
-    expect(s.activeTab).toBe(s.tabs[0].id);
+    const w = ws();
+    expect(w.tabs).toHaveLength(1);
+    expect(w.tabs[0].id).not.toBe(id);
+    expect(w.activeTab).toBe(w.tabs[0].id);
   });
 
   it("a script stops when its tab closes, and its late reply is dropped", async () => {
@@ -332,7 +383,7 @@ describe("tabs", () => {
     first.resolve(rowsResult(1, false));
     await running;
     expect(api.run).toHaveBeenCalledTimes(1);
-    expect(store.getState().tabs.find((t) => t.id === id)).toBeUndefined();
+    expect(ws().tabs.find((t) => t.id === id)).toBeUndefined();
   });
 
   it("closing a result closes its cursor", async () => {
@@ -346,33 +397,66 @@ describe("tabs", () => {
   });
 });
 
-describe("databases", () => {
-  it("connecting another profile closes the current database and every open result", async () => {
+describe("workspaces", () => {
+  it("two connected profiles run independently", async () => {
     api.run.mockResolvedValue(rowsResult(500, true));
-    await runner.runStatements(tabId(), stmts("select 1"));
-    api.connect.mockResolvedValue({ "conn-id": "c2", engine: "postgres", label: "Warehouse", "profile-id": "p2" });
-    await runner.connectProfile("p2");
-    expect(api.closeDb).toHaveBeenCalledWith("c1");
-    expect(store.getState().conn).toEqual({
-      connId: "c2",
-      engine: "postgres",
-      label: "Warehouse",
-      profileId: "p2",
-      color: "none",
-    });
-    expect(tab().results[0].cursor).toBe("closed");
+    await runner.runStatements(tabId("p1"), stmts("select 1"));
+    await runner.runStatements(tabId("p2"), stmts("select 2"));
+    expect(api.run.mock.calls.map((c) => [c[0], c[1]])).toEqual([
+      ["c1", tabId("p1")],
+      ["c2", tabId("p2")],
+    ]);
+    expect(tab("p1").results[0].sql).toBe("select 1");
+    expect(tab("p2").results[0].sql).toBe("select 2");
   });
 
-  it("a failed connect leaves no database and says why", async () => {
+  it("disconnecting one profile closes only its database and results", async () => {
+    api.run.mockResolvedValue(rowsResult(500, true));
+    await runner.runStatements(tabId("p1"), stmts("select 1"));
+    await runner.runStatements(tabId("p2"), stmts("select 2"));
+    const p1Tab = tabId("p1");
+    await runner.disconnectProfile("p1");
+    expect(api.closeDb).toHaveBeenCalledWith("c1");
+    expect(api.closeDb).toHaveBeenCalledTimes(1);
+    expect(ws("p1")).toMatchObject({ status: "disconnected", connId: null, error: null });
+    expect(tabId("p1")).toBe(p1Tab);
+    expect(tab("p1").results[0].cursor).toBe("closed");
+    expect(ws("p2")).toMatchObject({ status: "connected", connId: "c2" });
+    expect(tab("p2").results[0].cursor).toBe("open");
+  });
+
+  it("selecting a profile makes its workspace and never connects", () => {
+    store.setState({ notice: "Not connected." });
+    runner.selectProfile("p3");
+    expect(store.getState().selected).toBe("p3");
+    expect(ws("p3")).toMatchObject({ status: "disconnected", connId: null });
+    expect(store.getState().notice).toBeNull();
+    expect(api.connect).not.toHaveBeenCalled();
+  });
+
+  it("connecting keeps the selection and sets the connection", async () => {
+    api.connect.mockResolvedValue({ "conn-id": "c3", engine: "postgres", label: "P3", "profile-id": "p3" });
+    const connecting = runner.connectProfile("p3");
+    expect(ws("p3").status).toBe("connecting");
+    await runner.connectProfile("p3");
+    await connecting;
+    expect(api.connect).toHaveBeenCalledTimes(1);
+    expect(ws("p3")).toMatchObject({ status: "connected", connId: "c3", error: null });
+    expect(store.getState().selected).toBe("p1");
+  });
+
+  it("a failed connect stays disconnected and says why", async () => {
     api.connect.mockRejectedValue(new Error("password authentication failed"));
-    await runner.connectProfile("p2");
-    expect(store.getState().conn).toBeNull();
-    expect(store.getState().dbError).toBe("password authentication failed");
+    await runner.connectProfile("p3");
+    expect(ws("p3")).toMatchObject({
+      status: "disconnected",
+      connId: null,
+      error: "password authentication failed",
+    });
   });
 
-  it("closing the database clears it", async () => {
-    await runner.closeDb();
-    expect(api.closeDb).toHaveBeenCalledWith("c1");
-    expect(store.getState().conn).toBeNull();
+  it("connecting a connected profile does nothing", async () => {
+    await runner.connectProfile("p1");
+    expect(api.connect).not.toHaveBeenCalled();
   });
 });

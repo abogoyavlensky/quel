@@ -75,7 +75,11 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
   const [test, setTest] = useState<TestState>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const switching = useApp((s) => s.switching);
+  // A profile cannot be deleted while it connects or disconnects.
+  const pending = useApp((s) => {
+    const status = editing ? s.workspaces[editing.id]?.status : undefined;
+    return status === "connecting" || status === "disconnecting";
+  });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Bumped on every edit: a Test that finishes after the form changed
@@ -337,8 +341,8 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
                 type="button"
                 variant="ghost"
                 className="text-destructive"
-                disabled={busy || switching}
-                title={switching ? "Wait for the connection to finish opening" : undefined}
+                disabled={busy || pending}
+                title={pending ? "Wait for the connection to finish opening or closing" : undefined}
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete

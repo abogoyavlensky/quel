@@ -2,13 +2,12 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { closeTab, newTab, selectTab } from "@/state/runner";
-import { useApp } from "@/state/store";
+import type { Workspace } from "@/state/store";
 
-// The editor tabs. Each is its own database session: SET, temp tables and
-// an open transaction stay in the tab they were made in.
-export function EditorTabs() {
-  const tabs = useApp((s) => s.tabs);
-  const active = useApp((s) => s.activeTab);
+// The selected workspace's editor tabs. Each is its own database session:
+// SET, temp tables and an open transaction stay in the tab they were made in.
+export function EditorTabs({ workspace }: { workspace: Workspace }) {
+  const { tabs, activeTab: active } = workspace;
 
   return (
     <div role="tablist" aria-label="Editor tabs" className="flex h-9 shrink-0 items-end gap-px border-b bg-muted/30 px-1">
