@@ -603,14 +603,14 @@ Quel (branch `profiles`):
 ### Task 14: Review, PR, macOS checks
 
 - [x] **Step 1:** A codex review of the branch against master in the background. Fold real findings; re-run `lgx test-pg`, the frontend tests, `lgx smoke-pg` and `lgx e2e`.
-- [ ] **Step 2:** Push, open a PR against `master`, link it, wait for CI to go green. Do not merge without the user.
-- [ ] **Step 3:** Hand the user the macOS checklist from the Testing section.
+- [x] **Step 2:** Push, open a PR against `master`, link it, wait for CI to go green. Do not merge without the user.
+- [x] **Step 3:** Hand the user the macOS checklist from the Testing section.
 
 > The final review found two more: a profile could be deleted while its own connection was still opening and land connected afterwards, and the dialog overflowed a 720×480 window. Both fixed in 1265bde. Re-run after them: `lgx test-pg` (125 tests), frontend (111), `lgx smoke-pg`, `lgx e2e` (7).
 
 ## Completion summary
 
-Implemented, Tasks 1-13 and the review, 2026-10-23, on branch `profiles`.
+Implemented, Tasks 1-14, 2026-10-23, on branch `profiles`: PR #4, CI green.
 
 - **Upstream:** letgo-packages #13 (merged), `keyring-v0.1.0`: `put!`,
   `get`, `delete!` and `use-memory!` over go-keyring v0.2.8, an in-tree
