@@ -43,6 +43,12 @@ tasks need Docker.
   that returns it hands React a "cleanup" it crashes on.
 - `os/getenv` returns `""` for an unset variable, and `""` is truthy: check
   with `str/blank?`.
+- Never point a test or a server-mode run at the real profiles or Keychain:
+  `scripts/server-mode.sh` sets `QUEL_SECRETS=memory` and a temporary
+  `QUEL_DATA_DIR`; backend tests use `{:backend :memory}` and a temp
+  `:dir`. Linux boxes usually have no Secret Service at all.
+- Every SQLite file opens through `quel.conn/sqlite-uri` (a `file:` URI):
+  a raw path with `?` or `#` opens a different file.
 
 ## Backlog
 

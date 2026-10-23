@@ -149,7 +149,32 @@ order: closing a session that is still running a query waits for it.
 A **profile** is the saved description of a database: name, engine, host
 / port / database / user or a file path, SSL mode, a colour tag
 (e.g. red for production), `:read-only?` and the confirm policy. The
-password lives in the Keychain under the profile id.
+password lives in the Keychain under the profile id: the item's service is
+`Quel` and its account the profile id. The profile row keeps only
+`has_password`, so a profile without one never asks the Keychain, and a
+SQLite profile never has one. Names are unique, ignoring case. Read-only
+and the confirm policy arrive with milestone 2, in their own migration.
+
+A Postgres or Redshift profile connects through a key/value DSN built
+from its fields, every value quoted (`quel.conn/dsn-quote`), so no URL
+encoding is involved. A profile with no saved password leaves the key out,
+and pgx's `PGPASSWORD` and `.pgpass` fallbacks apply as in `psql`. Errors
+are redacted with the password in its raw and DSN-escaped forms, and pgx's
+own parse errors drop the DSN it quotes. Every SQLite file opens as a
+`file:` URI, so a `?` or `#` in its path stays part of the name. A file
+path or URL can still be opened without a profile (Quick open).
+
+### The app database
+
+`quel.store` keeps SQLite at `~/Library/Application Support/Quel/quel.db`
+on macOS (`$XDG_DATA_HOME/quel` or `~/.local/share/quel` elsewhere;
+`QUEL_DATA_DIR` overrides both), migrated on start with ragtime from
+`quel.migrations`, whose SQL is inline. The pragmas (`foreign_keys`,
+`busy_timeout`, WAL) are in the DSN, so every pooled connection gets them.
+Profile saves and deletes are serialised, since each changes the Keychain
+and the table together. `QUEL_SECRETS=memory` swaps the Keychain for an
+in-memory store; the smoke and e2e runs set it, with a temporary
+`QUEL_DATA_DIR`.
 
 Connecting a profile opens one `database/sql` pool. Two kinds of work use
 it:
@@ -410,8 +435,8 @@ with string keys); errors reject the frontend's promise with the message.
 
 | Area | Handlers |
 |---|---|
-| Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` |
-| Connections | `connect`, `disconnect`, `connection-status` |
+| Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
+| Connections | `connect` (a profile id), `disconnect`, `connection-status`; `open-db` / `close-db` for Quick open (a file path or URL, no profile) and to close either |
 | Structure | `list-schemas`, `list-objects`, `describe-object`, `object-ddl`, `schema-ddl`, `completion-schema`, `diagram-model` |
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-ddl`, `export-result` (both open a save dialog) |
@@ -487,7 +512,7 @@ package feature, not app glue.
 | `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
 | `letgo-packages/sql` | `ScanRow` keeps binary values as bytes (today `[]byte` becomes a string) | the bytea / BLOB preview |
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
-| new `letgo-packages/keyring` | Keychain access, e.g. over `zalando/go-keyring` | saved passwords |
+| `letgo-packages/keyring` | Done in `keyring-v0.1.0`: `put!`, `get`, `delete!` over `zalando/go-keyring` (macOS Keychain, Secret Service), and `use-memory!` for tests | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` / let-go | Resource embedding and per-target build tags for `:target :native` | the native build |
 
@@ -508,8 +533,10 @@ package feature, not app glue.
    with highlighting and keyword completion; run statement, selection or
    script; a virtualized grid paging through open cursors, with cancel;
    result tabs with pinning; the messages log; HMR in the dev loop;
-   checked in the native macOS window as well. Then
-   profiles and Keychain; structure tree (schemas, tables, views,
+   checked in the native macOS window as well. Third slice done
+   2026-10-23: connection profiles in the app database, their passwords
+   in the Keychain, created, tested, edited and connected from the
+   database panel. Then structure tree (schemas, tables, views,
    columns) and schema completion; history; workspace restore.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
    procedures, table info; DDL view and export; write confirmation and

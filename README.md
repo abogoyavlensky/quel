@@ -6,8 +6,9 @@ structure, in the spirit of TablePlus. It is written in
 with a React frontend. macOS comes first. See [docs/DESIGN.md](docs/DESIGN.md)
 for the design and [docs/plans/](docs/plans/) for the implementation plans.
 
-Status: milestone 1 in progress. Quel opens a SQLite file or a Postgres
-or Redshift URL; it has editor tabs, each with its own session; and it
+Status: milestone 1 in progress. Quel keeps connection profiles (their
+passwords in the macOS Keychain) and also opens a SQLite file or a
+Postgres or Redshift URL directly; it has editor tabs, each with its own session; and it
 runs the statement under the cursor, the selection or the whole script
 into result tabs. The results load page by page as you scroll, and a
 result can be pinned. A runaway query can be cancelled.
@@ -54,6 +55,20 @@ CGO_ENABLED=0 GOFLAGS=-tags=server lgx dev    # http://localhost:8080
 ```
 
 Menus and file dialogs do nothing there.
+
+### Where Quel keeps its data
+
+Profiles live in `~/Library/Application Support/Quel/quel.db` on macOS
+(`$XDG_DATA_HOME/quel` or `~/.local/share/quel` on Linux), their
+passwords in the Keychain under the service `Quel`. Two variables
+redirect them, for tests or a scratch run:
+
+```sh
+QUEL_DATA_DIR=/tmp/quel-scratch QUEL_SECRETS=memory lgx run
+```
+
+`QUEL_SECRETS=memory` keeps passwords in memory for the run. The smoke and
+e2e tasks set both, so they never touch your profiles or Keychain.
 
 ## Test
 
