@@ -705,6 +705,24 @@ describe("closing and reopening", () => {
     expect(tab().runningQueryId).toBeNull();
   });
 
+  it("a failed close during a page load closes that result", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(500, true));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const id = tabId();
+    const resultId = tab().results[0].id;
+    const page = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(page.promise);
+    const loading = runner.fetchMore(id, resultId);
+    api.closeTab.mockRejectedValueOnce(new Error("disk full"));
+    await runner.closeTab(id);
+    expect(tab().results[0]).toMatchObject({ cursor: "closed", fetching: false, rows: expect.any(Array) });
+    expect(api.closeResult).toHaveBeenCalledWith(resultId);
+    page.resolve({ rows: rows(500, 501), "has-more": true, closed: false });
+    await loading;
+    expect(tab().results[0].rows).toHaveLength(500);
+    expect(tab().results[0].cursor).toBe("closed");
+  });
+
   it("a save before the close has run still lists the tab, with its last text", async () => {
     vi.useFakeTimers();
     try {

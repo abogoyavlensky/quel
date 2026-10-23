@@ -363,12 +363,17 @@ export async function closeTab(tabId: string): Promise<void> {
   } catch (e) {
     if (!store.getState().workspaces[profileId]) return;
     seed(tabId, text, selection);
-    // As it was, less the run: cancelled above, and ended by the epoch.
+    // As it was, less the run: cancelled above, and ended by the epoch. A
+    // result whose page was in flight is closed: that page is dropped, so
+    // reading on would skip its rows.
+    for (const r of tab.results) if (r.fetching && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
     const back: EditorTab = {
       ...tab,
       runningQueryId: null,
       stopping: false,
-      results: tab.results.map((r) => ({ ...r, fetching: false })),
+      results: tab.results.map((r) =>
+        r.fetching ? { ...r, fetching: false, cursor: r.cursor === "open" ? "closed" : r.cursor } : r,
+      ),
     };
     // The fresh tab that stood in for it goes, unless typed in since.
     const stale = replacement !== null && currentInput(replacement).text === "" ? replacement : null;
