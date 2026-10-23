@@ -276,10 +276,17 @@ deleted too." when the workspace has tabs with text.
 
 **Files:** `frontend/src/state/{persist,runner,store}.ts`, `frontend/src/lib/{api,types}.ts`, tests, `frontend/src/App.tsx`.
 
-- [ ] **Step 1: Tests:** `persist.test.ts` with fake timers; runner tests for async `ensureWorkspace` from a loaded workspace, start-up selection, save triggers.
-- [ ] **Step 2:** Implement per the Design (Loading, Saving). Every tab mutation in the runner calls `scheduleSave` for its profile.
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 4: Commit** `Restore and save each profile's tabs`.
+- [x] **Step 1: Tests:** `persist.test.ts` with fake timers; runner tests for async `ensureWorkspace` from a loaded workspace, start-up selection, save triggers.
+- [x] **Step 2:** Implement per the Design (Loading, Saving). Every tab mutation in the runner calls `scheduleSave` for its profile.
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 4: Commit** `Restore and save each profile's tabs`.
+
+> Deviation: `ensureWorkspace` moved from `store.ts` to `runner.ts` (it now calls the backend); concurrent callers and Retry share one in-flight load.
+> Deviation: a closed tab's backend session closes only after `close-tab` succeeds, and a run in flight is cancelled at close; a failed close restores the original tab (results, messages, session) rather than a fresh one with the text.
+> Deviation: ⌘⇧T picks "the most recent closed" inside its queued operation, so ⌘W then ⌘⇧T reopens that tab even before the close returns.
+> Deviation: the status bar shows a notice when connected too (it showed one only when disconnected), so "Unpin the tab to close it." and "Could not save tabs: …" are visible.
+> Deviation: `select-profile` writes go through an app-wide queue, latest wins (codex: concurrent bridge calls could land out of order).
+> Deviation: Retry keeps a connection opened while the workspace was in its load-error state (codex).
 
 ### Task 5: Rename, pin, recently closed
 
