@@ -41,7 +41,9 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await expect(dialog(page)).toHaveCount(0);
 
   // Listed; a click connects it, and the status bar shows its name.
-  await saved(page).getByRole("button", { name: /^E2E file/ }).click();
+  await saved(page)
+    .getByRole("button", { name: /^E2E file/ })
+    .click();
   await expect(page.getByRole("contentinfo")).toContainText("E2E file");
   await write(page, "select count(*) as n from t;");
   await page.keyboard.press("ControlOrMeta+Enter");
