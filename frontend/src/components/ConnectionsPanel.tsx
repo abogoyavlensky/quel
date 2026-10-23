@@ -1,24 +1,22 @@
-import { useState } from "react";
-import { PencilIcon, PlusIcon } from "lucide-react";
+import { PencilIcon, PlusIcon, UnplugIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { openProfileDialog } from "@/state/profiles";
-import { closeDb, connectProfile, openDb } from "@/state/runner";
+import { closeDb, connectProfile } from "@/state/runner";
 import { useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
 const engineLabel = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" } as const;
 
-// The left panel: saved connections (a click connects one), and below
-// them a quick open for a file path or postgres:// URL that is not saved.
+// The left panel: the saved connections. A click connects one; the
+// connected one can be disconnected, any one edited. New ones come from
+// the + button, or from File > Open Database for a SQLite file.
 export function ConnectionsPanel() {
   const conn = useApp((s) => s.conn);
   const switching = useApp((s) => s.switching);
   const error = useApp((s) => s.dbError);
   const profiles = useApp((s) => s.profiles);
   const profilesError = useApp((s) => s.profilesError);
-  const [target, setTarget] = useState("");
 
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-3 text-sm">
@@ -38,7 +36,12 @@ export function ConnectionsPanel() {
           </Button>
         </div>
         {profiles.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No saved connections.</p>
+          <div className="flex flex-col items-start gap-2 py-2">
+            <p className="text-xs text-muted-foreground">No saved connections.</p>
+            <Button size="sm" variant="outline" onClick={() => openProfileDialog({ mode: "new" })}>
+              New connection…
+            </Button>
+          </div>
         ) : (
           <ul aria-label="Saved connections" className="-mx-1 flex flex-col">
             {profiles.map((p) => {
@@ -60,6 +63,18 @@ export function ConnectionsPanel() {
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
                   </button>
+                  {connected && (
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Disconnect ${p.name}`}
+                      title="Disconnect"
+                      disabled={switching}
+                      onClick={() => void closeDb()}
+                    >
+                      <UnplugIcon />
+                    </Button>
+                  )}
                   <Button
                     size="icon-xs"
                     variant="ghost"
@@ -82,56 +97,10 @@ export function ConnectionsPanel() {
         )}
       </section>
 
-      <form
-        className="flex flex-col gap-2 border-t pt-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (target.trim()) void openDb(target.trim());
-        }}
-      >
-        <h2 className="text-xs font-medium text-muted-foreground">Quick open</h2>
-        <label htmlFor="db-target" className="text-xs text-muted-foreground">
-          File path or postgres:// URL
-        </label>
-        <Input
-          id="db-target"
-          className="h-8 font-mono text-xs"
-          placeholder="/path/to/app.db"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <div className="flex gap-2">
-          <Button type="submit" size="sm" disabled={switching || !target.trim()}>
-            Open
-          </Button>
-          {conn && (
-            <Button type="button" size="sm" variant="ghost" disabled={switching} onClick={() => void closeDb()}>
-              Close
-            </Button>
-          )}
-        </div>
-      </form>
-
       {error && (
-        <p role="alert" className="text-xs break-words text-destructive">
+        <p role="alert" className="border-t pt-3 text-xs break-words text-destructive">
           {error}
         </p>
-      )}
-
-      {conn ? (
-        <div className="flex items-start gap-2 border-t pt-3">
-          <ConnMark engine={conn.engine} color={conn.color} className="mt-1.5" />
-          <div className="min-w-0">
-            <p className="truncate font-mono text-xs" title={conn.label}>
-              {conn.label}
-            </p>
-            <p className="text-xs text-muted-foreground">{engineLabel[conn.engine]}</p>
-          </div>
-        </div>
-      ) : (
-        !error && <p className="border-t pt-3 text-xs text-muted-foreground">No database open.</p>
       )}
     </div>
   );

@@ -608,6 +608,8 @@ Quel (branch `profiles`):
 
 > The final review found two more: a profile could be deleted while its own connection was still opening and land connected afterwards, and the dialog overflowed a 720×480 window. Both fixed in 1265bde. Re-run after them: `lgx test-pg` (125 tests), frontend (111), `lgx smoke-pg`, `lgx e2e` (7).
 
+> After the plan, at the user's request: the Quick open form is gone, so the UI connects only through profiles. File > Open Database… (`⌘O`) opens the New Connection dialog filled in with the chosen SQLite file, named after it. The connected row has a Disconnect button, and the empty list offers "New connection…". The runner's `openDb` is gone. The `open-db` handler stays for the smoke test. The query-loop e2e connects through a profile (`e2e/connect.ts`).
+
 ## Completion summary
 
 Implemented, Tasks 1-14, 2026-10-23, on branch `profiles`: PR #4, CI green.

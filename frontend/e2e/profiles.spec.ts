@@ -18,7 +18,7 @@ async function write(page: Page, sql: string) {
 
 test("a profile is tested before saving, then connected, renamed and deleted", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "New connection" }).click();
+  await page.getByRole("button", { name: "New connection" }).first().click();
   await expect(dialog(page)).toContainText("New Connection");
 
   await dialog(page).getByLabel("Name").fill("E2E file");
@@ -29,7 +29,7 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await dialog(page).getByLabel("File").fill(`${db}.missing`);
   await dialog(page).getByRole("button", { name: "Test" }).click();
   await expect(dialog(page).getByRole("alert")).toContainText("No such file");
-  await expect(page.getByText("No saved connections.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^E2E file/ })).toHaveCount(0);
 
   // Editing clears the result; the right path passes.
   await dialog(page).getByLabel("File").fill(db);
@@ -49,6 +49,14 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("gridcell", { name: "2000", exact: true })).toBeVisible();
 
+  // Disconnect, and connect again.
+  await saved(page).getByRole("button", { name: "Disconnect E2E file" }).click();
+  await expect(page.getByRole("contentinfo")).toContainText("No database");
+  await saved(page)
+    .getByRole("button", { name: /^E2E file/ })
+    .click();
+  await expect(page.getByRole("contentinfo")).toContainText("E2E file");
+
   // Renamed: the list and the open connection follow.
   await saved(page).getByRole("button", { name: "Edit E2E file" }).click();
   await dialog(page).getByLabel("Name").fill("E2E renamed");
@@ -60,13 +68,13 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await saved(page).getByRole("button", { name: "Edit E2E renamed" }).click();
   await dialog(page).getByRole("button", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("No saved connections.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^E2E renamed/ })).toHaveCount(0);
   await expect(page.getByRole("contentinfo")).toContainText("No database");
 });
 
 test("a duplicate name is refused", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "New connection" }).click();
+  await page.getByRole("button", { name: "New connection" }).first().click();
   await dialog(page).getByLabel("Name").fill("Dup");
   await dialog(page).getByRole("combobox", { name: "Type" }).click();
   await page.getByRole("option", { name: "SQLite" }).click();
@@ -74,7 +82,7 @@ test("a duplicate name is refused", async ({ page }) => {
   await dialog(page).getByRole("button", { name: "Save" }).click();
   await expect(saved(page).getByRole("button", { name: /^Dup/ })).toBeVisible();
 
-  await page.getByRole("button", { name: "New connection" }).click();
+  await page.getByRole("button", { name: "New connection" }).first().click();
   await dialog(page).getByLabel("Name").fill("dup");
   await dialog(page).getByRole("combobox", { name: "Type" }).click();
   await page.getByRole("option", { name: "SQLite" }).click();
@@ -87,5 +95,5 @@ test("a duplicate name is refused", async ({ page }) => {
   await saved(page).getByRole("button", { name: "Edit Dup" }).click();
   await dialog(page).getByRole("button", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
-  await expect(page.getByText("No saved connections.")).toBeVisible();
+  await expect(saved(page).getByRole("button", { name: /^Dup/ })).toHaveCount(0);
 });

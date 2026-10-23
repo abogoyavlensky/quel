@@ -8,7 +8,6 @@ const api = vi.hoisted(() => ({
   testConnection: vi.fn(),
   connect: vi.fn(),
   closeDb: vi.fn(),
-  openDb: vi.fn(),
   closeSession: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);

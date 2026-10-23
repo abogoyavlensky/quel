@@ -55,6 +55,16 @@ export function emptyForm(engine: Engine = "postgres"): ProfileForm {
   };
 }
 
+// A new SQLite profile for the file at path, named after the file.
+export function fileForm(path: string): ProfileForm {
+  const name =
+    path
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/\.(db|sqlite3?)$/i, "") || path;
+  return { ...emptyForm("sqlite"), name, path };
+}
+
 export function fromProfile(p: Profile): ProfileForm {
   return {
     id: p.id,

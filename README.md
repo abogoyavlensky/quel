@@ -6,9 +6,9 @@ structure, in the spirit of TablePlus. It is written in
 with a React frontend. macOS comes first. See [docs/DESIGN.md](docs/DESIGN.md)
 for the design and [docs/plans/](docs/plans/) for the implementation plans.
 
-Status: milestone 1 in progress. Quel keeps connection profiles (their
-passwords in the macOS Keychain) and also opens a SQLite file or a
-Postgres or Redshift URL directly; it has editor tabs, each with its own session; and it
+Status: milestone 1 in progress. Quel connects through saved profiles
+for SQLite, Postgres and Redshift (passwords in the macOS Keychain); it
+has editor tabs, each with its own session; and it
 runs the statement under the cursor, the selection or the whole script
 into result tabs. The results load page by page as you scroll, and a
 result can be pinned. A runaway query can be cancelled.

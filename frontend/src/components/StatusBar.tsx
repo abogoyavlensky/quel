@@ -12,7 +12,7 @@ export function StatusBar() {
   const running = !!tab?.runningQueryId;
 
   let state = "Ready";
-  if (!conn) state = "Open a database to run queries";
+  if (!conn) state = "Connect a database to run queries";
   else if (tab?.stopping) state = "Canceling…";
   else if (running) state = "Running…";
 

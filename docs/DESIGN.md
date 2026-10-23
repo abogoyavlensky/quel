@@ -162,7 +162,9 @@ and pgx's `PGPASSWORD` and `.pgpass` fallbacks apply as in `psql`. Errors
 are redacted with the password in its raw and DSN-escaped forms, and pgx's
 own parse errors drop the DSN it quotes. Every SQLite file opens as a
 `file:` URI, so a `?` or `#` in its path stays part of the name. A file
-path or URL can still be opened without a profile (Quick open).
+The UI connects only through profiles: File > Open Database… (`⌘O`)
+turns the chosen SQLite file into a new profile, filled in for Save. The
+`open-db` handler still opens a bare path or URL, for the smoke test.
 
 ### The app database
 
@@ -384,9 +386,9 @@ Layout, in resizable panes (shadcn `Resizable`):
 
 ```
 ┌──────────┬───────────────────────────────────────────┐
-│ database │ [Query 1 ×] [Query 2 ×] [+]               │
-│ (profiles│  CodeMirror editor                         │
-│  later)  ├───────────────────────────────────────────┤
+│ saved    │ [Query 1 ×] [Query 2 ×] [+]               │
+│ connec-  │  CodeMirror editor                         │
+│ tions    ├───────────────────────────────────────────┤
 │ structure│ [Messages] [select … 📌 ×] [select … ×]    │
 │ tree     │  virtualized grid                          │
 └──────────┴───────────────────────────────────────────┘
@@ -436,7 +438,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Area | Handlers |
 |---|---|
 | Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
-| Connections | `connect` (a profile id), `disconnect`, `connection-status`; `open-db` / `close-db` for Quick open (a file path or URL, no profile) and to close either |
+| Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
 | Structure | `list-schemas`, `list-objects`, `describe-object`, `object-ddl`, `schema-ddl`, `completion-schema`, `diagram-model` |
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-ddl`, `export-result` (both open a save dialog) |

@@ -32,6 +32,7 @@ import {
   type ProfileForm,
   SSL_MODES,
   emptyForm,
+  fileForm,
   fromProfile,
   missing,
   toInput,
@@ -61,14 +62,16 @@ export function ProfileDialog() {
   return (
     <Dialog open={!!dialog} onOpenChange={(open) => !open && closeProfileDialog()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
-        {dialog && <ProfileEditor editing={editing} />}
+        {dialog && <ProfileEditor editing={editing} path={dialog.mode === "new" ? dialog.path : undefined} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function ProfileEditor({ editing }: { editing: Profile | undefined }) {
-  const [form, setForm] = useState<ProfileForm>(() => (editing ? fromProfile(editing) : emptyForm()));
+function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: string | undefined }) {
+  const [form, setForm] = useState<ProfileForm>(() =>
+    editing ? fromProfile(editing) : path ? fileForm(path) : emptyForm(),
+  );
   const [test, setTest] = useState<TestState>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

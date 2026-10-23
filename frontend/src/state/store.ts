@@ -49,13 +49,14 @@ export interface EditorTab {
 export interface Conn {
   connId: string;
   engine: Engine;
-  label: string; // the profile's name, or the path / URL opened
-  profileId: string | null; // null for a quick open
-  color: Color; // the profile's colour tag; "none" for a quick open
+  label: string; // the profile's name
+  profileId: string;
+  color: Color; // the profile's colour tag
 }
 
-// The profile dialog: closed, a new profile, or editing one.
-export type ProfileDialog = { mode: "new" } | { mode: "edit"; id: string } | null;
+// The profile dialog: closed, a new profile (a SQLite one for path, when
+// File > Open Database chose a file), or editing one.
+export type ProfileDialog = { mode: "new"; path?: string } | { mode: "edit"; id: string } | null;
 
 export interface AppState {
   conn: Conn | null;

@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog } from "@/state/profiles";
-import { cancel, closeTab, newTab, openDb, runCurrent } from "@/state/runner";
+import { cancel, closeTab, newTab, runCurrent } from "@/state/runner";
 import { store } from "@/state/store";
 
 // The app's menu items (quel.menu) arrive as events; the work happens here.
@@ -21,7 +21,8 @@ function useMenu() {
       onEvent("menu:cancel", () => cancel(active())),
       onEvent("menu:open-db", (data) => {
         const path = (data as { path?: string } | null)?.path;
-        if (path) void openDb(path);
+        // A chosen file becomes a new SQLite profile, filled in for Save.
+        if (path) openProfileDialog({ mode: "new", path });
       }),
       onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
     ];
