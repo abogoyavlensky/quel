@@ -1,22 +1,28 @@
 import * as api from "@/lib/api";
-import type { OpenResult } from "@/lib/types";
 import { currentInput, dropState } from "@/editor/states";
 import type { Statement } from "@/sql/split";
 import { type RunMode, toRun } from "@/sql/target";
 import {
   type EditorTab,
   MESSAGES,
+  activeTabOf,
   addMessage,
-  closeAllCursors,
+  closeCursors,
+  ensureWorkspace,
   findTab,
   newTabState,
+  selectedWorkspace,
   store,
   updateResult,
   updateTab,
+  updateWorkspace,
+  workspaceOfTab,
 } from "./store";
 
 // What the user does, as plain async functions over the store and the
-// backend. Each editor tab is a backend session (its id is the
+// backend. Each profile has a workspace with its own connection and tabs;
+// several can be connected at once, and nothing here touches another
+// profile's workspace. Each editor tab is a backend session (its id is the
 // session-id), and one statement or page is in flight per tab at a time
 // (runningQueryId): a second run while one is in flight is dropped, which
 // also makes a shortcut that fires twice (the native menu and the
@@ -35,6 +41,13 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+// Whether the profile is still connected on connId: a run started there
+// and a disconnect (or a reconnect) meanwhile closed its cursors.
+function stillOn(profileId: string, connId: string): boolean {
+  const w = store.getState().workspaces[profileId];
+  return w?.status === "connected" && w.connId === connId;
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 // Run statements one after another in the tab's session. Each one that
@@ -43,9 +56,10 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 // the backend as soon as the session runs again. The first error or a
 // cancel stops the script.
 export async function runStatements(tabId: string, statements: Statement[]): Promise<void> {
-  const { conn, switching } = store.getState();
+  const w = workspaceOfTab(tabId);
   const tab = findTab(tabId);
-  if (!conn || switching || !tab || tab.runningQueryId || statements.length === 0) return;
+  if (!w || w.status !== "connected" || !w.connId || !tab || tab.runningQueryId || statements.length === 0) return;
+  const { profileId, connId } = w;
 
   const firstId = newId();
   for (const r of tab.results) {
@@ -67,7 +81,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
     for (const [i, stmt] of statements.entries()) {
       const current = findTab(tabId);
       if (!current) return;
-      if (i > 0 && (current.stopping || store.getState().conn?.connId !== conn.connId)) break;
+      if (i > 0 && (current.stopping || !stillOn(profileId, connId))) break;
       const queryId = i === 0 ? firstId : newId();
       // This run closes the session's open cursor on the backend: an
       // earlier statement's result in this script has no more rows to give.
@@ -77,10 +91,10 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
         results: t.results.map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
       }));
       try {
-        const r = await api.run(conn.connId, tabId, queryId, stmt.text);
+        const r = await api.run(connId, tabId, queryId, stmt.text);
         if (!findTab(tabId)) return;
-        // The database closed or changed while this ran: its cursor is gone.
-        const live = store.getState().conn?.connId === conn.connId;
+        // The profile disconnected while this ran: its cursor is gone.
+        const live = stillOn(profileId, connId);
         if (r.columns.length > 0) {
           lastResult = queryId;
           updateTab(tabId, (t) => ({
@@ -140,10 +154,18 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   }
 }
 
-// Run from the active tab's editor: the statement under the cursor (or the
-// selection's statements), or the whole script.
+// Run from the selected workspace's active editor: the statement under the
+// cursor (or the selection's statements), or the whole script. A
+// disconnected workspace sends nothing and says so in the status bar; one
+// that is connecting drops the run, as a second run in flight is dropped.
 export async function runCurrent(mode: RunMode): Promise<void> {
-  const tabId = store.getState().activeTab;
+  const w = selectedWorkspace(store.getState());
+  if (!w || w.status === "connecting") return;
+  if (w.status !== "connected") {
+    store.setState({ notice: "Not connected." });
+    return;
+  }
+  const tabId = w.activeTab;
   const { text, selection } = currentInput(tabId);
   await runStatements(tabId, toRun(text, selection, mode));
 }
@@ -159,15 +181,17 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
     return;
   }
 
-  const connId = store.getState().conn?.connId;
+  const w = workspaceOfTab(tabId);
+  if (w?.status !== "connected" || !w.connId) return;
+  const { profileId, connId } = w;
   updateResult(tabId, resultId, (r) => ({ ...r, fetching: true }));
   updateTab(tabId, (t) => ({ ...t, runningQueryId: resultId }));
   try {
     const p = await api.fetchPage(resultId);
     if (!findTab(tabId)) return;
-    const live = store.getState().conn?.connId === connId;
+    const live = stillOn(profileId, connId);
     updateResult(tabId, resultId, (r) => {
-      // Closed meanwhile (the database changed, the result was replaced).
+      // Closed meanwhile (a disconnect, the result was replaced).
       if (r.cursor !== "open") return r;
       const rows = r.rows.concat(p.rows);
       if (rows.length >= maxRows && (p["has-more"] || rows.length > maxRows)) {
@@ -204,36 +228,40 @@ export function cancel(tabId: string): void {
   void api.cancel(tab.runningQueryId).catch(() => {});
 }
 
+// A new tab in the selected workspace.
 export function newTab(): void {
-  store.setState((s) => {
-    const tab = newTabState(s.nextTabNumber);
-    return { tabs: [...s.tabs, tab], activeTab: tab.id, nextTabNumber: s.nextTabNumber + 1 };
+  const profileId = store.getState().selected;
+  if (profileId === null) return;
+  updateWorkspace(profileId, (w) => {
+    const tab = newTabState(w.nextTabNumber);
+    return { ...w, tabs: [...w.tabs, tab], activeTab: tab.id, nextTabNumber: w.nextTabNumber + 1 };
   });
 }
 
 export function selectTab(tabId: string): void {
-  if (findTab(tabId)) store.setState({ activeTab: tabId });
+  const w = workspaceOfTab(tabId);
+  if (w) updateWorkspace(w.profileId, (w) => ({ ...w, activeTab: tabId }));
 }
 
 // Close an editor tab: it leaves the store first, so its runner stops,
-// then its backend session closes (cancelling what runs there). The last
-// tab is replaced by a fresh one.
+// then its backend session closes (cancelling what runs there) if its
+// profile is connected. A workspace's last tab is replaced by a fresh one.
 export async function closeTab(tabId: string): Promise<void> {
-  const { conn, tabs } = store.getState();
-  const i = tabs.findIndex((t) => t.id === tabId);
-  if (i < 0) return;
-  store.setState((s) => {
-    let rest = s.tabs.filter((t) => t.id !== tabId);
-    let nextTabNumber = s.nextTabNumber;
+  const w = workspaceOfTab(tabId);
+  if (!w) return;
+  const i = w.tabs.findIndex((t) => t.id === tabId);
+  updateWorkspace(w.profileId, (w) => {
+    let rest = w.tabs.filter((t) => t.id !== tabId);
+    let nextTabNumber = w.nextTabNumber;
     if (rest.length === 0) {
       rest = [newTabState(nextTabNumber)];
       nextTabNumber += 1;
     }
-    const activeTab = s.activeTab === tabId ? rest[Math.min(i, rest.length - 1)].id : s.activeTab;
-    return { tabs: rest, activeTab, nextTabNumber };
+    const activeTab = w.activeTab === tabId ? rest[Math.min(i, rest.length - 1)].id : w.activeTab;
+    return { ...w, tabs: rest, activeTab, nextTabNumber };
   });
   dropState(tabId);
-  if (conn) await api.closeSession(conn.connId, tabId).catch(() => {});
+  if (w.status === "connected" && w.connId) await api.closeSession(w.connId, tabId).catch(() => {});
 }
 
 export function selectResult(tabId: string, id: string): void {
@@ -255,37 +283,56 @@ export function closeResult(tabId: string, resultId: string): void {
   });
 }
 
-// Connect a saved profile in place of the current database. Connecting
-// and closing are serialized: a request while one is in flight is dropped.
+// Show the profile's workspace, made on first select. Never connects.
+export function selectProfile(id: string): void {
+  ensureWorkspace(id);
+  store.setState({ selected: id, notice: null });
+}
+
+// Connect the profile's workspace; the selection stays where it is. A
+// connect while one is in flight, or on a connected profile, is dropped.
 export async function connectProfile(id: string): Promise<void> {
-  await switchDb(() => api.connect(id));
-}
-
-export async function closeDb(): Promise<void> {
-  await switchDb(null);
-}
-
-async function switchDb(open: (() => Promise<OpenResult>) | null): Promise<void> {
-  if (store.getState().switching) return;
-  store.setState({ switching: true, dbError: null });
+  if (ensureWorkspace(id).status !== "disconnected") return;
+  updateWorkspace(id, (w) => ({ ...w, status: "connecting", error: null }));
+  store.setState({ notice: null });
   try {
-    const current = store.getState().conn;
-    if (current) {
-      store.setState({ conn: null });
-      closeAllCursors();
-      await api.closeDb(current.connId);
+    const opened = await api.connect(id);
+    if (!store.getState().workspaces[id]) {
+      // Dropped meanwhile: nothing will use this connection.
+      void api.closeDb(opened["conn-id"]).catch(() => {});
+      return;
     }
-    if (open !== null) {
-      const opened = await open();
-      const profileId = opened["profile-id"] ?? "";
-      const color = store.getState().profiles.find((p) => p.id === profileId)?.color ?? "none";
-      store.setState({
-        conn: { connId: opened["conn-id"], engine: opened.engine, label: opened.label, profileId, color },
-      });
-    }
+    updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"] }));
   } catch (e) {
-    store.setState({ dbError: errorText(e) });
-  } finally {
-    store.setState({ switching: false });
+    updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }
+}
+
+// Disconnect the profile: its open results close, a run in flight there
+// ends, and the backend closes the database with its sessions and cursors.
+// The tabs and their text stay.
+export async function disconnectProfile(id: string): Promise<void> {
+  const w = store.getState().workspaces[id];
+  if (w?.status !== "connected" || !w.connId) return;
+  const connId = w.connId;
+  updateWorkspace(id, (w) => ({ ...w, status: "disconnecting", error: null }));
+  closeCursors(id);
+  let error: string | null = null;
+  try {
+    await api.closeDb(connId);
+  } catch (e) {
+    error = errorText(e);
+  }
+  updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error }));
+}
+
+// The status bar's notice goes away on the next edit.
+export function clearNotice(): void {
+  if (store.getState().notice !== null) store.setState({ notice: null });
+}
+
+// The selected workspace's active tab, for the menu actions.
+export function selectedTabId(): string | null {
+  const w = selectedWorkspace(store.getState());
+  return w ? activeTabOf(w).id : null;
 }
