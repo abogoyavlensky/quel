@@ -3,7 +3,15 @@ import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import type { Statement } from "@/sql/split";
 import { type RunMode, toRun } from "@/sql/target";
-import { cancelSave, enqueue, flushSave, rememberSelection, scheduleSave } from "./persist";
+import {
+  cancelSave,
+  enqueue,
+  flushSave,
+  markClosing,
+  rememberSelection,
+  scheduleSave,
+  unmarkClosing,
+} from "./persist";
 import {
   type EditorTab,
   MAX_CLOSED,
@@ -56,6 +64,17 @@ function stillOn(profileId: string, connId: string): boolean {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+// A tab's run epoch: closing the tab ends the runs and page loads it had
+// in flight, even when a failed close then brings the tab back.
+const epochs = new Map<string, number>();
+const epochOf = (tabId: string) => epochs.get(tabId) ?? 0;
+
+// Whether a run or page load started at epoch in the tab may go on.
+function aliveFn(tabId: string): () => boolean {
+  const epoch = epochOf(tabId);
+  return () => epochOf(tabId) === epoch && findTab(tabId) !== undefined;
+}
+
 // Run statements one after another in the tab's session. Each one that
 // returns rows gets its own result tab; the run first drops the tab's
 // unpinned results, and the open cursors of the pinned ones are closed by
@@ -66,6 +85,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   const tab = findTab(tabId);
   if (!w || w.status !== "connected" || !w.connId || !tab || tab.runningQueryId || statements.length === 0) return;
   const { profileId, connId } = w;
+  const alive = aliveFn(tabId);
 
   const firstId = newId();
   for (const r of tab.results) {
@@ -85,7 +105,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   let failed = false;
   try {
     for (const [i, stmt] of statements.entries()) {
-      const current = findTab(tabId);
+      const current = alive() ? findTab(tabId) : undefined;
       if (!current) return;
       if (i > 0 && (current.stopping || !stillOn(profileId, connId))) break;
       const queryId = i === 0 ? firstId : newId();
@@ -98,7 +118,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       }));
       try {
         const r = await api.run(connId, tabId, queryId, stmt.text);
-        if (!findTab(tabId)) return;
+        if (!alive()) return;
         // The profile disconnected while this ran: its cursor is gone.
         const live = stillOn(profileId, connId);
         if (r.columns.length > 0) {
@@ -135,7 +155,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
           });
         }
       } catch (e) {
-        if (!findTab(tabId)) return;
+        if (!alive()) return;
         const text = errorText(e);
         addMessage(tabId, {
           sql: stmt.text,
@@ -148,7 +168,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       }
     }
   } finally {
-    if (findTab(tabId)) {
+    if (alive()) {
       updateTab(tabId, (t) => ({
         ...t,
         runningQueryId: null,
@@ -190,11 +210,12 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
   const w = workspaceOfTab(tabId);
   if (w?.status !== "connected" || !w.connId) return;
   const { profileId, connId } = w;
+  const alive = aliveFn(tabId);
   updateResult(tabId, resultId, (r) => ({ ...r, fetching: true }));
   updateTab(tabId, (t) => ({ ...t, runningQueryId: resultId }));
   try {
     const p = await api.fetchPage(resultId);
-    if (!findTab(tabId)) return;
+    if (!alive()) return;
     const live = stillOn(profileId, connId);
     updateResult(tabId, resultId, (r) => {
       // Closed meanwhile (a disconnect, the result was replaced).
@@ -209,7 +230,7 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
       return { ...r, rows };
     });
   } catch (e) {
-    if (!findTab(tabId)) return;
+    if (!alive()) return;
     const text = errorText(e);
     updateResult(tabId, resultId, (r) => (r.cursor === "open" ? { ...r, cursor: "closed" } : r));
     addMessage(tabId, {
@@ -219,7 +240,7 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
       elapsedMs: null,
     });
   } finally {
-    if (findTab(tabId)) {
+    if (alive()) {
       updateResult(tabId, resultId, (r) => ({ ...r, fetching: false }));
       updateTab(tabId, (t) => ({ ...t, runningQueryId: null }));
     }
@@ -303,6 +324,7 @@ export async function closeTab(tabId: string): Promise<void> {
   const wasActive = w.activeTab === tabId;
   let replacement: string | null = null;
   if (tab.runningQueryId) void api.cancel(tab.runningQueryId).catch(() => {});
+  epochs.set(tabId, epochOf(tabId) + 1);
   updateWorkspace(profileId, (w) => {
     let rest = w.tabs.filter((t) => t.id !== tabId);
     let nextTabNumber = w.nextTabNumber;
@@ -315,8 +337,20 @@ export async function closeTab(tabId: string): Promise<void> {
     return { ...w, tabs: rest, activeTab, nextTabNumber };
   });
   dropState(tabId);
+  // Saves until the close has run still list the tab, with this text: a
+  // save that found it gone would close it itself, with older text.
+  markClosing(profileId, {
+    id: tabId,
+    title,
+    body: text,
+    pinned: false,
+    "sel-from": selection.from,
+    "sel-to": selection.to,
+  });
   flushSave(profileId);
-  const closing = enqueue(profileId, () => api.closeTab(profileId, { id: tabId, title, body: text }));
+  const closing = enqueue(profileId, () =>
+    api.closeTab(profileId, { id: tabId, title, body: text }).finally(() => unmarkClosing(profileId, tabId)),
+  );
   scheduleSave(profileId);
   try {
     const entry = await closing;
@@ -329,7 +363,7 @@ export async function closeTab(tabId: string): Promise<void> {
   } catch (e) {
     if (!store.getState().workspaces[profileId]) return;
     seed(tabId, text, selection);
-    // As it was, less the run: cancelled above, its reply dropped.
+    // As it was, less the run: cancelled above, and ended by the epoch.
     const back: EditorTab = {
       ...tab,
       runningQueryId: null,

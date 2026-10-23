@@ -1,5 +1,5 @@
 import * as api from "@/lib/api";
-import type { WorkspaceInput } from "@/lib/types";
+import type { SavedTab, WorkspaceInput } from "@/lib/types";
 import { currentInput } from "@/editor/states";
 import { type Workspace, store, workspaceOfTab } from "./store";
 
@@ -39,21 +39,39 @@ export function enqueue<T>(profileId: string, op: () => Promise<T>): Promise<T> 
   return run;
 }
 
+// Tabs taken out of a workspace whose close-tab has not run yet, by
+// profile. Saves meanwhile list them, last, as they were at the close.
+const closing = new Map<string, Map<string, SavedTab>>();
+
+export function markClosing(profileId: string, tab: SavedTab): void {
+  if (!closing.has(profileId)) closing.set(profileId, new Map());
+  closing.get(profileId)!.set(tab.id, tab);
+}
+
+export function unmarkClosing(profileId: string, tabId: string): void {
+  closing.get(profileId)?.delete(tabId);
+  if (closing.get(profileId)?.size === 0) closing.delete(profileId);
+}
+
 // What save-workspace sends for w: each tab with its text and selection
-// as the editor has them now.
+// as the editor has them now, then the tabs still closing.
 export function snapshot(w: Workspace): WorkspaceInput {
+  const pending = [...(closing.get(w.profileId)?.values() ?? [])].filter((c) => !w.tabs.some((t) => t.id === c.id));
   return {
-    tabs: w.tabs.map((t) => {
-      const { text, selection } = currentInput(t.id);
-      return {
-        id: t.id,
-        title: t.title,
-        body: text,
-        pinned: t.pinned,
-        "sel-from": selection.from,
-        "sel-to": selection.to,
-      };
-    }),
+    tabs: [
+      ...w.tabs.map((t) => {
+        const { text, selection } = currentInput(t.id);
+        return {
+          id: t.id,
+          title: t.title,
+          body: text,
+          pinned: t.pinned,
+          "sel-from": selection.from,
+          "sel-to": selection.to,
+        };
+      }),
+      ...pending,
+    ],
     "active-tab": w.activeTab,
     "next-tab-number": w.nextTabNumber,
   };

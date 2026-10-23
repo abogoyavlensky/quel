@@ -684,7 +684,7 @@ describe("closing and reopening", () => {
     const id = tabId();
     const held = deferred<RunResult>();
     api.run.mockReturnValueOnce(held.promise);
-    void runner.runStatements(id, stmts("select 2"));
+    const script = runner.runStatements(id, stmts("select 2; select 3"));
     const running = tab().runningQueryId;
     const pinnedBefore = tab().results;
     api.closeTab.mockRejectedValueOnce(new Error("disk full"));
@@ -697,7 +697,35 @@ describe("closing and reopening", () => {
     expect(tab()).toMatchObject({ runningQueryId: null, stopping: false });
     expect(tab().results).toEqual(pinnedBefore);
     expect(tab().messages).toHaveLength(1);
+    // The script's late reply is dropped, and it runs nothing more.
     held.resolve(rowsResult(1, false));
+    await script;
+    expect(api.run).toHaveBeenCalledTimes(2);
+    expect(tab().results).toEqual(pinnedBefore);
+    expect(tab().runningQueryId).toBeNull();
+  });
+
+  it("a save before the close has run still lists the tab, with its last text", async () => {
+    vi.useFakeTimers();
+    try {
+      runner.newTab();
+      const id = tabId();
+      editor.texts[id] = "select latest";
+      const closing = deferred<ClosedTab>();
+      api.closeTab.mockReturnValue(closing.promise);
+      const closed = runner.closeTab(id);
+      await vi.advanceTimersByTimeAsync(0);
+      // The pending save went first, the tab in it.
+      const first = api.saveWorkspace.mock.calls[0][1];
+      expect(first.tabs.find((t: { id: string }) => t.id === id)).toMatchObject({ body: "select latest" });
+      closing.resolve(closedTab(id, 4));
+      await closed;
+      await vi.advanceTimersByTimeAsync(800);
+      const after = api.saveWorkspace.mock.calls.at(-1)![1];
+      expect(after.tabs.map((t: { id: string }) => t.id)).not.toContain(id);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a pinned tab is not closed", async () => {
