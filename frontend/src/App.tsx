@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
 import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
+import { loadProfiles, openProfileDialog } from "@/state/profiles";
 import { cancel, closeTab, newTab, openDb, runCurrent } from "@/state/runner";
 import { store } from "@/state/store";
 
@@ -22,6 +23,7 @@ function useMenu() {
         const path = (data as { path?: string } | null)?.path;
         if (path) void openDb(path);
       }),
+      onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -29,5 +31,8 @@ function useMenu() {
 
 export default function App() {
   useMenu();
+  useEffect(() => {
+    void loadProfiles();
+  }, []);
   return <AppShell />;
 }

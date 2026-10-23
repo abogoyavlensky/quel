@@ -18,8 +18,7 @@ export const cancel = (queryId: string) => call<{ canceled: boolean }>("cancel",
 
 export const closeResult = (queryId: string) => call<void>("close-result", queryId);
 
-export const closeSession = (connId: string, sessionId: string) =>
-  call<void>("close-session", connId, sessionId);
+export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
 
 // Profiles. A password goes in (save, test) and never comes back.
 
@@ -30,8 +29,7 @@ export const saveProfile = (input: ProfileInput) => call<Profile>("save-profile"
 export const deleteProfile = (id: string) => call<void>("delete-profile", id);
 
 // Connects with the form as it stands and closes again; saves nothing.
-export const testConnection = (input: ProfileInput) =>
-  call<{ ok: boolean; label: string }>("test-connection", input);
+export const testConnection = (input: ProfileInput) => call<{ ok: boolean; label: string }>("test-connection", input);
 
 export const connect = (profileId: string) => call<OpenResult>("connect", profileId);
 

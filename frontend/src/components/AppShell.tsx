@@ -1,12 +1,13 @@
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SqlEditor } from "@/editor/SqlEditor";
 import { useApp } from "@/state/store";
-import { DatabasePanel } from "./DatabasePanel";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 import { EditorTabs } from "./EditorTabs";
+import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { StatusBar } from "./StatusBar";
 
-// The window: the database on the left; on the right the editor tabs, the
+// The window: the connections on the left; on the right the editor tabs, the
 // active tab's editor above its results; the status bar below all.
 export function AppShell() {
   const tab = useApp((s) => s.tabs.find((t) => t.id === s.activeTab)!);
@@ -16,7 +17,7 @@ export function AppShell() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize="22" minSize={180} className="bg-muted/20">
-          <DatabasePanel />
+          <ConnectionsPanel />
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel minSize={360}>
@@ -35,6 +36,7 @@ export function AppShell() {
         </ResizablePanel>
       </ResizablePanelGroup>
       <StatusBar />
+      <ProfileDialog />
     </div>
   );
 }

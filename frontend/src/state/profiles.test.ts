@@ -12,7 +12,10 @@ const api = vi.hoisted(() => ({
   closeSession: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);
-vi.mock("@/editor/states", () => ({ currentInput: () => ({ text: "", selection: { from: 0, to: 0 } }), dropState: () => {} }));
+vi.mock("@/editor/states", () => ({
+  currentInput: () => ({ text: "", selection: { from: 0, to: 0 } }),
+  dropState: () => {},
+}));
 
 const { store, initialState } = await import("./store");
 const profiles = await import("./profiles");
@@ -81,7 +84,13 @@ describe("profiles", () => {
     store.setState({ profiles: [p("a", { color: "purple" })] });
     api.connect.mockResolvedValue({ "conn-id": "c9", engine: "postgres", label: "P a", "profile-id": "a" });
     await runner.connectProfile("a");
-    expect(store.getState().conn).toEqual({ connId: "c9", engine: "postgres", label: "P a", profileId: "a", color: "purple" });
+    expect(store.getState().conn).toEqual({
+      connId: "c9",
+      engine: "postgres",
+      label: "P a",
+      profileId: "a",
+      color: "purple",
+    });
   });
 
   it("a failed connect says why", async () => {

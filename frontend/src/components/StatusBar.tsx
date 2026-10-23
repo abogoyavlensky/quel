@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { cancel } from "@/state/runner";
 import { useApp } from "@/state/store";
-import { EngineMark } from "./EngineMark";
+import { ConnMark } from "./ConnMark";
 
 // The open database, the active tab's state, and Cancel while something
 // runs there.
@@ -19,7 +19,7 @@ export function StatusBar() {
   return (
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t bg-muted/30 px-3 text-xs text-muted-foreground">
       <span className="flex min-w-0 items-center gap-1.5">
-        <EngineMark engine={conn?.engine ?? null} />
+        <ConnMark engine={conn?.engine ?? null} color={conn?.color} />
         <span className="max-w-80 truncate font-mono" title={conn?.label}>
           {conn ? conn.label : "No database"}
         </span>
