@@ -40,6 +40,7 @@
 (def new-tab! (emitter "New Tab" "menu:new-tab"))
 (def new-connection! (emitter "New Connection" "menu:new-connection"))
 (def close-tab! (emitter "Close Tab" "menu:close-tab"))
+(def reopen-tab! (emitter "Reopen Closed Tab" "menu:reopen-tab"))
 (def run! (emitter "Run" "menu:run"))
 (def run-script! (emitter "Run Script" "menu:run-script"))
 (def cancel! (emitter "Cancel" "menu:cancel"))
@@ -60,6 +61,8 @@
             {:separator true}
             {:label "Close Tab" :accelerator "CmdOrCtrl+W"
              :on-click (partial #'close-tab! env)}
+            {:label "Reopen Closed Tab" :accelerator "CmdOrCtrl+Shift+T"
+             :on-click (partial #'reopen-tab! env)}
             {:separator true}
             {:role :quit}]}
    {:role :edit-menu}

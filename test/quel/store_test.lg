@@ -33,7 +33,7 @@
   (with-store
     (fn [db dir]
       (is (false? (:dir? (os/stat (str dir "/quel.db")))))
-      (is (= ["001-create-profiles"]
+      (is (= ["001-create-profiles" "002-create-editor-tabs"]
              (mapv :id (sql/execute! db ["select id from ragtime_migrations order by seq"]))))
       (is (= #{"profiles_name"}
              (set (map :name (sql/execute! db ["select name from sqlite_master where type = 'index' and tbl_name = 'profiles' and name not like 'sqlite_%'"]))))))))
@@ -43,7 +43,7 @@
     (try
       (ig/halt-key! :quel.store/db (ig/init-key :quel.store/db {:dir dir}))
       (let [db (ig/init-key :quel.store/db {:dir dir})]
-        (is (= 1 (:n (sql/execute-one! db ["select count(*) as n from ragtime_migrations"]))))
+        (is (= 2 (:n (sql/execute-one! db ["select count(*) as n from ragtime_migrations"]))))
         (ig/halt-key! :quel.store/db db))
       (finally (os/sh "rm" "-rf" dir)))))
 

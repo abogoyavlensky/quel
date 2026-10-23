@@ -63,7 +63,7 @@ export function ConnectionsPanel() {
                       type="button"
                       aria-current={selected === p.id ? "true" : undefined}
                       title={statusLabel[status]}
-                      onClick={() => selectProfile(p.id)}
+                      onClick={() => void selectProfile(p.id)}
                       className={cn(
                         "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted",
                         selected === p.id && "bg-muted font-medium",

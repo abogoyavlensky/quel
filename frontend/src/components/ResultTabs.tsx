@@ -42,7 +42,8 @@ function TabButton({
 }
 
 // The results of one editor tab: its messages log and one tab per result.
-// A run replaces the unpinned results; a pinned one stays until closed.
+// A run replaces the results; a kept one ("Keep result", the pin) stays
+// until closed.
 export function ResultTabs({ tab }: { tab: EditorTab }) {
   const current = tab.results.find((r) => r.id === tab.active);
   const empty = tab.results.length === 0 && tab.messages.length === 0;
@@ -58,7 +59,8 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
             <span className="max-w-56 truncate font-mono">{label(r.sql)}</span>
             <button
               type="button"
-              aria-label={r.pinned ? "Unpin result" : "Pin result"}
+              aria-label="Keep result"
+              title="Keep result across runs"
               aria-pressed={r.pinned}
               onClick={(e) => {
                 e.stopPropagation();

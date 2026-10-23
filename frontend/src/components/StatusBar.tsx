@@ -19,9 +19,10 @@ export function StatusBar() {
     // Nothing selected: the name slot says "No connection".
   } else if (status === "connecting") state = "Connecting…";
   else if (status === "disconnecting") state = "Disconnecting…";
-  else if (status === "disconnected") state = notice ?? "Not connected";
   else if (tab?.stopping) state = "Canceling…";
   else if (running) state = "Running…";
+  else if (notice) state = notice;
+  else if (status === "disconnected") state = "Not connected";
   else state = "Ready";
 
   return (

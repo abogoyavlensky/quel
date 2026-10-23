@@ -4,6 +4,7 @@
             [quel.exec :as exec]
             [quel.menu :as menu]
             [quel.profiles :as profiles]
+            [quel.workspace :as workspace]
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
@@ -67,6 +68,27 @@
   [{:keys [app]}]
   (w/open-file app {:title "Choose a Database File" :filters menu/db-filters}))
 
+;; Each profile's saved editor tabs (quel.workspace), and which profile
+;; was selected.
+
+(defn load-workspace [{:keys [store]} profile-id]
+  (workspace/load store profile-id))
+
+(defn save-workspace [{:keys [store]} profile-id m]
+  (workspace/save! store profile-id m))
+
+(defn close-tab [{:keys [store]} profile-id tab]
+  (workspace/close! store profile-id tab))
+
+(defn reopen-tab [{:keys [store]} profile-id closed-id]
+  (workspace/reopen! store profile-id closed-id))
+
+(defn selected-profile [{:keys [store]}]
+  (workspace/selected-profile store))
+
+(defn select-profile [{:keys [store]} profile-id]
+  (workspace/select-profile! store profile-id))
+
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
@@ -84,7 +106,13 @@
    "delete-profile" #'delete-profile
    "test-connection" #'test-connection
    "connect" #'connect
-   "choose-file" #'choose-file})
+   "choose-file" #'choose-file
+   "load-workspace" #'load-workspace
+   "save-workspace" #'save-workspace
+   "close-tab" #'close-tab
+   "reopen-tab" #'reopen-tab
+   "selected-profile" #'selected-profile
+   "select-profile" #'select-profile})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

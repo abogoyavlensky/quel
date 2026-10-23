@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke-test the app headless, in Wails' server mode: the frontend is
 # served, the handlers answer over the real bridge, profiles save and
-# connect, a runaway query is
+# connect, a profile's tabs save and load, a runaway query is
 # cancelled (on Postgres too, when QUEL_PG_URL is set), and redefining a
 # handler over the in-app nREPL changes the running app with no restart.
 #
@@ -89,6 +89,12 @@ pconn="$(json "$connected" "['conn-id']")" || fail "connect: $connected"
 [[ "$connected" == *'"label":"Smoke file"'* ]] || fail "connect label: $connected"
 [[ "$(call run "[\"$pconn\",\"s1\",\"q-p\",\"select 1\"]")" == *'"rows":[[1]]'* ]] || fail "run on a profile's connection"
 call close-db "[\"$pconn\"]" >/dev/null
+
+# The profile's editor tabs: save them, load them back.
+r="$(call save-workspace "[\"$profile\",{\"tabs\":[{\"id\":\"smoke-tab\",\"title\":\"Query 1\",\"body\":\"select 42\"}],\"active-tab\":\"smoke-tab\",\"next-tab-number\":2}]")"
+nothing "$r" || fail "save-workspace: $r"
+loaded="$(call load-workspace "[\"$profile\"]")"
+[[ "$(json "$loaded" "['tabs'][0]['body']")" == "select 42" ]] || fail "load-workspace: $loaded"
 
 # Postgres, when one is configured (lgx smoke-pg, or CI): open the URL,
 # run, cancel, and run again on the same session.

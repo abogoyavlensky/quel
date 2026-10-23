@@ -1,7 +1,7 @@
 import * as api from "@/lib/api";
 import type { Profile, ProfileInput } from "@/lib/types";
 import { dropState } from "@/editor/states";
-import { disconnectProfile, selectProfile } from "./runner";
+import { disconnectProfile, forgetWorkspace, selectProfile } from "./runner";
 import { type ProfileDialog, store } from "./store";
 
 // Saved connection profiles: loading, saving and deleting them, which one
@@ -21,11 +21,22 @@ export async function loadProfiles(): Promise<void> {
   }
 }
 
-// The selection at start-up, after the first loadProfiles: the first
-// profile, when nothing is selected yet.
-export function restoreSelection(): void {
+// The selection at start-up, after the first loadProfiles: the profile
+// selected when the app last ran, if it still exists, else the first. The
+// fallback is not saved: only a user's choice is, so a failed or early
+// read never overwrites it. A selection the user made meanwhile stays.
+export async function restoreSelection(): Promise<void> {
+  if (store.getState().selected !== null || store.getState().profiles.length === 0) return;
+  let saved: string | null = null;
+  try {
+    saved = await api.selectedProfile();
+  } catch {
+    // The first profile, then.
+  }
   const { selected, profiles } = store.getState();
-  if (selected === null && profiles.length > 0) selectProfile(profiles[0].id);
+  if (selected !== null || profiles.length === 0) return;
+  const id = profiles.some((p) => p.id === saved) ? saved! : profiles[0].id;
+  await selectProfile(id, { remember: false });
 }
 
 // Save, then reload the list; a new profile becomes the selected one. A
@@ -34,20 +45,22 @@ export function restoreSelection(): void {
 export async function saveProfile(input: ProfileInput): Promise<Profile> {
   const saved = await api.saveProfile(input);
   await loadProfiles();
-  if (!input.id) selectProfile(saved.id);
+  if (!input.id) void selectProfile(saved.id);
   return saved;
 }
 
 // Delete a profile, disconnecting it first if it is connected, and drop
 // its workspace with its tabs. Refused while it connects or disconnects:
 // a connect in flight would land after the delete. When it was the
-// selected one, the first remaining profile is selected.
+// selected one, the first remaining profile is selected. Its saved tabs go
+// with it (the backend deletes them with the profile).
 export async function deleteProfile(id: string): Promise<void> {
   const status = store.getState().workspaces[id]?.status;
   if (status === "connecting") throw new Error("Wait for the connection to finish opening.");
   if (status === "disconnecting") throw new Error("Wait for the connection to finish closing.");
   if (status === "connected") await disconnectProfile(id);
   await api.deleteProfile(id);
+  forgetWorkspace(id);
   const dropped = store.getState().workspaces[id];
   if (dropped) {
     // Connected again while the delete ran: nothing will use it now. (A
@@ -62,7 +75,7 @@ export async function deleteProfile(id: string): Promise<void> {
   await loadProfiles();
   if (store.getState().selected === id) {
     const first = store.getState().profiles.find((p) => p.id !== id);
-    if (first) selectProfile(first.id);
+    if (first) await selectProfile(first.id, { remember: false });
     else store.setState({ selected: null, notice: null });
   }
 }

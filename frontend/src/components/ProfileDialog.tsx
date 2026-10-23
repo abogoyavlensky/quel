@@ -38,6 +38,7 @@ import {
   toInput,
   withEngine,
 } from "@/state/profileForm";
+import { textOf } from "@/editor/states";
 import { closeProfileDialog, deleteProfile, saveProfile, testConnection } from "@/state/profiles";
 import { useApp } from "@/state/store";
 import { tagColor } from "./colors";
@@ -81,6 +82,12 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
     return status === "connecting" || status === "disconnecting";
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The tabs with text that go with the profile (counted when its
+  // workspace is loaded).
+  const savedTabs = useApp((s) => {
+    const w = editing ? s.workspaces[editing.id] : undefined;
+    return w && !w.loadError ? w.tabs.filter((t) => textOf(t.id).trim() !== "").length : 0;
+  });
 
   // Bumped on every edit: a Test that finishes after the form changed
   // answers for settings that are gone, so its result is dropped.
@@ -366,6 +373,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
             <AlertDialogTitle>Delete {editing?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               The connection and its saved password are removed. Your database is not touched.
+              {savedTabs > 0 && ` Its ${savedTabs === 1 ? "saved tab is" : `${savedTabs} saved tabs are`} deleted too.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

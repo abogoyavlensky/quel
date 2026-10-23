@@ -76,3 +76,38 @@ export interface ProfileInput {
   password?: string;
   "forget-password"?: boolean;
 }
+
+// A profile's saved editor tab, as `load-workspace` and `reopen-tab`
+// return it and `save-workspace` takes it. "body" is its text; "sel-from"
+// and "sel-to" its selection.
+export interface SavedTab {
+  id: string;
+  title: string;
+  body: string;
+  pinned: boolean;
+  "sel-from": number;
+  "sel-to": number;
+}
+
+// A recently closed tab. "closed-at" is ms since the epoch.
+export interface ClosedTab {
+  id: string;
+  title: string;
+  body: string;
+  "closed-at": number;
+}
+
+// `load-workspace`'s reply: the open tabs in order, newest closed first.
+export interface SavedWorkspace {
+  tabs: SavedTab[];
+  "active-tab": string | null;
+  "next-tab-number": number;
+  closed: ClosedTab[];
+}
+
+// What `save-workspace` takes.
+export interface WorkspaceInput {
+  tabs: SavedTab[];
+  "active-tab": string;
+  "next-tab-number": number;
+}
