@@ -385,15 +385,20 @@ mutation.
 Layout, in resizable panes (shadcn `Resizable`):
 
 ```
-┌──────────┬───────────────────────────────────────────┐
-│ saved    │ [Query 1 ×] [Query 2 ×] [+]               │
-│ connec-  │  CodeMirror editor                         │
-│ tions    ├───────────────────────────────────────────┤
-│ structure│ [Messages] [select … 📌 ×] [select … ×]    │
-│ tree     │  virtualized grid                          │
-└──────────┴───────────────────────────────────────────┘
- status bar: database · tab state · rows · elapsed · cancel
+┌──────────────┬───────────────────────────────────────────┐
+│ ● Prod   🔌  │ [Query 1 ×] [Query 2 ×] [+]               │
+│ ○ Local  🔌  │  CodeMirror editor                         │
+│ (selected:   ├───────────────────────────────────────────┤
+│  its tabs →) │ [Messages] [select … 📌 ×] [select … ×]    │
+│ structure    │  virtualized grid                          │
+│ tree         │                                           │
+└──────────────┴───────────────────────────────────────────┘
+ status bar: profile · state (Ready / Running… / Not connected [Connect]) · rows · elapsed · cancel
 ```
+
+The sidebar lists the saved profiles, each with its status mark (filled
+when connected, a hollow ring when not, pulsing while connecting) and a
+Connect/Disconnect button.
 
 App state lives in a zustand store. The run flow (`state/runner.ts`) is
 plain async functions over it and the handlers, so menu events and
@@ -418,9 +423,43 @@ and the bodies of SQLite triggers and `BEGIN ATOMIC` functions, where a
 - Context menus on the grid: copy cell / row / column, copy as CSV, JSON
   or `INSERT`.
 - Workspace state - open tabs, their text, the selected profile - is
-  saved to the app database (debounced) and restored on launch.
+  saved to the app database (debounced) and restored on launch (planned:
+  `docs/plans/2026-10-23-1055-persisted-tabs.md`).
 - The schema tree is built with a headless tree on shadcn primitives;
   shadcn has no tree component.
+
+### Workspaces
+
+Each profile has a **workspace**: its connection status and conn-id, its
+editor tabs, and each tab's results and messages. Workspaces live in
+memory for the app's run; a profile's is made the first time it is
+selected and dropped when the profile is deleted.
+
+- **Select** (a click on a profile row) shows that workspace, connected
+  or not; it never connects. The editor's dialect comes from the
+  profile's engine, so a disconnected workspace is still editable.
+- **Connect** and **Disconnect** (the row's button, or the status bar's
+  Connect) act on one profile and leave the selection and every other
+  workspace alone, so several profiles can be connected at once.
+  Disconnecting closes the profile's database on the backend (its
+  sessions, cursors and pool) and marks its open results closed; the tabs
+  and their text stay.
+- **Running** (⌘Enter, ⌘⇧Enter, the menu) on a workspace that is not
+  connected sends nothing and shows "Not connected." with a Connect
+  button in the status bar; the notice clears on the next edit, select or
+  connect. While connecting, a run is dropped.
+- The menu's tab actions (new, close, run, cancel) act on the selected
+  workspace's active tab.
+- A connect error shows under its profile's row.
+
+Tab ids stay globally unique (they are backend session ids), so the
+runner addresses a tab by id and finds its workspace by scanning. A run
+checks the tab's own workspace's conn-id after every await: if the
+profile disconnected (or reconnected) meanwhile, its cursor is gone.
+
+Every editor tab that has run something holds one backend session, and
+so one connection, per connected profile. Disconnecting a profile
+releases all of them; there is no idle release yet.
 
 ### Diagrams
 
