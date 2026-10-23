@@ -2,6 +2,8 @@
 
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: implemented, 2026-10-23** (macOS checks pending, see Task 14).
+
 **Goal:** Saved connection profiles in an app database, with each profile's password kept in the macOS Keychain. A new `keyring` package in letgo-packages provides the Keychain access. The database panel lists the profiles, connects one with a click, and lets you create, edit, test and delete them.
 
 **Tech Stack:** let-go 1.13.0 / lgx 0.5.1; letgo-packages `sqlite-v0.3.0`, `postgres-v0.4.0`, `ragtime-v0.3.0`, `wails-v0.3.0`, and a new `keyring-v0.1.0` over `github.com/zalando/go-keyring` v0.2.8. Frontend: React 19, zustand, shadcn (dialog, alert-dialog, label, select), Vitest, Playwright.
@@ -519,75 +521,139 @@ Quel (branch `profiles`):
 
 **Files:** `src/quel/conn.lg`, `test/quel/conn_test.lg`, `test/quel/pg_test.lg`.
 
-- [ ] **Step 1: Write the tests** (the parse-error one needs no server): `open-target!` on a SQLite target returns `{:conn-id :engine :label}` with the given label; `redact` masks the raw and the DSN-escaped form of a `:secret` that holds `'`, `\` and spaces, inside an error that quotes the full generated DSN, and after a real `pg/open` parse failure (`sslmode='bogus'`); `check!` passes on an existing SQLite file and throws on a dead Postgres DSN (`host='127.0.0.1' port='1'`) without its secret in the message; in `pg_test`, a DSN target built from `QUEL_PG_URL`'s parts opens and runs `select 1` (parse the URL in the test with a regex).
-- [ ] **Step 2: Run** `lgx test-pg`. Expected: FAIL.
-- [ ] **Step 3:** Implement `open-target!`, `:dsn` in `open-pool`, `ping!`, `check!`, and the `:secret` and escape-aware masking in `redact`. Keep `open!`'s contract.
-- [ ] **Step 4: Run** `lgx test-pg`. Expected: PASS, the existing tests included.
-- [ ] **Step 5: Commit** `Open databases from a target map, and check one without keeping it`.
+- [x] **Step 1: Write the tests** (the parse-error one needs no server): `open-target!` on a SQLite target returns `{:conn-id :engine :label}` with the given label; `redact` masks the raw and the DSN-escaped form of a `:secret` that holds `'`, `\` and spaces, inside an error that quotes the full generated DSN, and after a real `pg/open` parse failure (`sslmode='bogus'`); `check!` passes on an existing SQLite file and throws on a dead Postgres DSN (`host='127.0.0.1' port='1'`) without its secret in the message; in `pg_test`, a DSN target built from `QUEL_PG_URL`'s parts opens and runs `select 1` (parse the URL in the test with a regex).
+- [x] **Step 2: Run** `lgx test-pg`. Expected: FAIL.
+- [x] **Step 3:** Implement `open-target!`, `:dsn` in `open-pool`, `ping!`, `check!`, and the `:secret` and escape-aware masking in `redact`. Keep `open!`'s contract.
+- [x] **Step 4: Run** `lgx test-pg`. Expected: PASS, the existing tests included.
+- [x] **Step 5: Commit** `Open databases from a target map, and check one without keeping it`.
+
+> Codex (reviewing Tasks 5-6) found two real bugs, both fixed in d7965c4. First, concurrent saves of one profile could leave its password and `has_password` disagreeing, so `save!` and `delete!` now take one lock, a size-1 `async` channel, since let-go has no `locking`. Second, a digit-only port past the long range parsed to nil and quietly became the default. A later review found that a `?` in a SQLite profile's file name opened another file. So every SQLite open, ad-hoc ones included, now goes through `conn/sqlite-uri` (7da0fb8), which the store shares.
 
 ### Task 7: Handlers, wiring and the menu item
 
 **Files:** `src/quel/api.lg`, `src/quel/system.lg`, `src/quel/menu.lg`, their tests, `test/quel/pg_test.lg`.
 
-- [ ] **Step 1: Write the tests**: `api_test` (the handler set adds the six names; `save-profile` → `list-profiles` → `connect` → `run` → `close-db` on SQLite; `test-connection` of an unsaved form; `delete-profile`; a save with a duplicate name throws the message). Extend `with-env` with a temp store and memory secrets; `:app` stays nil, and `choose-file` is not called in tests. `system_test`: the new keys, the handlers' refs, `QUEL_SECRETS` deciding the backend. `menu_test`: the File menu has "New Connection…" emitting `menu:new-connection`. `pg_test`: the Postgres profile cases from the Testing list.
-- [ ] **Step 2: Run** `lgx test-pg`. Expected: FAIL.
-- [ ] **Step 3:** Implement the handlers and wiring per the Design. In `system/config`: `:quel.store/db {:dir nil}`, `:quel.secrets/store {:backend …}`, and `:store`, `:secrets` and `:app` refs on `:quel.api/handlers`. Halt order: the store closes after the handlers (the refs take care of it). The menu item is `{:label "New Connection…" :on-click (partial #'new-connection! env)}`, placed before "Open Database…", with no accelerator.
-- [ ] **Step 4: Run** `lgx test-pg`. Expected: PASS.
-- [ ] **Step 5: Commit** `Add the profile handlers and the New Connection menu item`.
+- [x] **Step 1: Write the tests**: `api_test` (the handler set adds the six names; `save-profile` → `list-profiles` → `connect` → `run` → `close-db` on SQLite; `test-connection` of an unsaved form; `delete-profile`; a save with a duplicate name throws the message). Extend `with-env` with a temp store and memory secrets; `:app` stays nil, and `choose-file` is not called in tests. `system_test`: the new keys, the handlers' refs, `QUEL_SECRETS` deciding the backend. `menu_test`: the File menu has "New Connection…" emitting `menu:new-connection`. `pg_test`: the Postgres profile cases from the Testing list.
+- [x] **Step 2: Run** `lgx test-pg`. Expected: FAIL.
+- [x] **Step 3:** Implement the handlers and wiring per the Design. In `system/config`: `:quel.store/db {:dir nil}`, `:quel.secrets/store {:backend …}`, and `:store`, `:secrets` and `:app` refs on `:quel.api/handlers`. Halt order: the store closes after the handlers (the refs take care of it). The menu item is `{:label "New Connection…" :on-click (partial #'new-connection! env)}`, placed before "Open Database…", with no accelerator.
+- [x] **Step 4: Run** `lgx test-pg`. Expected: PASS.
+- [x] **Step 5: Commit** `Add the profile handlers and the New Connection menu item`.
+
+> Deviation: the Postgres profile tests live in `pg_test` with their own env helper (`with-api-env`), as `api_test`'s `with-env` is SQLite-only.
 
 ### Task 8: Server mode and smoke
 
 **Files:** `scripts/server-mode.sh`, `scripts/smoke.sh`.
 
-- [ ] **Step 1:** In `start_app`, make a temp data dir, export `QUEL_SECRETS=memory` and `QUEL_DATA_DIR=<it>` for the app, and remove the dir in `stop_app`.
-- [ ] **Step 2:** In `smoke.sh`, after the existing SQLite steps: `save-profile` with a SQLite map pointing at `$db`, `list-profiles` contains it, `connect` with its id returns a conn-id whose `run` of `select 1` answers. With `QUEL_PG_URL` set: build a profile map from the URL's parts with `python3` (`urllib.parse`), including the password, save it, check the reply has `"has-password":true` and no password, connect, and run `select 1`.
-- [ ] **Step 3: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke-pg`. Expected: PASS.
-- [ ] **Step 4: Commit** `Smoke-test profiles over the bridge`.
+- [x] **Step 1:** In `start_app`, make a temp data dir, export `QUEL_SECRETS=memory` and `QUEL_DATA_DIR=<it>` for the app, and remove the dir in `stop_app`.
+- [x] **Step 2:** In `smoke.sh`, after the existing SQLite steps: `save-profile` with a SQLite map pointing at `$db`, `list-profiles` contains it, `connect` with its id returns a conn-id whose `run` of `select 1` answers. With `QUEL_PG_URL` set: build a profile map from the URL's parts with `python3` (`urllib.parse`), including the password, save it, check the reply has `"has-password":true` and no password, connect, and run `select 1`.
+- [x] **Step 3: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke-pg`. Expected: PASS.
+- [x] **Step 4: Commit** `Smoke-test profiles over the bridge`.
 
 ### Task 9: Frontend state
 
 **Files:** `frontend/src/lib/{types,api}.ts`, `frontend/src/state/{store,runner,profiles,profileForm}.ts` and tests.
 
-- [ ] **Step 1: Write the tests**: `profileForm.test.ts`, `profiles.test.ts`, and the `connectProfile` cases in `runner.test.ts` (the Testing list).
-- [ ] **Step 2: Run** `npm --prefix frontend test`. Expected: FAIL.
-- [ ] **Step 3:** Implement the types, API calls, store fields, `switchTo` / `connectProfile`, `state/profiles.ts` and `state/profileForm.ts` per the Design. Existing `openDb` tests must pass unchanged, apart from the `Conn` shape (`profileId: null`, `color: "none"`).
-- [ ] **Step 4: Run** `npm --prefix frontend test && npm --prefix frontend run lint`. Expected: PASS.
-- [ ] **Step 5: Commit** `Keep profiles in the frontend store and connect them`.
+- [x] **Step 1: Write the tests**: `profileForm.test.ts`, `profiles.test.ts`, and the `connectProfile` cases in `runner.test.ts` (the Testing list).
+- [x] **Step 2: Run** `npm --prefix frontend test`. Expected: FAIL.
+- [x] **Step 3:** Implement the types, API calls, store fields, `switchTo` / `connectProfile`, `state/profiles.ts` and `state/profileForm.ts` per the Design. Existing `openDb` tests must pass unchanged, apart from the `Conn` shape (`profileId: null`, `color: "none"`).
+- [x] **Step 4: Run** `npm --prefix frontend test && npm --prefix frontend run lint`. Expected: PASS.
+- [x] **Step 5: Commit** `Keep profiles in the frontend store and connect them`.
+
+> Deviation: `effective-password` takes the store too (`[db secrets p]`) and asks the Keychain only when the saved profile says `has-password`, after a review found that a passwordless profile still read the Keychain, which fails where there is no Secret Service (288a69d). A later review found the same for a server profile turned SQLite, so a SQLite profile now always counts as "forget": a leftover password is deleted and never read (72920d2).
 
 ### Task 10: Frontend UI
 
 **Files:** the components listed in File Structure, `frontend/src/index.css`, `App.tsx`/`main.tsx` (wherever menu events are subscribed today).
 
-- [ ] **Step 1:** `npx shadcn@latest add dialog alert-dialog label select` in `frontend/` (follow /shadcn). Check that nothing generated conflicts with the existing `button`/`input`.
-- [ ] **Step 2:** Build `ConnMark`, `ConnectionsPanel`, `ProfileDialog` and the status bar change per the Design. Every input has a `<Label htmlFor>`. The dialog's buttons are named "Test", "Save", "Delete" and "Cancel", and the e2e relies on these names. Follow /frontend-design for spacing, keeping the panel's current density.
-- [ ] **Step 3:** Subscribe `menu:new-connection` and call `loadProfiles()` on start.
-- [ ] **Step 4: Verify by hand** in server mode (`CGO_ENABLED=0 GOFLAGS=-tags=server QUEL_SECRETS=memory QUEL_DATA_DIR=$(mktemp -d) lgx dev`, headless Chromium through Playwright or the preview tools): create, test, save, connect, edit, forget password, delete; check light and dark. Fix what looks wrong.
-- [ ] **Step 5: Run** `npm --prefix frontend test && npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: PASS.
-- [ ] **Step 6: Commit** `List, edit and connect profiles in the database panel`.
+- [x] **Step 1:** `npx shadcn@latest add dialog alert-dialog label select` in `frontend/` (follow /shadcn). Check that nothing generated conflicts with the existing `button`/`input`.
+- [x] **Step 2:** Build `ConnMark`, `ConnectionsPanel`, `ProfileDialog` and the status bar change per the Design. Every input has a `<Label htmlFor>`. The dialog's buttons are named "Test", "Save", "Delete" and "Cancel", and the e2e relies on these names. Follow /frontend-design for spacing, keeping the panel's current density.
+- [x] **Step 3:** Subscribe `menu:new-connection` and call `loadProfiles()` on start.
+- [x] **Step 4: Verify by hand** in server mode (`CGO_ENABLED=0 GOFLAGS=-tags=server QUEL_SECRETS=memory QUEL_DATA_DIR=$(mktemp -d) lgx dev`, headless Chromium through Playwright or the preview tools): create, test, save, connect, edit, forget password, delete; check light and dark. Fix what looks wrong.
+- [x] **Step 5: Run** `npm --prefix frontend test && npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: PASS.
+- [x] **Step 6: Commit** `List, edit and connect profiles in the database panel`.
+
+> Deviation: shadcn generated its components importing `cn` from the `cn` npm package; they import `@/lib/utils` like the app code. The dialog's form state lives in an inner `ProfileEditor` that mounts with the dialog content, so each opening starts fresh without a state-resetting effect. The colour classes moved to `components/colors.ts` (lint: a component file exporting a constant). Hand-checked in server mode, in light and dark: create, Test with a missing file and then a good one, Save, connect, run, the Postgres error, edit with "Saved in Keychain" and Forget, delete through the confirm. The final review fixed two more things: save and delete touch the Keychain only for a saved password (621b8e8), and a Test result for settings since edited is dropped (e1035d4).
 
 ### Task 11: End to end
 
 **Files:** `frontend/e2e/profiles.spec.ts`.
 
-- [ ] **Step 1:** Write the spec from the Testing list against `QUEL_E2E_DB`. Locate fields by label and buttons by role and name.
-- [ ] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all specs pass, the query-loop ones included.
-- [ ] **Step 3: Commit** `Test profiles end to end`.
+- [x] **Step 1:** Write the spec from the Testing list against `QUEL_E2E_DB`. Locate fields by label and buttons by role and name.
+- [x] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all specs pass, the query-loop ones included.
+- [x] **Step 3: Commit** `Test profiles end to end`.
+
+> Deviation: a second spec covers a duplicate name. `scripts/e2e.sh` needs `CGO_ENABLED=0 GOFLAGS=-tags=server` for the whole script here, since its `lgx fe-build` builds the runtime too.
 
 ### Task 12: Docs
 
 **Files:** `docs/DESIGN.md`, `README.md`, `AGENTS.md`.
 
-- [ ] **Step 1:** DESIGN: in "Connections and sessions", the profile fields this slice stores (read-only and confirm come with milestone 2) and the Keychain service/account; a short "App database" paragraph (data dir rules, `QUEL_DATA_DIR`, migrations inline); the Handler API row for Profiles and Connections (`connect` takes a profile id; `choose-file`; `open-db`/`close-db` for ad-hoc opens); the Upstream row for `keyring`, marked done in `keyring-v0.1.0`; milestone 1's line ("profiles and Keychain" done, with the date).
-- [ ] **Step 2:** README: where profiles live; `QUEL_DATA_DIR` and `QUEL_SECRETS=memory`. AGENTS.md: one line under "Rules that bite" saying that server-mode runs use `QUEL_SECRETS=memory` and a temp `QUEL_DATA_DIR`, so they never touch the real Keychain or profiles.
-- [ ] **Step 3: Commit** `Document profiles and the app database`.
+- [x] **Step 1:** DESIGN: in "Connections and sessions", the profile fields this slice stores (read-only and confirm come with milestone 2) and the Keychain service/account; a short "App database" paragraph (data dir rules, `QUEL_DATA_DIR`, migrations inline); the Handler API row for Profiles and Connections (`connect` takes a profile id; `choose-file`; `open-db`/`close-db` for ad-hoc opens); the Upstream row for `keyring`, marked done in `keyring-v0.1.0`; milestone 1's line ("profiles and Keychain" done, with the date).
+- [x] **Step 2:** README: where profiles live; `QUEL_DATA_DIR` and `QUEL_SECRETS=memory`. AGENTS.md: one line under "Rules that bite" saying that server-mode runs use `QUEL_SECRETS=memory` and a temp `QUEL_DATA_DIR`, so they never touch the real Keychain or profiles.
+- [x] **Step 3: Commit** `Document profiles and the app database`.
+
+> AGENTS.md also gets the `sqlite-uri` rule.
 
 ### Task 13: Backlog
 
-- [ ] **Step 1:** Add `docs/backlog/ask-for-unsaved-password.md` (`**Status: open**`): a profile without a saved password connects without one; a prompt on connect (kept for the session only) would cover people who do not want passwords stored. Follow AGENTS.md's backlog rules.
-- [ ] **Step 2: Commit** `Backlog: ask for a password that is not saved`.
+- [x] **Step 1:** Add `docs/backlog/ask-for-unsaved-password.md` (`**Status: open**`): a profile without a saved password connects without one; a prompt on connect (kept for the session only) would cover people who do not want passwords stored. Follow AGENTS.md's backlog rules.
+- [x] **Step 2: Commit** `Backlog: ask for a password that is not saved`.
 
 ### Task 14: Review, PR, macOS checks
 
-- [ ] **Step 1:** A codex review of the branch against master in the background. Fold real findings; re-run `lgx test-pg`, the frontend tests, `lgx smoke-pg` and `lgx e2e`.
+- [x] **Step 1:** A codex review of the branch against master in the background. Fold real findings; re-run `lgx test-pg`, the frontend tests, `lgx smoke-pg` and `lgx e2e`.
 - [ ] **Step 2:** Push, open a PR against `master`, link it, wait for CI to go green. Do not merge without the user.
 - [ ] **Step 3:** Hand the user the macOS checklist from the Testing section.
+
+> The final review found two more: a profile could be deleted while its own connection was still opening and land connected afterwards, and the dialog overflowed a 720×480 window. Both fixed in 1265bde. Re-run after them: `lgx test-pg` (125 tests), frontend (111), `lgx smoke-pg`, `lgx e2e` (7).
+
+## Completion summary
+
+Implemented, Tasks 1-13 and the review, 2026-10-23, on branch `profiles`.
+
+- **Upstream:** letgo-packages #13 (merged), `keyring-v0.1.0`: `put!`,
+  `get`, `delete!` and `use-memory!` over go-keyring v0.2.8, an in-tree
+  shim with one lock around every call.
+- **Backend:** `quel.store`, the app database in the per-user data dir,
+  migrated with ragtime, its pragmas in the DSN. `quel.secrets` keeps
+  passwords in the Keychain, or in memory with `QUEL_SECRETS=memory`.
+  `quel.profiles` normalizes, validates, saves and deletes profiles under
+  one lock, decides the password through one rule for save and test, and
+  builds the target. `quel.conn` gains `open-target!`, `check!`, DSN
+  targets, escape-aware redaction, and `file:` URIs for every SQLite open.
+  Handlers: `list-profiles`, `save-profile`, `delete-profile`,
+  `test-connection`, `connect`, `choose-file`. File gets "New Connection…".
+- **Frontend:** the Connections panel (saved profiles, plus Quick open),
+  the profile dialog (one input per field, Test before saving, Forget
+  saved password, delete with a confirm), colour tags on the connection
+  dot, `connectProfile`.
+- **Verified:** `lgx test-pg`, frontend unit tests, lint and build,
+  `lgx smoke-pg`, `lgx e2e`, and the UI by hand in server mode, light and
+  dark. Not run: the macOS Keychain itself (no Mac here; the list is in
+  the Testing section).
+
+Deviations, in one place:
+
+- `put!` instead of `set!` (a let-go special form); let-go's `mkdir` (no
+  `os/mkdir-p`), and no `:file?` in `os/stat`.
+- `effective-password` takes the store and reads the Keychain only when a
+  password is saved; a SQLite profile always forgets its password.
+- `dsn-quote` landed in Task 5; the Postgres profile tests have their own
+  env in `pg_test`.
+- shadcn's `cn` import fixed; the dialog's state lives in an inner
+  component; the colour classes moved to `colors.ts`.
+- Real bugs that codex found along the way, all fixed with tests:
+  - a `?` in a SQLite path opened another file, in the store and in profiles;
+  - concurrent saves of one profile could break `has_password`;
+  - a port past the long range quietly became the default;
+  - save, delete, test and connect asked the Keychain with no password saved;
+  - a stale Test result replaced the current one;
+  - a delete could race a connect;
+  - the dialog overflowed a small window.
+
+**What the plan could have specified better:** that the Keychain may be
+absent, as on any Linux box with no Secret Service. The plan treated it as
+always reachable, so four review rounds each found one more path that
+touched it without need. A plan that adds an external dependency should
+say which operations must work without it.
