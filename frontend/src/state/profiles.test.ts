@@ -9,12 +9,17 @@ const api = vi.hoisted(() => ({
   connect: vi.fn(),
   closeDb: vi.fn(),
   closeSession: vi.fn(),
+  loadWorkspace: vi.fn(),
+  saveWorkspace: vi.fn(),
+  selectedProfile: vi.fn(),
+  selectProfile: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);
 const dropped = vi.hoisted(() => [] as string[]);
 vi.mock("@/editor/states", () => ({
   currentInput: () => ({ text: "", selection: { from: 0, to: 0 } }),
   dropState: (id: string) => dropped.push(id),
+  seed: () => {},
 }));
 
 const { store, initialState, newWorkspace } = await import("./store");
@@ -43,6 +48,9 @@ beforeEach(() => {
   dropped.length = 0;
   store.setState(initialState(), true);
   api.closeDb.mockResolvedValue(undefined);
+  api.selectProfile.mockResolvedValue(undefined);
+  api.selectedProfile.mockResolvedValue(null);
+  api.loadWorkspace.mockResolvedValue({ tabs: [], "active-tab": null, "next-tab-number": 1, closed: [] });
 });
 
 describe("profiles", () => {
@@ -59,17 +67,38 @@ describe("profiles", () => {
     api.listProfiles.mockResolvedValue([p("a"), p("b")]);
     await profiles.loadProfiles();
     expect(store.getState().selected).toBeNull();
-    profiles.restoreSelection();
+    await profiles.restoreSelection();
     expect(store.getState().selected).toBe("a");
     expect(store.getState().workspaces.a).toMatchObject({ status: "disconnected" });
     expect(api.connect).not.toHaveBeenCalled();
   });
 
-  it("restoring keeps a selection already made", () => {
+  it("restoring keeps a selection already made", async () => {
     store.setState({ profiles: [p("a"), p("b")] });
-    runner.selectProfile("b");
-    profiles.restoreSelection();
+    void runner.selectProfile("b");
+    await profiles.restoreSelection();
     expect(store.getState().selected).toBe("b");
+  });
+
+  it("restoring selects the profile saved last time, without saving it again", async () => {
+    store.setState({ profiles: [p("a"), p("b")] });
+    api.selectedProfile.mockResolvedValue("b");
+    await profiles.restoreSelection();
+    expect(store.getState().selected).toBe("b");
+    expect(store.getState().workspaces.b).toBeDefined();
+    expect(api.selectProfile).not.toHaveBeenCalled();
+  });
+
+  it("restoring falls back to the first profile and does not write that back", async () => {
+    store.setState({ profiles: [p("a"), p("b")] });
+    api.selectedProfile.mockResolvedValue("deleted");
+    await profiles.restoreSelection();
+    expect(store.getState().selected).toBe("a");
+    api.selectedProfile.mockRejectedValue(new Error("no db"));
+    store.setState({ selected: null });
+    await profiles.restoreSelection();
+    expect(store.getState().selected).toBe("a");
+    expect(api.selectProfile).not.toHaveBeenCalled();
   });
 
   it("saving a new profile reloads the list and selects it", async () => {

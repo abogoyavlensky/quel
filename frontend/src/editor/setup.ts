@@ -14,11 +14,13 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { Engine } from "@/lib/types";
+import { onEdit } from "@/state/persist";
 import { clearNotice, runCurrent } from "@/state/runner";
 import type { Seed } from "./states";
 
 // A tab's editor state: the extensions every tab shares, and the text and
-// selection a restored tab starts from (its seed, editor/states.ts).
+// selection a restored tab starts from (its seed, editor/states.ts). An
+// edit or a selection change schedules a save of the tab's workspace.
 
 // The dialect follows the open database. lang-sql completes its keywords;
 // schema completion comes with the structure browser.
@@ -85,7 +87,7 @@ function selectionOf(seed: Seed | undefined) {
   return EditorSelection.single(clamp(seed.from), clamp(seed.to));
 }
 
-export function newState(engine: Engine | null, seed?: Seed): EditorState {
+export function newState(engine: Engine | null, seed?: Seed, tabId?: string): EditorState {
   return EditorState.create({
     doc: seed?.text ?? "",
     selection: selectionOf(seed),
@@ -109,6 +111,7 @@ export function newState(engine: Engine | null, seed?: Seed): EditorState {
       // An edit clears the status bar's "Not connected." notice.
       EditorView.updateListener.of((u) => {
         if (u.docChanged) clearNotice();
+        if (tabId && (u.docChanged || u.selectionSet)) onEdit(tabId);
       }),
     ],
   });

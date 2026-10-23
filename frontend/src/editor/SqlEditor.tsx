@@ -32,7 +32,7 @@ export function SqlEditor({ tabId, engine }: { tabId: string; engine: Engine | n
     const v = view.current;
     if (!v || shown.current === tabId) return;
     if (shown.current) unmountView(shown.current);
-    v.setState(savedState(tabId) ?? newState(engine, seedOf(tabId)));
+    v.setState(savedState(tabId) ?? newState(engine, seedOf(tabId), tabId));
     v.dispatch({ effects: language.reconfigure(sql({ dialect: dialectFor(engine) })) });
     mountView(tabId, v);
     shown.current = tabId;

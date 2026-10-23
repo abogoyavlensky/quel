@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   type ResultTab,
   closeCursors,
-  ensureWorkspace,
   findTab,
   initialState,
   newWorkspace,
@@ -49,15 +48,6 @@ describe("workspaces", () => {
     updateTab(b, (t) => ({ ...t, title: "Changed" }));
     expect(findTab(b)?.title).toBe("Changed");
     expect(findTab(a)?.title).toBe("Query 1");
-  });
-
-  it("makes a workspace once", () => {
-    const w = ensureWorkspace("p");
-    expect(w).toMatchObject({ profileId: "p", status: "disconnected", connId: null, nextTabNumber: 2 });
-    expect(w.tabs.map((t) => t.title)).toEqual(["Query 1"]);
-    expect(w.activeTab).toBe(w.tabs[0].id);
-    expect(ensureWorkspace("p")).toBe(w);
-    expect(Object.keys(store.getState().workspaces)).toEqual(["p"]);
   });
 
   it("closes the cursors of one workspace", () => {

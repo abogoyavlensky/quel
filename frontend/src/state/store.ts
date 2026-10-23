@@ -1,6 +1,6 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { Cell, Column, Profile } from "@/lib/types";
+import type { Cell, ClosedTab, Column, Profile } from "@/lib/types";
 
 // The app's state: the saved profiles and a workspace per profile (its
 // connection, its editor tabs, and each tab's results and messages).
@@ -10,7 +10,9 @@ import type { Cell, Column, Profile } from "@/lib/types";
 // only when its own result changes.
 //
 // Editor documents are not here: editor/states.ts keeps a CodeMirror
-// EditorState per tab.
+// EditorState per tab. Each workspace's tabs are saved to the app database
+// as they change (state/persist.ts) and loaded the first time the profile
+// is selected (ensureWorkspace in state/runner.ts).
 
 // open: more rows on the server; done: all read; closed: the server
 // closed it (a newer run in its tab, idle, an error, a disconnect);
@@ -39,7 +41,8 @@ export interface Message {
 
 export interface EditorTab {
   id: string; // = the backend session-id
-  title: string; // "Query 1", "Query 2", ...
+  title: string; // "Query 1", "Query 2", ..., or the user's name for it
+  pinned: boolean; // first in the bar, and cannot be closed
   runningQueryId: string | null; // the statement or page in flight
   stopping: boolean; // cancel asked: the script stops after this one
   results: ResultTab[];
@@ -51,8 +54,11 @@ export interface EditorTab {
 // while the backend opens or closes the database.
 export type ConnStatus = "disconnected" | "connecting" | "connected" | "disconnecting";
 
-// One profile's editor tabs and its connection. Made the first time the
-// profile is selected; it lives as long as the app runs, connected or not.
+// One profile's editor tabs and its connection. Loaded from the app
+// database the first time the profile is selected; it lives as long as the
+// app runs, connected or not. When the load fails, loadError says why and
+// the workspace is never saved: a failed read must not overwrite the saved
+// tabs.
 export interface Workspace {
   profileId: string;
   status: ConnStatus;
@@ -61,6 +67,8 @@ export interface Workspace {
   tabs: EditorTab[]; // never empty
   activeTab: string;
   nextTabNumber: number;
+  closed: ClosedTab[]; // recently closed, newest first, at most MAX_CLOSED
+  loadError: string | null;
 }
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
@@ -78,11 +86,13 @@ export interface AppState {
 
 export const MESSAGES = "messages";
 export const MAX_MESSAGES = 500;
+export const MAX_CLOSED = 20;
 
 export function newTabState(n: number): EditorTab {
   return {
     id: crypto.randomUUID(),
     title: `Query ${n}`,
+    pinned: false,
     runningQueryId: null,
     stopping: false,
     results: [],
@@ -101,6 +111,8 @@ export function newWorkspace(profileId: string): Workspace {
     tabs: [first],
     activeTab: first.id,
     nextTabNumber: 2,
+    closed: [],
+    loadError: null,
   };
 }
 
@@ -127,15 +139,6 @@ export function selectedWorkspace(s: AppState): Workspace | undefined {
 
 export function activeTabOf(w: Workspace): EditorTab {
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
-}
-
-// The profile's workspace, made on first use.
-export function ensureWorkspace(profileId: string): Workspace {
-  const w = store.getState().workspaces[profileId];
-  if (w) return w;
-  const made = newWorkspace(profileId);
-  store.setState((s) => ({ workspaces: { ...s.workspaces, [profileId]: made } }));
-  return made;
 }
 
 export function updateWorkspace(profileId: string, f: (w: Workspace) => Workspace): void {
