@@ -256,10 +256,10 @@ deleted too." when the workspace has tabs with text.
 
 **Files:** `src/quel/api.lg`, `src/quel/menu.lg`, their tests, `scripts/smoke.sh`.
 
-- [ ] **Step 1: Tests:** handler set; a load/save/reopen round trip in `api_test`; the menu item in `menu_test` (8 clickable items).
-- [ ] **Step 2:** Implement; smoke: save a workspace for the smoke profile, load it back, check the tab text.
-- [ ] **Step 3: Run** `lgx test` and `lgx smoke` (server-mode env). Expected: PASS.
-- [ ] **Step 4: Commit** `Add the workspace handlers and Reopen Closed Tab`.
+- [x] **Step 1: Tests:** handler set; a load/save/reopen round trip in `api_test`; the menu item in `menu_test` (8 clickable items).
+- [x] **Step 2:** Implement; smoke: save a workspace for the smoke profile, load it back, check the tab text.
+- [x] **Step 3: Run** `lgx test` and `lgx smoke` (server-mode env). Expected: PASS.
+- [x] **Step 4: Commit** `Add the workspace handlers and Reopen Closed Tab`.
 
 ### Task 3: Editor seeding
 
