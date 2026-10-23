@@ -2,23 +2,26 @@ import { useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
 import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
-import { loadProfiles, openProfileDialog } from "@/state/profiles";
-import { cancel, closeTab, newTab, runCurrent } from "@/state/runner";
-import { store } from "@/state/store";
+import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
+import { cancel, closeTab, newTab, runCurrent, selectedTabId } from "@/state/runner";
 
-// The app's menu items (quel.menu) arrive as events; the work happens here.
+// The app's menu items (quel.menu) arrive as events; the work happens here,
+// on the selected profile's workspace (nothing, when none is selected).
 function useMenu() {
   useEffect(() => {
-    const active = () => store.getState().activeTab;
+    const active = (f: (tabId: string) => void) => () => {
+      const id = selectedTabId();
+      if (id) f(id);
+    };
     const offs = [
       onEvent("menu:new-tab", () => {
         newTab();
         setTimeout(focusEditor);
       }),
-      onEvent("menu:close-tab", () => void closeTab(active())),
+      onEvent("menu:close-tab", active((id) => void closeTab(id))),
       onEvent("menu:run", () => void runCurrent("statement")),
       onEvent("menu:run-script", () => void runCurrent("script")),
-      onEvent("menu:cancel", () => cancel(active())),
+      onEvent("menu:cancel", active(cancel)),
       onEvent("menu:open-db", (data) => {
         const path = (data as { path?: string } | null)?.path;
         // A chosen file becomes a new SQLite profile, filled in for Save.
@@ -33,7 +36,7 @@ function useMenu() {
 export default function App() {
   useMenu();
   useEffect(() => {
-    void loadProfiles();
+    void loadProfiles().then(restoreSelection);
   }, []);
   return <AppShell />;
 }

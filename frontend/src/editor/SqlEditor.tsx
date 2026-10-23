@@ -15,7 +15,7 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { Engine } from "@/lib/types";
-import { runCurrent } from "@/state/runner";
+import { clearNotice, runCurrent } from "@/state/runner";
 import { mountView, savedState, unmountView } from "./states";
 
 // The SQL editor: one EditorView, showing the active tab's EditorState.
@@ -99,6 +99,10 @@ function newState(engine: Engine | null): EditorState {
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
       language.of(sql({ dialect: dialectFor(engine) })),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
+      // An edit clears the status bar's "Not connected." notice.
+      EditorView.updateListener.of((u) => {
+        if (u.docChanged) clearNotice();
+      }),
     ],
   });
 }
@@ -135,7 +139,7 @@ export function SqlEditor({ tabId, engine }: { tabId: string; engine: Engine | n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId]);
 
-  // A different database: re-highlight for its dialect.
+  // A different profile's engine: re-highlight for its dialect.
   useEffect(() => {
     view.current?.dispatch({ effects: language.reconfigure(sql({ dialect: dialectFor(engine) })) });
   }, [engine]);

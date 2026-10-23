@@ -1,20 +1,27 @@
-import { PencilIcon, PlusIcon, UnplugIcon } from "lucide-react";
+import { PencilIcon, PlugIcon, PlusIcon, UnplugIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { openProfileDialog } from "@/state/profiles";
-import { closeDb, connectProfile } from "@/state/runner";
-import { useApp } from "@/state/store";
+import { connectProfile, disconnectProfile, selectProfile } from "@/state/runner";
+import { type ConnStatus, useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
 const engineLabel = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" } as const;
 
-// The left panel: the saved connections. A click connects one; the
-// connected one can be disconnected, any one edited. New ones come from
-// the + button, or from File > Open Database for a SQLite file.
+const statusLabel: Record<ConnStatus, string> = {
+  connected: "Connected",
+  disconnected: "Not connected",
+  connecting: "Connecting…",
+  disconnecting: "Disconnecting…",
+};
+
+// The left panel: the saved connections. A click selects one and shows its
+// workspace; each connects and disconnects on its own button, and several
+// can be connected at once. New ones come from the + button, or from
+// File > Open Database for a SQLite file.
 export function ConnectionsPanel() {
-  const conn = useApp((s) => s.conn);
-  const switching = useApp((s) => s.switching);
-  const error = useApp((s) => s.dbError);
+  const selected = useApp((s) => s.selected);
+  const workspaces = useApp((s) => s.workspaces);
   const profiles = useApp((s) => s.profiles);
   const profilesError = useApp((s) => s.profilesError);
 
@@ -45,46 +52,56 @@ export function ConnectionsPanel() {
         ) : (
           <ul aria-label="Saved connections" className="-mx-1 flex flex-col">
             {profiles.map((p) => {
-              const connected = conn?.profileId === p.id;
+              const w = workspaces[p.id];
+              const status = w?.status ?? "disconnected";
+              const pending = status === "connecting" || status === "disconnecting";
+              const plugged = status === "connected" || status === "disconnecting";
               return (
-                <li key={p.id} className="group flex items-center">
-                  <button
-                    type="button"
-                    disabled={switching}
-                    aria-current={connected ? "true" : undefined}
-                    title={connected ? `${p.name} (connected)` : `Connect ${p.name}`}
-                    onClick={() => void connectProfile(p.id)}
-                    className={cn(
-                      "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted",
-                      connected && "bg-muted font-medium",
-                    )}
-                  >
-                    <ConnMark engine={p.engine} color={p.color} />
-                    <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
-                  </button>
-                  {connected && (
+                <li key={p.id} className="group flex flex-col">
+                  <div className="flex items-center">
+                    <button
+                      type="button"
+                      aria-current={selected === p.id ? "true" : undefined}
+                      title={statusLabel[status]}
+                      onClick={() => selectProfile(p.id)}
+                      className={cn(
+                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted",
+                        selected === p.id && "bg-muted font-medium",
+                      )}
+                    >
+                      <ConnMark engine={p.engine} color={p.color} status={status} />
+                      <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
+                    </button>
                     <Button
                       size="icon-xs"
                       variant="ghost"
-                      aria-label={`Disconnect ${p.name}`}
-                      title="Disconnect"
-                      disabled={switching}
-                      onClick={() => void closeDb()}
+                      aria-label={`${plugged ? "Disconnect" : "Connect"} ${p.name}`}
+                      title={plugged ? "Disconnect" : "Connect"}
+                      disabled={pending}
+                      className={cn(
+                        status === "disconnected" && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                      )}
+                      onClick={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
                     >
-                      <UnplugIcon />
+                      {plugged ? <UnplugIcon /> : <PlugIcon />}
                     </Button>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={`Edit ${p.name}`}
+                      title={`Edit ${p.name}`}
+                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                      onClick={() => openProfileDialog({ mode: "edit", id: p.id })}
+                    >
+                      <PencilIcon />
+                    </Button>
+                  </div>
+                  {w?.error && (
+                    <p role="alert" className="px-1.5 pb-1 text-xs break-words text-destructive">
+                      {w.error}
+                    </p>
                   )}
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={`Edit ${p.name}`}
-                    title={`Edit ${p.name}`}
-                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                    onClick={() => openProfileDialog({ mode: "edit", id: p.id })}
-                  >
-                    <PencilIcon />
-                  </Button>
                 </li>
               );
             })}
@@ -96,12 +113,6 @@ export function ConnectionsPanel() {
           </p>
         )}
       </section>
-
-      {error && (
-        <p role="alert" className="border-t pt-3 text-xs break-words text-destructive">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

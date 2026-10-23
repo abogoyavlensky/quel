@@ -1,32 +1,45 @@
 import { Button } from "@/components/ui/button";
-import { cancel } from "@/state/runner";
-import { useApp } from "@/state/store";
+import { cancel, connectProfile } from "@/state/runner";
+import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
-// The open database, the active tab's state, and Cancel while something
-// runs there.
+// The selected profile and its connection, the active tab's state, Cancel
+// while something runs there, and Connect when it is not connected.
 export function StatusBar() {
-  const conn = useApp((s) => s.conn);
-  const tab = useApp((s) => s.tabs.find((t) => t.id === s.activeTab));
+  const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
+  const w = useApp(selectedWorkspace);
+  const notice = useApp((s) => s.notice);
+  const tab = w && activeTabOf(w);
   const result = tab?.results.find((r) => r.id === tab.active);
   const running = !!tab?.runningQueryId;
+  const status = w?.status ?? "disconnected";
 
-  let state = "Ready";
-  if (!conn) state = "Connect a database to run queries";
+  let state = "";
+  if (!profile) {
+    // Nothing selected: the name slot says "No connection".
+  } else if (status === "connecting") state = "Connecting…";
+  else if (status === "disconnecting") state = "Disconnecting…";
+  else if (status === "disconnected") state = notice ?? "Not connected";
   else if (tab?.stopping) state = "Canceling…";
   else if (running) state = "Running…";
+  else state = "Ready";
 
   return (
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t bg-muted/30 px-3 text-xs text-muted-foreground">
       <span className="flex min-w-0 items-center gap-1.5">
-        <ConnMark engine={conn?.engine ?? null} color={conn?.color} />
-        <span className="max-w-80 truncate font-mono" title={conn?.label}>
-          {conn ? conn.label : "No database"}
+        <ConnMark engine={profile?.engine ?? null} color={profile?.color} status={profile ? status : "connected"} />
+        <span className="max-w-80 truncate font-mono" title={profile?.name}>
+          {profile ? profile.name : "No connection"}
         </span>
       </span>
       <span role="status" className="flex-1 truncate">
         {state}
       </span>
+      {profile && status === "disconnected" && (
+        <Button size="xs" variant="outline" onClick={() => void connectProfile(profile.id)}>
+          Connect
+        </Button>
+      )}
       {result && !running && (
         <span className="flex gap-3 tabular-nums">
           <span>{result.rows.length.toLocaleString()} rows</span>
