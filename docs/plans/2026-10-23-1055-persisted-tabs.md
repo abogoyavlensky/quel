@@ -305,7 +305,36 @@ deleted too." when the workspace has tabs with text.
 
 ### Task 6: End to end, docs, review, PR
 
-- [ ] **Step 1:** `frontend/e2e/tabs.spec.ts` per the Testing list. **Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all pass. Commit `Test persisted tabs end to end`.
-- [ ] **Step 2:** DESIGN: workspace persistence (what is saved, the tables, the handlers, reopen's new id); mark "workspace restore" done in milestone 1 with the date. Commit `Document persisted tabs`.
-- [ ] **Step 3:** Codex review of the branch in the background; fold real findings; re-run `lgx test-pg`, frontend tests, `lgx smoke-pg`, `lgx e2e`.
-- [ ] **Step 4:** Push, open a PR, link it, wait for CI. Do not merge without the user. Hand the user a macOS check: quit with ⌘Q right after typing and relaunch; tabs and text are back.
+- [x] **Step 1:** `frontend/e2e/tabs.spec.ts` per the Testing list. **Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all pass. Commit `Test persisted tabs end to end`.
+- [x] **Step 2:** DESIGN: workspace persistence (what is saved, the tables, the handlers, reopen's new id); mark "workspace restore" done in milestone 1 with the date. Commit `Document persisted tabs`.
+- [x] **Step 3:** Codex review of the branch in the background; fold real findings; re-run `lgx test-pg`, frontend tests, `lgx smoke-pg`, `lgx e2e`.
+- [x] **Step 4:** Push, open a PR, link it, wait for CI. Do not merge without the user. Hand the user a macOS check: quit with ⌘Q right after typing and relaunch; tabs and text are back.
+
+> Deviation: `tabs.spec.ts` checks the pinned-tab refusal with a middle click, not ⌘W: native menu accelerators do not exist in server mode, and both go through `closeTab`. Its profile name is unique per run, so a Playwright retry starts with no saved tabs.
+
+## Completion
+
+**Status: completed** (2026-10-23, branch `persisted-tabs`).
+
+**What was implemented.** Migration `002-create-editor-tabs` (`editor_tabs`, `workspaces`, `settings`) and `quel.workspace` (`load`, `save!`, `close!`, `reopen!`, `selected-profile`, `select-profile!`, serialised by a lock); six handlers; File > Reopen Closed Tab (⌘⇧T). Frontend: editor seeding (`editor/setup.ts`, seeds in `editor/states.ts`), `state/persist.ts` (a per-profile queue of save/close/reopen, 800 ms debounced saves built at run time, flush on hide/pagehide), async `ensureWorkspace` with a load-error state and Retry, the saved selection restored at start-up (never written back by the fallback), rename (double-click or menu), pin (context menu, pin icon unpins), the recently-closed history menu, "Keep result" wording, and the tab count in the delete confirm. DESIGN documents it (Saved tabs, tables, handlers, milestone line). Tests: 13 backend workspace tests plus api/menu/store updates (140 backend tests), 163 frontend tests (new `persist.test.ts`, `states.test.ts`, runner and profiles tests), `tabs.spec.ts` e2e (9 e2e tests), and a smoke round trip. All green: `lgx test-pg`, `lgx smoke-pg`, `lgx e2e`, frontend test, lint, build. Checked by hand in server mode, light and dark.
+
+**Issues found in review and fixed** (codex, per task and on the branch):
+- Retry after a failed load dropped a live connection; a failed close restored a blank tab instead of the original; concurrent `select-profile` writes could land out of order; double Retry could wipe seeded text; a rolled-back close could reuse a tab number.
+- Rename from the context menu lost focus to the closing menu; unpinning did not clear the "Unpin the tab to close it." hint.
+- A failed close could let the original script run on (now: a per-tab run epoch); a save between a tab leaving the store and its `close-tab` would close it with stale text and trim unrelated history (now: saves list closing tabs until the close lands); a page load cut off by a failed close left an "open" cursor that would skip rows (now closed).
+
+**Deviations, all in one place:**
+- `reopen!` saves the reopened tab as open at once (a quit before the next save keeps it).
+- Closes stamp `closed_at` strictly after the profile's latest, so same-millisecond closes keep their order.
+- The editor's edit listener was wired in Task 4 (with `persist.onEdit`), not Task 3.
+- `ensureWorkspace` lives in `runner.ts`; concurrent callers and Retry share one load.
+- A closed tab's session closes only after `close-tab` succeeds; a run in flight is cancelled at close; a failed close restores the original tab.
+- ⌘⇧T picks "the most recent closed" inside its queued operation.
+- The status bar shows notices while connected too.
+- `select-profile` writes go through an app-wide queue, latest wins; Retry keeps a connection opened meanwhile.
+- Kept shadcn's `import { cn } from "cn"` (a real package; the existing ui components use it).
+- No drag-to-reorder (the Design named it as a trigger but specified no UI).
+- The delete confirm counts tabs only for a loaded workspace.
+- The e2e uses a middle click for the pinned-close check, and a per-run profile name.
+
+**What the plan could have specified better:** the failure interleavings around closing a tab (a run or page load in flight, a save queued between removal and `close-tab`, a failed close restoring the tab) — the plan specified the happy-path order but not what the restored tab and the in-flight work should become, and every review round's must-fix came from there.
