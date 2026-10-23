@@ -86,6 +86,7 @@ beforeEach(() => {
   api.saveWorkspace.mockResolvedValue(undefined);
   api.selectProfile.mockResolvedValue(undefined);
   api.loadWorkspace.mockResolvedValue({ tabs: [], "active-tab": null, "next-tab-number": 1, closed: [] });
+  editor.input = { text: "", selection: { from: 0, to: 0 } };
   editor.dropped = [];
   editor.texts = {};
   editor.seeds = {};
@@ -565,6 +566,34 @@ describe("loading a workspace", () => {
   });
 });
 
+describe("retrying a failed load", () => {
+  it("keeps a connection opened meanwhile", async () => {
+    api.loadWorkspace.mockRejectedValueOnce(new Error("disk I/O error"));
+    await runner.ensureWorkspace("p3");
+    api.connect.mockResolvedValue({ "conn-id": "c3", engine: "postgres", label: "P3", "profile-id": "p3" });
+    await runner.connectProfile("p3");
+    api.loadWorkspace.mockResolvedValueOnce(saved({ tabs: [savedTab("a", "x")] }));
+    await runner.retryLoad("p3");
+    expect(ws("p3")).toMatchObject({ loadError: null, status: "connected", connId: "c3", activeTab: "a" });
+    expect(api.closeDb).not.toHaveBeenCalled();
+  });
+});
+
+describe("the selected profile", () => {
+  it("is saved one write at a time, the last click winning", async () => {
+    const first = deferred<void>();
+    api.selectProfile.mockReturnValueOnce(first.promise);
+    void runner.selectProfile("p2");
+    await vi.waitFor(() => expect(api.selectProfile).toHaveBeenCalledTimes(1));
+    void runner.selectProfile("p3");
+    void runner.selectProfile("p1");
+    first.resolve();
+    await vi.waitFor(() => expect(api.selectProfile).toHaveBeenCalledTimes(2));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(api.selectProfile.mock.calls.map((c) => c[0])).toEqual(["p2", "p1"]);
+  });
+});
+
 describe("saving", () => {
   it("each tab change schedules a save of its workspace", async () => {
     vi.useFakeTimers();
@@ -631,6 +660,27 @@ describe("closing and reopening", () => {
     await runner.closeTab(id);
     expect(ws().tabs.map((t) => t.id)).not.toContain(id);
     expect(ws().closed.map((c) => c.id)).toEqual([id]);
+  });
+
+  it("a failed close of a running tab cancels the run and restores its results", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(500, true));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const id = tabId();
+    const held = deferred<RunResult>();
+    api.run.mockReturnValueOnce(held.promise);
+    void runner.runStatements(id, stmts("select 2"));
+    const running = tab().runningQueryId;
+    const pinnedBefore = tab().results;
+    api.closeTab.mockRejectedValueOnce(new Error("disk full"));
+    await runner.closeTab(id);
+    expect(api.cancel).toHaveBeenCalledWith(running);
+    expect(ws().tabs.map((t) => t.id)).toEqual([id]);
+    expect(ws().nextTabNumber).toBe(2);
+    expect(tab().id).toBe(id);
+    expect(tab()).toMatchObject({ runningQueryId: null, stopping: false });
+    expect(tab().results).toEqual(pinnedBefore);
+    expect(tab().messages).toHaveLength(1);
+    held.resolve(rowsResult(1, false));
   });
 
   it("a pinned tab is not closed", async () => {

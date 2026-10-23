@@ -107,6 +107,23 @@ export function cancelSave(profileId: string): void {
   timers.delete(profileId);
 }
 
+// The selected profile, saved for the next launch. Bridge calls run
+// concurrently on the backend, so the writes go one at a time on an
+// app-wide queue, each sending the latest choice: the last click wins.
+const SELECTION = "\u0000selection";
+let latestSelection: string | null = null;
+let savedSelection: string | null | undefined;
+
+export function rememberSelection(profileId: string): void {
+  latestSelection = profileId;
+  void enqueue(SELECTION, async () => {
+    const id = latestSelection;
+    if (id === savedSelection) return;
+    await api.selectProfile(id);
+    savedSelection = id;
+  }).catch(() => {});
+}
+
 // An edit or a selection change in a tab's editor.
 export function onEdit(tabId: string): void {
   const w = workspaceOfTab(tabId);

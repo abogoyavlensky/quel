@@ -3,7 +3,7 @@ import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import type { Statement } from "@/sql/split";
 import { type RunMode, toRun } from "@/sql/target";
-import { cancelSave, enqueue, flushSave, scheduleSave } from "./persist";
+import { cancelSave, enqueue, flushSave, rememberSelection, scheduleSave } from "./persist";
 import {
   type EditorTab,
   MAX_CLOSED,
@@ -258,8 +258,9 @@ export function selectTab(tabId: string): void {
 // stops; a workspace's last tab is replaced by a fresh one. Then, on the
 // profile's queue after any pending save, the backend keeps it in the
 // recently closed list with that text (a blank one is deleted instead).
-// Only once that has worked does its backend session close: if it fails,
-// the tab comes back where it was, with its text and its session.
+// A run in flight there is cancelled: the user is done with it. Only once
+// the close has worked does the backend session close: if it fails, the
+// tab comes back where it was, with its text, results and session.
 export async function closeTab(tabId: string): Promise<void> {
   const w = workspaceOfTab(tabId);
   const tab = w?.tabs.find((t) => t.id === tabId);
@@ -272,11 +273,15 @@ export async function closeTab(tabId: string): Promise<void> {
   const i = w.tabs.findIndex((t) => t.id === tabId);
   const { text, selection } = currentInput(tabId);
   const title = tab.title;
+  const wasActive = w.activeTab === tabId;
+  let replacement: string | null = null;
+  if (tab.runningQueryId) void api.cancel(tab.runningQueryId).catch(() => {});
   updateWorkspace(profileId, (w) => {
     let rest = w.tabs.filter((t) => t.id !== tabId);
     let nextTabNumber = w.nextTabNumber;
     if (rest.length === 0) {
       rest = [newTabState(nextTabNumber)];
+      replacement = rest[0].id;
       nextTabNumber += 1;
     }
     const activeTab = w.activeTab === tabId ? rest[Math.min(i, rest.length - 1)].id : w.activeTab;
@@ -297,10 +302,21 @@ export async function closeTab(tabId: string): Promise<void> {
   } catch (e) {
     if (!store.getState().workspaces[profileId]) return;
     seed(tabId, text, selection);
+    // As it was, less the run: cancelled above, its reply dropped.
+    const back: EditorTab = {
+      ...tab,
+      runningQueryId: null,
+      stopping: false,
+      results: tab.results.map((r) => ({ ...r, fetching: false })),
+    };
+    // The fresh tab that stood in for it goes, unless typed in since.
+    const stale = replacement !== null && currentInput(replacement).text === "" ? replacement : null;
+    if (stale) dropState(stale);
     updateWorkspace(profileId, (w) => {
-      const tabs = [...w.tabs];
-      tabs.splice(Math.min(i, tabs.length), 0, { ...newTabState(0), id: tabId, title });
-      return { ...w, tabs };
+      const tabs = w.tabs.filter((t) => t.id !== stale);
+      tabs.splice(Math.min(i, tabs.length), 0, back);
+      const activeTab = wasActive || !tabs.some((t) => t.id === w.activeTab) ? tabId : w.activeTab;
+      return { ...w, tabs, activeTab, nextTabNumber: stale ? w.nextTabNumber - 1 : w.nextTabNumber };
     });
     store.setState({ notice: `Could not close the tab: ${errorText(e)}` });
     scheduleSave(profileId);
@@ -399,13 +415,17 @@ export function ensureWorkspace(profileId: string): Promise<Workspace> {
   return p;
 }
 
-async function loadWorkspace(profileId: string): Promise<Workspace> {
-  let made: Workspace;
+// The profile's saved workspace, or one marked with the load error.
+async function readWorkspace(profileId: string): Promise<Workspace> {
   try {
-    made = fromSaved(profileId, await api.loadWorkspace(profileId));
+    return fromSaved(profileId, await api.loadWorkspace(profileId));
   } catch (e) {
-    made = { ...newWorkspace(profileId), loadError: errorText(e) };
+    return { ...newWorkspace(profileId), loadError: errorText(e) };
   }
+}
+
+async function loadWorkspace(profileId: string): Promise<Workspace> {
+  const made = await readWorkspace(profileId);
   const existing = store.getState().workspaces[profileId];
   if (existing) {
     for (const t of made.tabs) dropState(t.id);
@@ -415,15 +435,18 @@ async function loadWorkspace(profileId: string): Promise<Workspace> {
   return made;
 }
 
-// Load a workspace whose load failed again.
+// Load a workspace whose load failed again. Its connection, which may
+// have been opened meanwhile, stays as it is.
 export async function retryLoad(profileId: string): Promise<void> {
-  const w = store.getState().workspaces[profileId];
-  if (!w?.loadError) return;
-  store.setState((s) => {
-    const { [profileId]: _, ...workspaces } = s.workspaces;
-    return { workspaces };
+  if (!store.getState().workspaces[profileId]?.loadError) return;
+  const loaded = await readWorkspace(profileId);
+  let replaced = false;
+  updateWorkspace(profileId, (w) => {
+    if (!w.loadError) return w;
+    replaced = true;
+    return { ...loaded, status: w.status, connId: w.connId, error: w.error };
   });
-  await ensureWorkspace(profileId);
+  if (!replaced) for (const t of loaded.tabs) dropState(t.id);
 }
 
 // Show the profile's workspace, loaded on first select. Never connects.
@@ -431,7 +454,7 @@ export async function retryLoad(profileId: string): Promise<void> {
 // not the start-up fallback, which must not overwrite the saved choice).
 export async function selectProfile(id: string, { remember = true } = {}): Promise<void> {
   store.setState({ selected: id, notice: null });
-  if (remember) void api.selectProfile(id).catch(() => {});
+  if (remember) rememberSelection(id);
   await ensureWorkspace(id);
 }
 
