@@ -33,7 +33,8 @@
 
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
-           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"}
+           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
+           "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 
@@ -120,3 +121,26 @@
         (is (not (str/includes? (pr-str p) "s3cret")))
         (is (not (str/includes? (pr-str (api/list-profiles env)) "s3cret")))
         (is (= "s3cret" (secrets/password (:secrets env) (:id p))))))))
+
+(deftest a-workspace-from-save-to-reopen
+  (with-env
+    (fn [env path]
+      (spit path "")
+      (let [p (:id (api/save-profile env {"name" "W" "engine" "sqlite" "path" path}))]
+        (is (= {:tabs [] :active-tab nil :next-tab-number 1 :closed []} (api/load-workspace env p)))
+        (is (nil? (api/save-workspace env p {"tabs" [{"id" "a" "title" "Query 1" "body" "select 1"
+                                                       "pinned" true "sel-from" 0 "sel-to" 8}]
+                                             "active-tab" "a" "next-tab-number" 2})))
+        (let [closed (api/close-tab env p {"id" "b" "title" "Query 2" "body" "select 2"})
+              w (api/load-workspace env p)]
+          (is (= "select 2" (:body closed)))
+          (is (= [{:id "a" :title "Query 1" :body "select 1" :pinned true :sel-from 0 :sel-to 8}] (:tabs w)))
+          (is (= ["b"] (mapv :id (:closed w))))
+          (let [t (api/reopen-tab env p "b")]
+            (is (= "select 2" (:body t)))
+            (is (= ["a" (:id t)] (mapv :id (:tabs (api/load-workspace env p)))))))
+        (is (nil? (api/selected-profile env)))
+        (is (nil? (api/select-profile env p)))
+        (is (= p (api/selected-profile env)))
+        (is (= "This connection no longer exists."
+               (message-of #(api/save-workspace env "nope" {"tabs" []}))))))))
