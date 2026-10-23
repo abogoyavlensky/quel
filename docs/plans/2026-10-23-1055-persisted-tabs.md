@@ -265,10 +265,12 @@ deleted too." when the workspace has tabs with text.
 
 **Files:** `frontend/src/editor/{setup,states,SqlEditor}.ts(x)`, `states.test.ts`.
 
-- [ ] **Step 1:** Move `newState` and its extensions to `setup.ts`, adding an optional seed (doc and selection, clamped to the doc length) and the update listener hook. `states.ts`: `seed`, `seedOf`, `textOf`; `currentInput` falls back to the seed.
-- [ ] **Step 2: Test** `states.test.ts`: a seeded, never-mounted tab reports its text and selection; a mounted one reports the view's.
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 4: Commit** `Seed editor tabs from saved text`.
+- [x] **Step 1:** Move `newState` and its extensions to `setup.ts`, adding an optional seed (doc and selection, clamped to the doc length) and the update listener hook. `states.ts`: `seed`, `seedOf`, `textOf`; `currentInput` falls back to the seed.
+- [x] **Step 2: Test** `states.test.ts`: a seeded, never-mounted tab reports its text and selection; a mounted one reports the view's.
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 4: Commit** `Seed editor tabs from saved text`.
+
+> Deviation: the edit listener is wired in Task 4, with `persist.onEdit`, since Task 3 has nothing for it to call yet.
 
 ### Task 4: Persisting from the frontend
 
