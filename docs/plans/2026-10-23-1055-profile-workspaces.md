@@ -1,5 +1,7 @@
 # Profile Workspaces Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Each connection profile gets its own workspace (editor tabs, result tabs, messages). Several profiles can be connected at once. Selecting a profile in the sidebar shows its workspace whether it is connected or not, and each profile has its own Connect/Disconnect button.
@@ -223,50 +225,109 @@ this plan.
 
 **Files:** `frontend/src/state/store.ts`, `frontend/src/state/store.test.ts`.
 
-- [ ] **Step 1:** Cut branch `workspaces` from master (after PR #4 merged), or from `profiles` if not merged yet.
-- [ ] **Step 2: Write** `store.test.ts` for the helpers in the Design (`workspaceOfTab`, `findTab`, `updateTab` across two workspaces, `ensureWorkspace` idempotent, `closeCursors` limited to one workspace, `selectedWorkspace`).
-- [ ] **Step 3:** Implement the new state shape and helpers. Keep `newTabState`, `addMessage`, `updateResult` (now via `updateTab`). Remove `conn`, `switching`, `dbError` and the top-level tab fields. TypeScript will now flag every reader; leave them broken until Task 2-4.
-- [ ] **Step 4: Run** `npm --prefix frontend test -- store`. Expected: the new tests PASS (others may fail to compile until Task 2).
+- [x] **Step 1:** Cut branch `workspaces` from master (after PR #4 merged), or from `profiles` if not merged yet.
+> Deviation: the branch is `workspaces-feat`, cut from master by the user (PR #4 already merged).
+
+- [x] **Step 2: Write** `store.test.ts` for the helpers in the Design (`workspaceOfTab`, `findTab`, `updateTab` across two workspaces, `ensureWorkspace` idempotent, `closeCursors` limited to one workspace, `selectedWorkspace`).
+- [x] **Step 3:** Implement the new state shape and helpers. Keep `newTabState`, `addMessage`, `updateResult` (now via `updateTab`). Remove `conn`, `switching`, `dbError` and the top-level tab fields. TypeScript will now flag every reader; leave them broken until Task 2-4.
+- [x] **Step 4: Run** `npm --prefix frontend test -- store`. Expected: the new tests PASS (others may fail to compile until Task 2).
 
 ### Task 2: Runner
 
 **Files:** `frontend/src/state/runner.ts`, `frontend/src/state/runner.test.ts`.
 
-- [ ] **Step 1: Rework the tests** to the workspace shape (the Testing list). Seed state with two workspaces through a small helper in the test file.
-- [ ] **Step 2:** Implement: `runStatements`/`fetchMore` read the connId from `workspaceOfTab(tabId)` and treat "workspace not connected or connId changed" as today's "database changed"; `selectProfile`, `connectProfile`, `disconnectProfile` per the Design; `runCurrent` with the notice; `newTab`, `selectTab`, `closeTab` on the owning/selected workspace. Remove `switchDb` and `closeDb` (callers move to `disconnectProfile`).
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: runner and store PASS; profiles tests may still fail.
-- [ ] **Step 4: Commit** `Hold a workspace per profile, several connected at once`.
+- [x] **Step 1: Rework the tests** to the workspace shape (the Testing list). Seed state with two workspaces through a small helper in the test file.
+- [x] **Step 2:** Implement: `runStatements`/`fetchMore` read the connId from `workspaceOfTab(tabId)` and treat "workspace not connected or connId changed" as today's "database changed"; `selectProfile`, `connectProfile`, `disconnectProfile` per the Design; `runCurrent` with the notice; `newTab`, `selectTab`, `closeTab` on the owning/selected workspace. Remove `switchDb` and `closeDb` (callers move to `disconnectProfile`).
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: runner and store PASS; profiles tests may still fail.
+- [x] **Step 4: Commit** `Hold a workspace per profile, several connected at once`.
+
+> Deviation: the runner also exports `clearNotice()` (the editor calls it on an edit) and `selectedTabId()` (for the menu events), and `disconnectProfile` keeps a failed `closeDb` message in the workspace's `error`. Codex flagged only the consumers the plan leaves broken until Tasks 3-4.
 
 ### Task 3: Profiles actions
 
 **Files:** `frontend/src/state/profiles.ts`, `frontend/src/state/profiles.test.ts`.
 
-- [ ] **Step 1: Tests** per the Testing list.
-- [ ] **Step 2:** Implement: `restoreSelection()` (called from `App.tsx` after `loadProfiles()`); select the saved profile after creating one; delete guard per workspace; disconnect then delete then drop the workspace and its editor states; re-select after deleting the selected one.
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 4: Commit** `Select, connect and delete profiles per workspace`.
+- [x] **Step 1: Tests** per the Testing list.
+- [x] **Step 2:** Implement: `restoreSelection()` (called from `App.tsx` after `loadProfiles()`); select the saved profile after creating one; delete guard per workspace; disconnect then delete then drop the workspace and its editor states; re-select after deleting the selected one.
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 4: Commit** `Select, connect and delete profiles per workspace`.
+
+> Deviation: codex found that a reconnect during the delete could leave a live connection behind; deleting now closes any connection the dropped workspace still holds (fixup commit).
 
 ### Task 4: UI
 
 **Files:** `ConnMark.tsx`, `ConnectionsPanel.tsx`, `StatusBar.tsx`, `AppShell.tsx`, `EditorTabs.tsx`, `ResultTabs.tsx`, `ProfileDialog.tsx`, `App.tsx`.
 
-- [ ] **Step 1:** `ConnMark` `status` prop (filled / hollow ring / pulsing; `aria-hidden` stays, the row title carries the words).
-- [ ] **Step 2:** `ConnectionsPanel` per the Sidebar section. `StatusBar` per its section. `AppShell`/`EditorTabs`/`ResultTabs` read the selected workspace (render a quiet "Add a connection to start" placeholder in the main area when there is none). `App.tsx` menu events target the selected workspace.
-- [ ] **Step 3: Verify by hand** in server mode (`QUEL_SECRETS=memory QUEL_DATA_DIR=$(mktemp -d)`, the server-mode env from AGENTS.md, headless browser): two SQLite profiles, connect both, run in each, switch back and forth, disconnect one, ⌘Enter on it, Connect from the status bar; light and dark.
-- [ ] **Step 4: Run** `npm --prefix frontend test && npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: PASS, no new lint warnings.
-- [ ] **Step 5: Commit** `Select profiles in the sidebar and connect each on its own`.
+- [x] **Step 1:** `ConnMark` `status` prop (filled / hollow ring / pulsing; `aria-hidden` stays, the row title carries the words).
+- [x] **Step 2:** `ConnectionsPanel` per the Sidebar section. `StatusBar` per its section. `AppShell`/`EditorTabs`/`ResultTabs` read the selected workspace (render a quiet "Add a connection to start" placeholder in the main area when there is none). `App.tsx` menu events target the selected workspace.
+- [x] **Step 3: Verify by hand** in server mode (`QUEL_SECRETS=memory QUEL_DATA_DIR=$(mktemp -d)`, the server-mode env from AGENTS.md, headless browser): two SQLite profiles, connect both, run in each, switch back and forth, disconnect one, ⌘Enter on it, Connect from the status bar; light and dark.
+- [x] **Step 4: Run** `npm --prefix frontend test && npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: PASS, no new lint warnings.
+- [x] **Step 5: Commit** `Select profiles in the sidebar and connect each on its own`.
+
+> Deviation: `ConnMark` draws in `currentColor`, so `colors.ts` gained text-colour twins of the engine and tag maps (`engineText`, `tagText`) for the filled dot and the hollow ring. With nothing selected the status bar shows "No connection" in the name slot and an empty status. An edit clears the notice through an editor update listener calling the runner's `clearNotice()`.
+> Deviation: the hand check ran through `mise exec` with the server-mode env: the shell's `PATH` had a global lgx 0.4.2 that rejects `:go/build-tags`; the repo pins 0.5.1 in `.mise.toml`.
 
 ### Task 5: End to end
 
 **Files:** `frontend/e2e/*`, `scripts/e2e.sh`.
 
-- [ ] **Step 1:** `scripts/e2e.sh`: make a second fixture file (`t2` with 10 rows) and pass `QUEL_E2E_DB2`. `connect.ts`: select the profile, click "Connect <name>", wait for the status bar to show the name and "Ready". Adjust `profiles.spec.ts` (connect is now a button; the connected row is no longer the highlighted one).
-- [ ] **Step 2:** Write `workspaces.spec.ts` per the Testing list.
-- [ ] **Step 3: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all pass.
-- [ ] **Step 4: Commit** `Test profile workspaces end to end`.
+- [x] **Step 1:** `scripts/e2e.sh`: make a second fixture file (`t2` with 10 rows) and pass `QUEL_E2E_DB2`. `connect.ts`: select the profile, click "Connect <name>", wait for the status bar to show the name and "Ready". Adjust `profiles.spec.ts` (connect is now a button; the connected row is no longer the highlighted one).
+- [x] **Step 2:** Write `workspaces.spec.ts` per the Testing list.
+- [x] **Step 3: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: all pass.
+- [x] **Step 4: Commit** `Test profile workspaces end to end`.
+
+> Deviation: `connect.ts` also exports `ensureProfile`, `selectAndConnect` and `profileRow`, shared by `workspaces.spec.ts`. After a delete, `profiles.spec.ts` checks that the status bar no longer names the profile instead of expecting a fixed text, since the selection moves to whichever profile remains.
 
 ### Task 6: Docs, review, PR
 
-- [ ] **Step 1:** DESIGN Frontend section: the workspace model, select vs connect, the "not connected" behaviour, one connection per tab per connected profile; update the layout sketch (sidebar = profiles with status and Connect). Commit `Document profile workspaces`.
-- [ ] **Step 2:** Codex review of the branch against its base in the background; fold real findings; re-run frontend tests, `lgx smoke`, `lgx e2e`.
-- [ ] **Step 3:** Push, open a PR, link it, wait for CI. Do not merge without the user.
+- [x] **Step 1:** DESIGN Frontend section: the workspace model, select vs connect, the "not connected" behaviour, one connection per tab per connected profile; update the layout sketch (sidebar = profiles with status and Connect). Commit `Document profile workspaces`.
+- [x] **Step 2:** Codex review of the branch against its base in the background; fold real findings; re-run frontend tests, `lgx smoke`, `lgx e2e`.
+- [x] **Step 3:** Push, open a PR, link it, wait for CI. Do not merge without the user.
+
+> Deviation: codex-cli 0.163 refuses a focus prompt together with `--base`, so the branch review ran with its built-in prompt.
+
+---
+
+**Status: completed** (2026-10-23)
+
+## Summary
+
+Implemented as designed, frontend only. The store holds a `Workspace` per
+profile (status, connId, error, tabs), made on first select. The runner
+selects, connects and disconnects each profile on its own, checks the tab's
+own workspace after every await, and refuses ⌘Enter on a disconnected
+workspace with a "Not connected." notice. Profiles select the first profile
+at start-up (`restoreSelection`), select a newly saved one, guard delete per
+workspace and drop the workspace with its editor states. The sidebar
+selects rows and has a Connect/Disconnect button and per-row error per
+profile, the status bar has a Connect button, and `ConnMark` shows the
+connection status. e2e covers two connected profiles in `workspaces.spec.ts`.
+DESIGN documents the model.
+
+Verification: 128 frontend unit tests, `lgx test`, `lgx smoke`, and `lgx e2e`
+(8 tests) pass. I also checked by hand in server mode (headless Chromium, two
+SQLite profiles, light and dark). `lgx test-pg` / `smoke-pg` were not run (no
+backend change).
+
+Issues: codex found one real race. A profile connected again while its
+delete was in flight could leave an unreachable live connection; fixed in
+`bd8c2a0`. The shell's global lgx 0.4.2 rejects master's `lgx.edn`; run
+tasks through `mise exec` (the repo pins 0.5.1).
+
+Deviations, gathered:
+- Branch `workspaces-feat`, cut by the user from master (PR #4 merged).
+- The runner also exports `clearNotice()` and `selectedTabId()`;
+  `disconnectProfile` keeps a failed `closeDb` message in `error`.
+- Deleting a profile closes any connection its dropped workspace holds.
+- `colors.ts` gained text-colour maps (`engineText`, `tagText`) for
+  `ConnMark`; the status bar says "No connection" in the name slot when
+  nothing is selected; an editor update listener clears the notice.
+- `connect.ts` exports `ensureProfile`, `selectAndConnect`, `profileRow`.
+  After a delete, `profiles.spec.ts` checks that the status bar no longer
+  names the profile.
+- The branch review ran without a focus prompt (codex flag limits).
+
+What the plan could have specified better: how the editor clears the notice
+("on edit" needed a hook into CodeMirror the plan did not name), and which
+lgx the commands need (the tasks fail on a stale global lgx).
+
