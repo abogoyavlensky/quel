@@ -105,6 +105,36 @@ describe("profiles", () => {
     expect(store.getState().selected).toBe("b");
   });
 
+  it("a connect made while the delete runs is closed with the workspace", async () => {
+    store.setState({ profiles: [p("a")], selected: "a", workspaces: { a: newWorkspace("a") } });
+    api.connect.mockResolvedValue({ "conn-id": "c2", engine: "postgres", label: "P a", "profile-id": "a" });
+    api.deleteProfile.mockImplementation(() => runner.connectProfile("a"));
+    api.listProfiles.mockResolvedValue([]);
+    await profiles.deleteProfile("a");
+    expect(api.closeDb).toHaveBeenCalledWith("c2");
+    expect(store.getState().workspaces.a).toBeUndefined();
+  });
+
+  it("a connect still opening when the delete ends is closed when it lands", async () => {
+    store.setState({ profiles: [p("a")], selected: "a", workspaces: { a: newWorkspace("a") } });
+    let land!: () => void;
+    api.connect.mockReturnValue(
+      new Promise((res) => {
+        land = () => res({ "conn-id": "c3", engine: "postgres", label: "P a", "profile-id": "a" });
+      }),
+    );
+    let connecting!: Promise<void>;
+    api.deleteProfile.mockImplementation(async () => {
+      connecting = runner.connectProfile("a");
+    });
+    api.listProfiles.mockResolvedValue([]);
+    await profiles.deleteProfile("a");
+    land();
+    await connecting;
+    expect(api.closeDb).toHaveBeenCalledWith("c3");
+    expect(store.getState().workspaces.a).toBeUndefined();
+  });
+
   it("deleting the last profile leaves nothing selected", async () => {
     store.setState({ profiles: [p("a")], selected: "a", workspaces: { a: newWorkspace("a") } });
     api.listProfiles.mockResolvedValue([]);

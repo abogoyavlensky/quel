@@ -50,6 +50,9 @@ export async function deleteProfile(id: string): Promise<void> {
   await api.deleteProfile(id);
   const dropped = store.getState().workspaces[id];
   if (dropped) {
+    // Connected again while the delete ran: nothing will use it now. (A
+    // connect still in flight closes its own once it finds no workspace.)
+    if (dropped.connId) void api.closeDb(dropped.connId).catch(() => {});
     for (const t of dropped.tabs) dropState(t.id);
     store.setState((s) => {
       const { [id]: _, ...workspaces } = s.workspaces;
