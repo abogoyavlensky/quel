@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -72,7 +72,12 @@ function ProfileEditor({ editing }: { editing: Profile | undefined }) {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Bumped on every edit: a Test that finishes after the form changed
+  // answers for settings that are gone, so its result is dropped.
+  const revision = useRef(0);
+
   const set = (patch: Partial<ProfileForm>) => {
+    revision.current += 1;
     setForm((f) => ({ ...f, ...patch }));
     setTest({ state: "idle" });
     setError(null);
@@ -82,13 +87,16 @@ function ProfileEditor({ editing }: { editing: Profile | undefined }) {
   const server = form.engine !== "sqlite";
 
   async function onTest() {
+    const at = revision.current;
     setTest({ state: "testing" });
+    let result: TestState;
     try {
       await testConnection(toInput(form));
-      setTest({ state: "ok" });
+      result = { state: "ok" };
     } catch (e) {
-      setTest({ state: "failed", error: errorText(e) });
+      result = { state: "failed", error: errorText(e) };
     }
+    if (revision.current === at) setTest(result);
   }
 
   async function onSave(e: React.FormEvent) {
