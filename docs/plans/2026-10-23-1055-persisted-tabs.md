@@ -292,12 +292,16 @@ deleted too." when the workspace has tabs with text.
 
 **Files:** `frontend/src/components/{EditorTabs,ResultTabs,ProfileDialog}.tsx`, `frontend/src/state/runner.ts` (+ test), shadcn components, `App.tsx`.
 
-- [ ] **Step 1:** `npx shadcn@latest add context-menu dropdown-menu` (fix any `import { cn } from "cn"` to `@/lib/utils`, as before).
-- [ ] **Step 2: Tests** (runner): rename, blank rename ignored, pin ordering, pinned close refused with the notice, reopen.
-- [ ] **Step 3:** Implement per the Design (Rename, Pin, Recently closed, Delete confirm, "Keep result" wording, `menu:reopen-tab`).
-- [ ] **Step 4: Verify by hand** in server mode: rename, pin, ⌘W on a pinned tab, close and reopen, reload the page and see everything back; light and dark.
-- [ ] **Step 5: Run** frontend test, lint, build. Expected: PASS.
-- [ ] **Step 6: Commit** `Rename and pin editor tabs, and reopen closed ones`.
+- [x] **Step 1:** `npx shadcn@latest add context-menu dropdown-menu` (fix any `import { cn } from "cn"` to `@/lib/utils`, as before).
+- [x] **Step 2: Tests** (runner): rename, blank rename ignored, pin ordering, pinned close refused with the notice, reopen.
+- [x] **Step 3:** Implement per the Design (Rename, Pin, Recently closed, Delete confirm, "Keep result" wording, `menu:reopen-tab`).
+- [x] **Step 4: Verify by hand** in server mode: rename, pin, ⌘W on a pinned tab, close and reopen, reload the page and see everything back; light and dark.
+- [x] **Step 5: Run** frontend test, lint, build. Expected: PASS.
+- [x] **Step 6: Commit** `Rename and pin editor tabs, and reopen closed ones`.
+
+> Deviation: kept shadcn's `import { cn } from "cn"`: `cn` is a real package (`@/lib/utils` re-exports it) and the existing ui components import it the same way, so the plan's "fix the import" step no longer applies.
+> Deviation: no drag-to-reorder: the Design names reorder as a save trigger but specifies no UI for it; pin is the only reordering.
+> Deviation: the delete confirm counts the open tabs with text of a loaded workspace only (a profile never selected this run has no count).
 
 ### Task 6: End to end, docs, review, PR
 
