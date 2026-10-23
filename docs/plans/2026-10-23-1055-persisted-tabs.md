@@ -243,11 +243,14 @@ deleted too." when the workspace has tabs with text.
 
 **Files:** `src/quel/migrations.lg`, `src/quel/workspace.lg`, `test/quel/workspace_test.lg`, `test/quel/store_test.lg`.
 
-- [ ] **Step 1: Write** `workspace_test.lg` per the Testing list (reuse `quel.store-test/with-store`, `quel.profiles` to make profiles).
-- [ ] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server mise exec -- lgx test`. Expected: FAIL.
-- [ ] **Step 3:** Add the migration and implement `quel.workspace` per the Design (`close!` included). Rows map with one `row->tab` fn (`sel_from` → `:sel-from`, `pinned` 0/1 → boolean). Read the map from the frontend with string or keyword keys (the `field` pattern in `quel.profiles`).
-- [ ] **Step 4: Run** the tests. Expected: PASS. Update `store_test`'s migration-id assertion.
-- [ ] **Step 5: Commit** `Save editor tabs per profile in the app database`.
+- [x] **Step 1: Write** `workspace_test.lg` per the Testing list (reuse `quel.store-test/with-store`, `quel.profiles` to make profiles).
+- [x] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server mise exec -- lgx test`. Expected: FAIL.
+- [x] **Step 3:** Add the migration and implement `quel.workspace` per the Design (`close!` included). Rows map with one `row->tab` fn (`sel_from` → `:sel-from`, `pinned` 0/1 → boolean). Read the map from the frontend with string or keyword keys (the `field` pattern in `quel.profiles`).
+- [x] **Step 4: Run** the tests. Expected: PASS. Update `store_test`'s migration-id assertion.
+- [x] **Step 5: Commit** `Save editor tabs per profile in the app database`.
+
+> Deviation: `reopen!` also inserts the reopened tab as open (last position), so a quit before the next frontend save keeps it; the plan left that to the next save.
+> Deviation: `close!` and save-time closes stamp `closed_at` strictly after the profile's latest one, so two closes in one millisecond keep their order.
 
 ### Task 2: Handlers, menu, smoke
 
