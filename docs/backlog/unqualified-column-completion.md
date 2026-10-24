@@ -1,6 +1,7 @@
 # Bare column names do not complete from the FROM clause
 
-**Status: open**
+**Status: planned**
+Plan: docs/plans/2026-10-24-1351-unqualified-column-completion.md
 
 ## Problem
 
