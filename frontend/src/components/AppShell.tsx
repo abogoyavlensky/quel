@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { SqlEditor } from "@/editor/SqlEditor";
+import { namespaceOf } from "@/editor/namespace";
 import type { Completion } from "@/editor/setup";
 import * as api from "@/lib/api";
 import { metaKeys } from "@/lib/query";
@@ -91,7 +92,7 @@ function useCompletion(connId: string | null): Completion | null {
     enabled: connId !== null,
   });
   return useMemo(
-    () => (connId && data ? { schema: data.schemas, defaultSchema: data["default-schema"] ?? undefined } : null),
+    () => (connId && data ? { schema: namespaceOf(data), defaultSchema: data["default-schema"] ?? undefined } : null),
     [connId, data],
   );
 }
