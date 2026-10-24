@@ -1,4 +1,5 @@
 import * as api from "@/lib/api";
+import { metaKeys, queryClient } from "@/lib/query";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import type { Statement } from "@/sql/split";
@@ -579,6 +580,14 @@ export async function disconnectProfile(id: string): Promise<void> {
     error = errorText(e);
   }
   updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error }));
+  // Its cached structure goes with the connection; a reconnect gets a new
+  // conn-id and reads afresh.
+  queryClient.removeQueries({ queryKey: metaKeys.all(connId) });
+}
+
+// The structure tree's open nodes for the profile.
+export function setTreeExpanded(profileId: string, keys: string[]): void {
+  updateWorkspace(profileId, (w) => ({ ...w, treeExpanded: keys }));
 }
 
 // The status bar's notice goes away on the next edit.

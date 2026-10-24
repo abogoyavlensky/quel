@@ -69,6 +69,10 @@ export interface Workspace {
   nextTabNumber: number;
   closed: ClosedTab[]; // recently closed, newest first, at most MAX_CLOSED
   loadError: string | null;
+  // The structure tree's open nodes (state/tree.ts keys), in memory only;
+  // null until the tree first opens the default schema. Names, not ids, so
+  // they hold across a reconnect.
+  treeExpanded: string[] | null;
 }
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
@@ -113,6 +117,7 @@ export function newWorkspace(profileId: string): Workspace {
     nextTabNumber: 2,
     closed: [],
     loadError: null,
+    treeExpanded: null,
   };
 }
 
