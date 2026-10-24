@@ -28,6 +28,9 @@ export interface ResultTab {
   fetching: boolean;
   pinned: boolean;
   elapsedMs: number;
+  // The row the details panel shows, by index; in memory only. A new run
+  // makes new results, so it starts over.
+  selectedRow: number | null;
 }
 
 export interface Message {
@@ -86,6 +89,7 @@ export interface AppState {
   selected: string | null; // the profile whose workspace shows
   workspaces: Record<string, Workspace>; // by profile id
   notice: string | null; // a one-line hint for the status bar
+  rowDetails: boolean; // the row details panel is open; in memory only
 }
 
 export const MESSAGES = "messages";
@@ -129,6 +133,7 @@ export function initialState(): AppState {
     selected: null,
     workspaces: {},
     notice: null,
+    rowDetails: false,
   };
 }
 

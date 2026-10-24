@@ -20,6 +20,7 @@ const result = (id: string): ResultTab => ({
   fetching: false,
   pinned: false,
   elapsedMs: 1,
+  selectedRow: null,
 });
 
 // Two workspaces, a and b, each with one tab holding an open result.

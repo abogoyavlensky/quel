@@ -230,6 +230,42 @@ describe("runStatements", () => {
   });
 });
 
+describe("row details", () => {
+  it("selects a row on one result only", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(3, false)).mockResolvedValueOnce(rowsResult(3, false));
+    await runner.runStatements(tabId(), stmts("select 1; select 2"));
+    const [r1, r2] = tab().results;
+    expect(r1.selectedRow).toBeNull();
+    runner.selectRow(tabId(), r1.id, 2);
+    expect(tab().results.map((r) => r.selectedRow)).toEqual([2, null]);
+    expect(r2.selectedRow).toBeNull();
+  });
+
+  it("starts a new run's results unselected and keeps a pinned one's selection", async () => {
+    api.run.mockResolvedValue(rowsResult(3, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const pinned = tab().results[0].id;
+    runner.selectRow(tabId(), pinned, 1);
+    runner.pin(tabId(), pinned);
+    await runner.runStatements(tabId(), stmts("select 2"));
+    runner.selectRow(tabId(), tab().results[1].id, 0);
+    await runner.runStatements(tabId(), stmts("select 3"));
+    expect(tab().results.map((r) => r.selectedRow)).toEqual([1, null]);
+  });
+
+  it("toggles the panel, and opening leaves it open", () => {
+    expect(store.getState().rowDetails).toBe(false);
+    runner.toggleRowDetails();
+    expect(store.getState().rowDetails).toBe(true);
+    runner.openRowDetails();
+    expect(store.getState().rowDetails).toBe(true);
+    runner.toggleRowDetails();
+    expect(store.getState().rowDetails).toBe(false);
+    runner.openRowDetails();
+    expect(store.getState().rowDetails).toBe(true);
+  });
+});
+
 describe("runCurrent", () => {
   it("runs the statement under the cursor of the active tab", async () => {
     api.run.mockResolvedValue(rowsResult(1, false));
