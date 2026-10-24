@@ -242,14 +242,14 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
 **Files:**
 - Modify: `frontend/src/editor/setup.ts`, `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: `Completion.raw`, `languageFor`.** Add `raw:
+- [x] **Step 1: `Completion.raw`, `languageFor`.** Add `raw:
   CompletionSchema` to `Completion`. With a completion, `languageFor`
   returns `[support, support.language.data.of({ autocomplete:
   columnCompletionSource(completion.raw, engine) })]`, else `support` alone.
   Update the comment above `language` to mention bare columns.
-- [ ] **Step 2: `useCompletion`** adds `raw: data`.
-- [ ] **Step 3: Run** build, lint, tests. Expected: PASS.
-- [ ] **Step 4: Check by hand** in server mode, never against the real
+- [x] **Step 2: `useCompletion`** adds `raw: data`.
+- [x] **Step 3: Run** build, lint, tests. Expected: PASS.
+- [x] **Step 4: Check by hand** in server mode, never against the real
   profiles or Keychain (AGENTS.md): `CGO_ENABLED=0 GOFLAGS=-tags=server
   WAILS_SERVER_PORT=34567 LGX_RUN=1 QUEL_SECRETS=memory
   QUEL_DATA_DIR=$(mktemp -d) lgx run`, with a SQLite profile on a
@@ -261,7 +261,9 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
   - `select * from cu` still offers `customers`;
   - `select * from customers where na` offers `name` without Ctrl+Space
     once typing starts.
-- [ ] **Step 5: Commit.** `git commit -m "Offer bare columns in the editor"`
+- [x] **Step 5: Commit.** `git commit -m "Offer bare columns in the editor"`
+
+> Deviation: the hand check ran on port 34611 (34567 was held by a server-mode instance left from an earlier session) and was driven by a throwaway Playwright script rather than by hand; all four checks held.
 
 ### Task 3: End to end, docs
 
