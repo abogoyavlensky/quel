@@ -22,15 +22,17 @@ const WORD = new Set(["Identifier", "QuotedIdentifier", "Keyword", "Type"]);
 const NAME = new Set([...WORD, "CompositeIdentifier"]);
 const COMMENT = new Set(["LineComment", "BlockComment"]);
 // A table name follows these; FROM and JOIN start a comma-separated list
-// that the others end.
+// that the others end. A join's ON or USING does not end it
+// (`from a join b on ..., c`).
 const TABLE_AFTER = new Set(["from", "join", "update", "into", "table"]);
 const END_FROM = new Set(
-  "where group having order union intersect except limit offset fetch for on using set values".split(" "),
+  "where group having order union intersect except limit offset fetch for set values".split(" "),
 );
 // Between a table keyword and its table (`from only t`, `join lateral`).
 const TABLE_MODIFIER = new Set(["only", "lateral"]);
-// A compound query's SELECTs see their own tables only.
-const SET_OP = new Set(["union", "intersect", "except"]);
+// Each SELECT sees its own tables only: a compound query's SELECTs, and
+// the SELECT of an INSERT ... SELECT apart from the target's column list.
+const BRANCH = new Set(["select", "union", "intersect", "except"]);
 
 // Reserved words, applied quoted. From PostgreSQL 17's Appendix C, SQL Key
 // Words: the words marked "reserved" and "reserved (can be function or
@@ -122,6 +124,7 @@ function walk(doc: Text, scope: Node, upTo: number, table?: (n: Node) => void): 
 
 interface Slot {
   from: number;
+  to?: number; // the end of a closed quoted name the cursor is inside
   quote: string | null; // the opening quote when inside a quoted name
   container: Node; // the Statement or Parens holding the cursor
 }
@@ -152,7 +155,8 @@ function shouldAnswer(context: CompletionContext): Slot | null {
   if (WORD.has(node.name) && node.parent) {
     if (node.parent.name === "CompositeIdentifier") return null;
     const quote = node.name === "QuotedIdentifier" ? state.doc.sliceString(node.from, node.from + 1) : null;
-    slot = { from: node.from, quote, container: node.parent };
+    const closed = quote !== null && node.to - node.from > 1 && state.doc.sliceString(node.to - 1, node.to) === closing(quote);
+    slot = { from: node.from, to: closed ? node.to : undefined, quote, container: node.parent };
   } else {
     const container = explicit ? containerAt(node, pos) : null;
     if (!container) return null;
@@ -186,13 +190,13 @@ function partOf(doc: Text, n: Node): Part {
   return { name: m[2].split(m[3] + m[3]).join(m[3]), quoted: true };
 }
 
-// The scope's tables as paths: `[table]` or `[schema, table]`. In a
-// compound query, only those of the SELECT around `pos`.
+// The scope's tables as paths: `[table]` or `[schema, table]`, only those
+// of the branch around `pos` (BRANCH).
 function tablesIn(doc: Text, scope: Node, pos: number): Part[][] {
   let from = scope.from;
   let to = scope.to;
   for (let n = scope.firstChild; n; n = n.nextSibling) {
-    if (!SET_OP.has(keyword(doc, n) ?? "")) continue;
+    if (!BRANCH.has(keyword(doc, n) ?? "")) continue;
     if (n.to <= pos) from = n.to;
     else if (n.from >= pos) to = Math.min(to, n.from);
   }
@@ -207,14 +211,13 @@ function tablesIn(doc: Text, scope: Node, pos: number): Part[][] {
   return paths;
 }
 
-// One name among `names` by the engine's rules: a quoted name exactly; an
-// unquoted one folded to lower case on Postgres and Redshift, and
-// case-insensitively on SQLite (an exact match first).
+// One name among `names` by the engine's rules. On Postgres and Redshift
+// a quoted name matches exactly and an unquoted one folded to lower case;
+// SQLite matches either case-insensitively (an exact match first).
 function pick(names: string[], part: Part, engine: Engine | null): string | undefined {
-  if (part.quoted) return names.find((n) => n === part.name);
   if (engine === "postgres" || engine === "redshift") {
-    const folded = part.name.toLowerCase();
-    return names.find((n) => n === folded);
+    const name = part.quoted ? part.name : part.name.toLowerCase();
+    return names.find((n) => n === name);
   }
   const lower = part.name.toLowerCase();
   return names.find((n) => n === part.name) ?? names.find((n) => n.toLowerCase() === lower);
@@ -287,7 +290,6 @@ export function columnCompletionSource(schema: CompletionSchema, engine: Engine 
       .filter((t) => t !== null);
     const opts = options(tables, engine, slot.quote);
     if (!opts.length) return null;
-    const quoteAfter = slot.quote !== null && doc.sliceString(context.pos, context.pos + 1) === closing(slot.quote);
-    return { from: slot.from, to: quoteAfter ? context.pos + 1 : undefined, options: opts, validFor: /^[\w"]*$/ };
+    return { from: slot.from, to: slot.to, options: opts, validFor: /^[\w"]*$/ };
   };
 }

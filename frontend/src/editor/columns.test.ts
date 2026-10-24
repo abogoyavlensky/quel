@@ -107,6 +107,11 @@ describe("columnCompletionSource", () => {
     expect(option(r, "Col").apply).toBe('"Col"');
     expect(option(r, "autoincrement").apply).toBe('"autoincrement"');
     expect(option(r, "notnull").apply).toBe('"notnull"');
+    expect(labels(complete('select ▮ from "mixed"', { engine: "sqlite", explicit: true }))).toEqual([
+      "Col",
+      "autoincrement",
+      "notnull",
+    ]);
   });
 
   it("quotes reserved words by the engine's list", () => {
@@ -158,6 +163,30 @@ describe("columnCompletionSource", () => {
     ]);
   });
 
+  it("keeps an INSERT's target apart from its SELECT", () => {
+    expect(labels(complete("insert into orders select na▮ from customers"))).toEqual(["id", "name", "email"]);
+    expect(labels(complete("insert into orders (to▮) select id from customers"))).toEqual([
+      "id",
+      "customer_id",
+      "total",
+      "order",
+    ]);
+  });
+
+  it("reads a FROM list on past a join condition", () => {
+    const sql = "select ▮ from customers c join orders o on o.customer_id = c.id, sales.leads l";
+    expect(option(complete(sql, { explicit: true }), "id").detail).toBe("customers, orders, leads");
+    const using = "select ▮ from customers join mixed using (id), sales.orders";
+    expect(labels(complete(using, { explicit: true }))).toEqual([
+      "id",
+      "name",
+      "email",
+      "low",
+      "region",
+    ]);
+    expect(complete("select * from customers c join orders o on o.id = c.id, or▮")).toBeNull();
+  });
+
   it("reads past ONLY and LATERAL", () => {
     expect(labels(complete("select e▮ from only customers"))).toEqual(["id", "name", "email"]);
     expect(labels(complete("update only customers set na▮"))).toEqual(["id", "name", "email"]);
@@ -201,5 +230,7 @@ describe("columnCompletionSource", () => {
     expect(r?.to).toBe(11);
     expect(labels(r)).toEqual(['"Col"', '"a""b"']);
     expect(option(r, '"Col"').apply).toBeUndefined();
+    // Mid-name, the whole quoted name is replaced.
+    expect(complete('select "Co▮l" from "Mixed"')?.to).toBe(12);
   });
 });

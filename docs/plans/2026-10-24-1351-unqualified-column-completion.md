@@ -298,10 +298,11 @@ second completion source next to lang-sql's that offers the bare columns of
 the statement's FROM / JOIN / UPDATE / INSERT INTO tables, resolved by each
 engine's case rules, quoted when not plain lower case or reserved (word lists
 pinned to the PostgreSQL 17, Redshift and SQLite pages). Wired through
-`Completion.raw` and `languageFor`; unit tests (17), an e2e check, and a hand
-check in server mode. The Codex review of Task 1 found two real gaps, fixed in
-a follow-up commit: a compound query's SELECTs leaked tables into each other,
-and `from only t` lost the table.
+`Completion.raw` and `languageFor`; unit tests (19), an e2e check, and a hand
+check in server mode. The Codex reviews found real gaps, fixed in follow-up
+commits: tables leaking between a compound query's SELECTs and an INSERT's
+target and source, `from only t`, a FROM list after a join condition, SQLite's
+quoted-name case, and a mid-name quoted completion that corrupted the text.
 
 Deviations, all in place above:
 - `Keyword` and `Type` nodes count as names (lang-sql parses `name`, `user`,
@@ -310,8 +311,13 @@ Deviations, all in place above:
   said otherwise).
 - `table` is a table position for collecting too; a quoted name's doubled
   quote is undoubled when read.
-- Added past the plan from review: set-operation branches scope their tables;
-  `only` / `lateral` keep the table position.
+- Added past the plan from review: set-operation branches and an INSERT's
+  SELECT scope their own tables; `only` / `lateral` keep the table position;
+  `ON` / `USING` no longer end the FROM list; completing inside a closed
+  quoted name replaces all of it.
+- SQLite matches quoted names case-insensitively too (SQLite identifiers
+  are, quoted or not); the plan's "quoted: exactly, on every engine" holds
+  for Postgres and Redshift only.
 - The hand check ran on another port through a throwaway Playwright script;
   e2e ran with lgx 0.5.1 put on PATH.
 
