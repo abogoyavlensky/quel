@@ -44,8 +44,6 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
     getScrollElement: () => scroller.current,
     estimateSize: () => ROW_H,
     overscan: 20,
-    // Or a row scrolled up into view hides under the sticky header.
-    scrollPaddingStart: HEAD_H,
   });
   const cols = useVirtualizer({
     horizontal: true,
@@ -91,7 +89,12 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
     if (last < 0 || (cur === null && e.key === "ArrowUp")) return;
     const next = cur === null ? 0 : Math.max(0, Math.min(last, cur + (e.key === "ArrowDown" ? 1 : -1)));
     selectRow(tabId, result.id, next);
-    rows.scrollToIndex(next, { align: "auto" });
+    // Rows have a fixed height and sit under the sticky header, which the
+    // virtualizer's scrollToIndex does not know about: scroll by hand.
+    const el = e.currentTarget;
+    const top = HEAD_H + next * ROW_H;
+    if (top < el.scrollTop + HEAD_H) el.scrollTop = top - HEAD_H;
+    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
   };
 
   const colItems = cols.getVirtualItems();
