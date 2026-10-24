@@ -1,0 +1,30 @@
+name: macOS signing probe
+
+on:
+  push:
+    branches: [macos-homebrew-release]
+    paths:
+      - .github/workflows/macos-signing-probe.yml
+      - scripts/probe-macos-signing.sh
+      - lgx.edn
+      - .mise.toml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v3
+      - name: Build and probe the production executable
+        run: bash scripts/probe-macos-signing.sh
+      - name: Preserve experiment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-signing-probe
+          path: .tmp/signing-probe/
+          if-no-files-found: warn
