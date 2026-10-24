@@ -8,10 +8,12 @@ import { EditorTabs } from "./EditorTabs";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { StatusBar } from "./StatusBar";
+import { StructureTree } from "./StructureTree";
 
-// The window: the connections on the left; on the right the selected
-// profile's workspace: its editor tabs, the active tab's editor above its
-// results; the status bar below all.
+// The window: the connections on the left, the selected profile's
+// structure under them; on the right that profile's workspace: its editor
+// tabs, the active tab's editor above its results; the status bar below
+// all.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
@@ -23,7 +25,15 @@ export function AppShell() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize="22" minSize={180} className="bg-muted/20">
-          <ConnectionsPanel />
+          <ResizablePanelGroup orientation="vertical">
+            <ResizablePanel defaultSize="40" minSize={80}>
+              <ConnectionsPanel />
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel minSize={120}>
+              <StructureTree />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel minSize={360}>
