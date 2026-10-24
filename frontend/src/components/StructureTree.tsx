@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIsFetching, useQueries, useQuery } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRightIcon, DotIcon, EyeIcon, FolderIcon, FolderOpenIcon, LayersIcon, RefreshCwIcon, Table2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
@@ -135,20 +135,33 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
     getScrollElement: () => scroller.current,
     estimateSize: () => ROW_H,
     overscan: 10,
+    // The focused row stays rendered when scrolled away: it is the tree's
+    // one tab stop.
+    rangeExtractor: (range) => {
+      const shown = defaultRangeExtractor(range);
+      return focusIndex < 0 || shown.includes(focusIndex) ? shown : [...shown, focusIndex].sort((a, b) => a - b);
+    },
   });
 
   // A keyboard move scrolls the row into view and focuses it, once it is
-  // rendered.
+  // rendered. Only a move asks for that: a re-render after a refresh or a
+  // profile switch must not pull focus into the tree.
+  const pendingFocus = useRef(false);
   const [moved, setMoved] = useState(0);
   useEffect(() => {
-    if (moved === 0 || focusIndex < 0) return;
+    if (!pendingFocus.current || focusIndex < 0) return;
+    pendingFocus.current = false;
     virtual.scrollToIndex(focusIndex);
+    let done = false;
     const id = requestAnimationFrame(() => {
+      done = true;
       const el = scroller.current?.querySelector<HTMLElement>(`[data-index="${focusIndex}"]`);
       el?.focus();
     });
     return () => {
       cancelAnimationFrame(id);
+      // Re-rendered before the frame: the next run focuses instead.
+      if (!done) pendingFocus.current = true;
     };
   }, [moved, focusIndex, virtual]);
 
@@ -157,6 +170,7 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
     const r = rows[Math.max(0, Math.min(rows.length - 1, i))];
     if (!r) return;
     setFocusKey(r.key);
+    pendingFocus.current = true;
     setMoved((n) => n + 1);
   };
   const activate = (row: TreeRow) => {
@@ -288,11 +302,11 @@ function RowBody({ row }: { row: TreeRow }) {
         <>
           {chevron(row.expanded)}
           {row.objectKind === "table" ? (
-            <Table2Icon className={icon} aria-label="table" />
+            <Table2Icon className={icon} />
           ) : row.objectKind === "view" ? (
-            <EyeIcon className={icon} aria-label="view" />
+            <EyeIcon className={icon} />
           ) : (
-            <LayersIcon className={icon} aria-label="materialized view" />
+            <LayersIcon className={icon} />
           )}
           <span className="min-w-0 flex-1 truncate">{row.label}</span>
         </>
