@@ -1,6 +1,9 @@
 # Bare column names do not complete from the FROM clause
 
-**Status: open**
+**Status: done**
+
+Landed in `frontend/src/editor/columns.ts` (PR #9), by
+`docs/plans/2026-10-24-1351-unqualified-column-completion.md`, 2026-10-24.
 
 ## Problem
 

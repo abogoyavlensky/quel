@@ -92,7 +92,7 @@ function useCompletion(connId: string | null): Completion | null {
     enabled: connId !== null,
   });
   return useMemo(
-    () => (connId && data ? { schema: namespaceOf(data), defaultSchema: data["default-schema"] ?? undefined } : null),
+    () => (connId && data ? { schema: namespaceOf(data), defaultSchema: data["default-schema"] ?? undefined, raw: data } : null),
     [connId, data],
   );
 }

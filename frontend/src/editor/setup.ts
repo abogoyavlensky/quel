@@ -13,9 +13,10 @@ import {
   lineNumbers,
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
-import type { Engine } from "@/lib/types";
+import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
 import { clearNotice, runCurrent } from "@/state/runner";
+import { columnCompletionSource } from "./columns";
 import type { Seed } from "./states";
 
 // A tab's editor state: the extensions every tab shares, and the text and
@@ -24,7 +25,8 @@ import type { Seed } from "./states";
 
 // The dialect follows the open database, and lang-sql completes its
 // keywords plus, while connected, the database's schema, table and column
-// names (completion-schema, refreshed with the structure tree).
+// names (completion-schema, refreshed with the structure tree). Bare
+// columns of the statement's tables come from editor/columns.ts.
 export const language = new Compartment();
 
 export function dialectFor(engine: Engine | null) {
@@ -34,13 +36,16 @@ export function dialectFor(engine: Engine | null) {
 }
 
 export interface Completion {
-  schema: SQLNamespace;
+  schema: SQLNamespace; // namespaceOf(raw): dots escaped, for lang-sql
   defaultSchema?: string;
+  raw: CompletionSchema; // as completion-schema returned it
 }
 
 export function languageFor(engine: Engine | null, completion: Completion | null) {
   const dialect = dialectFor(engine);
-  return completion ? sql({ dialect, schema: completion.schema, defaultSchema: completion.defaultSchema }) : sql({ dialect });
+  if (!completion) return sql({ dialect });
+  const support = sql({ dialect, schema: completion.schema, defaultSchema: completion.defaultSchema });
+  return [support, support.language.data.of({ autocomplete: columnCompletionSource(completion.raw, engine) })];
 }
 
 // SQL colours from CSS variables (index.css), so the editor follows light
