@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import type { ResultTab } from "@/state/store";
-import { fetchMore } from "@/state/runner";
+import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
 import { display, isNumericType } from "./format";
 import { initialWidths } from "./widths";
 
@@ -10,6 +10,9 @@ import { initialWidths } from "./widths";
 // result or a 300-column table renders only what is on screen. Absolutely
 // positioned divs rather than a <table>: the header sticks to the top, the
 // row numbers to the left. Scrolling near the end loads the next page.
+// A click selects a row (the result keeps it, for the row details panel),
+// ↑/↓ move the selection while the grid has focus, and a double-click
+// also opens the panel.
 
 const ROW_H = 24;
 const HEAD_H = 40;
@@ -41,6 +44,8 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
     getScrollElement: () => scroller.current,
     estimateSize: () => ROW_H,
     overscan: 20,
+    // Or a row scrolled up into view hides under the sticky header.
+    scrollPaddingStart: HEAD_H,
   });
   const cols = useVirtualizer({
     horizontal: true,
@@ -77,6 +82,18 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
     el.addEventListener("pointerup", up);
   };
 
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const last = result.rows.length - 1;
+    const cur = result.selectedRow;
+    if (last < 0 || (cur === null && e.key === "ArrowUp")) return;
+    const next = cur === null ? 0 : Math.max(0, Math.min(last, cur + (e.key === "ArrowDown" ? 1 : -1)));
+    selectRow(tabId, result.id, next);
+    rows.scrollToIndex(next, { align: "auto" });
+  };
+
   const colItems = cols.getVirtualItems();
   const width = NUM_W + cols.getTotalSize();
   const digits = String(result.rows.length).length;
@@ -89,7 +106,9 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
         aria-label="Result"
         aria-rowcount={result.rows.length + 1}
         aria-colcount={result.columns.length}
-        className="relative min-h-0 flex-1 overflow-auto font-mono text-xs"
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        className="relative min-h-0 flex-1 overflow-auto font-mono text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <div style={{ width, height: HEAD_H + rows.getTotalSize() }} className="relative">
           {/* Header: sticks to the top; its corner sticks to the left too. */}
@@ -122,16 +141,28 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
 
           {items.map((r) => {
             const row = result.rows[r.index];
+            const selected = r.index === result.selectedRow;
             return (
               <div
                 key={r.key}
                 role="row"
                 aria-rowindex={r.index + 2}
-                className="absolute left-0 hover:bg-muted/40"
+                aria-selected={selected}
+                onClick={() => selectRow(tabId, result.id, r.index)}
+                onDoubleClick={() => {
+                  selectRow(tabId, result.id, r.index);
+                  openRowDetails();
+                }}
+                className={cn("absolute left-0", selected ? "bg-primary/10" : "hover:bg-muted/40")}
                 style={{ top: HEAD_H + r.start, height: ROW_H, width }}
               >
+                {/* Opaque, so cells scrolled under it stay hidden; the
+                    selection tints it on top. */}
                 <div
-                  className="sticky left-0 z-10 flex h-full items-center justify-end border-r bg-background px-2 text-muted-foreground tabular-nums"
+                  className={cn(
+                    "sticky left-0 z-10 flex h-full items-center justify-end border-r px-2 text-muted-foreground tabular-nums",
+                    selected ? "bg-[color-mix(in_oklch,var(--primary)_10%,var(--background))]" : "bg-background",
+                  )}
                   style={{ width: NUM_W, minWidth: `${digits + 2}ch` }}
                 >
                   {r.index + 1}
