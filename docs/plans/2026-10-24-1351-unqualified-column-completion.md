@@ -284,7 +284,7 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
   entry to `**Status: done**` with a line naming this plan and the PR.
   Mark this plan `**Status: completed**` with a summary.
 - [x] **Step 4: Commit.** `git commit -m "Record bare column completion"`
-- [ ] **Step 5: Review and PR.** Run the full frontend checks and `lgx
+- [x] **Step 5: Review and PR.** Run the full frontend checks and `lgx
   e2e`, review the branch (/review-with-codex against master), fix what
   is real, push, and open a PR against master titled "Complete bare
   column names".
