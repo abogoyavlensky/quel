@@ -137,6 +137,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
                 fetching: false,
                 pinned: false,
                 elapsedMs: r["elapsed-ms"],
+                selectedRow: null,
               },
             ],
           }));
@@ -433,6 +434,18 @@ export async function reopenTab(closedId?: string): Promise<void> {
 
 export function selectResult(tabId: string, id: string): void {
   updateTab(tabId, (t) => ({ ...t, active: id }));
+}
+
+export function selectRow(tabId: string, resultId: string, index: number | null): void {
+  updateResult(tabId, resultId, (r) => ({ ...r, selectedRow: index }));
+}
+
+export function toggleRowDetails(): void {
+  store.setState((s) => ({ rowDetails: !s.rowDetails }));
+}
+
+export function openRowDetails(): void {
+  store.setState({ rowDetails: true });
 }
 
 export function pin(tabId: string, resultId: string): void {

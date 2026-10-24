@@ -4,7 +4,8 @@ import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
-import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId } from "@/state/runner";
+import { isMac } from "@/components/keys";
+import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId, toggleRowDetails } from "@/state/runner";
 
 // The app's menu items (quel.menu) arrive as events; the work happens here,
 // on the selected profile's workspace (nothing, when none is selected).
@@ -35,6 +36,26 @@ function useMenu() {
   }, []);
 }
 
+// ⌘I / Ctrl+I opens and closes the row details panel. Not a native menu
+// item: a toggle cannot take the double delivery Run tolerates (menu plus
+// page), and CodeMirror binds Mod-i itself. Caught in the capture phase,
+// before the editor sees it.
+function useRowDetailsKey() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (!mod || e.shiftKey || e.altKey || e.key.toLowerCase() !== "i") return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleRowDetails();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+}
+
 // Pending tab saves go out now when the window hides or the page goes
 // away: the app is likely quitting.
 function useFlushOnHide() {
@@ -53,6 +74,7 @@ function useFlushOnHide() {
 
 export default function App() {
   useMenu();
+  useRowDetailsKey();
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);

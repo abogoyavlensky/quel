@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HistoryIcon, Pin, Plus, X } from "lucide-react";
+import { HistoryIcon, PanelRight, Pin, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -17,8 +17,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ClosedTab } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin } from "@/state/runner";
-import type { EditorTab, Workspace } from "@/state/store";
+import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin, toggleRowDetails } from "@/state/runner";
+import { type EditorTab, type Workspace, useApp } from "@/state/store";
+import { ROW_KEY } from "./keys";
 
 // The selected workspace's editor tabs. Each is its own database session:
 // SET, temp tables and an open transaction stay in the tab they were made in.
@@ -106,6 +107,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
       </Button>
       <div className="flex-1" />
       <ClosedTabsMenu closed={closed} />
+      <RowDetailsToggle />
     </div>
   );
 }
@@ -155,6 +157,24 @@ function ago(at: number, now: number): string {
 
 function firstLine(body: string): string {
   return body.split("\n").find((l) => l.trim() !== "")?.trim() ?? "";
+}
+
+// Opens and closes the row details panel on the right.
+function RowDetailsToggle() {
+  const open = useApp((s) => s.rowDetails);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label="Row details"
+      aria-pressed={open}
+      title={`Row details (${ROW_KEY})`}
+      onClick={toggleRowDetails}
+      className={cn("mb-1", open && "bg-muted text-foreground")}
+    >
+      <PanelRight />
+    </Button>
+  );
 }
 
 // Recently closed tabs, newest first: a click opens one again.

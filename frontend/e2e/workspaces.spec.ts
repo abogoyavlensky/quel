@@ -60,11 +60,11 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
   await expect(status(page)).toHaveText("Not connected");
   await expect(editor(page)).toHaveText("select count(*) as n from t2;");
 
-  // A run on B is refused with a Connect offer; Connect, and the next run works.
+  // A run on B is refused; connect it from its row, and the next run works.
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(status(page)).toHaveText("Not connected.");
-  await page.getByRole("contentinfo").getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Connect WS B" }).click();
   await expect(status(page)).toHaveText("Ready");
   await write(page, "select max(id) as m from t2;");
   await page.keyboard.press("ControlOrMeta+Enter");

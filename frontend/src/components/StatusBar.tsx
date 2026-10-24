@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { cancel, connectProfile } from "@/state/runner";
+import { cancel } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
-// The selected profile and its connection, the active tab's state, Cancel
-// while something runs there, and Connect when it is not connected.
+// The selected profile and its connection, the active tab's state, and
+// Cancel while something runs there. Connecting is the sidebar's job.
 export function StatusBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
@@ -36,11 +36,6 @@ export function StatusBar() {
       <span role="status" className="flex-1 truncate">
         {state}
       </span>
-      {profile && status === "disconnected" && (
-        <Button size="xs" variant="outline" onClick={() => void connectProfile(profile.id)}>
-          Connect
-        </Button>
-      )}
       {result && !running && (
         <span className="flex gap-3 tabular-nums">
           <span>{result.rows.length.toLocaleString()} rows</span>
