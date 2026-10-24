@@ -1,0 +1,63 @@
+(ns quel.meta-test
+  (:require [quel.conn :as conn]
+            [quel.conn-test :refer [with-registry]]
+            [quel.meta :as meta]
+            [quel.meta.sqlite]
+            [sql.core :as sql]
+            [clojure.test :refer [deftest is]]))
+
+;; SQLite introspection over a throwaway file.
+
+(defn- with-db
+  "Run (f db) over a SQLite file holding a few tables and views."
+  [f]
+  (with-registry
+    (fn [registry path]
+      (let [{:keys [conn-id]} (conn/open! registry path)
+            db (conn/db registry conn-id)]
+        (doseq [q ["create table t (id integer primary key, name text)"
+                   "create view v as select name from t"
+                   "create virtual table docs using fts5(body)"
+                   "create table \"it's a table\" (x int)"
+                   "create table g (a int, b int generated always as (a * 2) virtual)"
+                   "create table gone (x int)"
+                   "create view broken as select x from gone"
+                   "drop table gone"]]
+          (sql/execute! db [q]))
+        (f db)))))
+
+(deftest sqlite-schemas-leave-out-temp
+  (with-db
+    (fn [db]
+      (is (= [{:name "main" :default true}] (meta/schemas :sqlite db))))))
+
+(deftest sqlite-objects
+  (with-db
+    (fn [db]
+      (is (= [{:name "broken" :kind "view"}
+              {:name "docs" :kind "table"}
+              {:name "g" :kind "table"}
+              {:name "it's a table" :kind "table"}
+              {:name "t" :kind "table"}
+              {:name "v" :kind "view"}]
+             (meta/objects :sqlite db "main"))))))
+
+(deftest sqlite-columns
+  (with-db
+    (fn [db]
+      (is (= [{:name "id" :type "INTEGER"} {:name "name" :type "TEXT"}]
+             (meta/columns :sqlite db "main" "t")))
+      (is (= ["a" "b"] (mapv :name (meta/columns :sqlite db "main" "g"))) "generated columns too")
+      (is (= ["body"] (mapv :name (meta/columns :sqlite db "main" "docs"))) "no FTS hidden columns")
+      (is (= [{:name "x" :type "INT"}] (meta/columns :sqlite db "main" "it's a table")))
+      (is (= [] (meta/columns :sqlite db "main" "nope"))))))
+
+(deftest sqlite-completion-survives-a-broken-view
+  (with-db
+    (fn [db]
+      (let [c (meta/completion-schema :sqlite db)]
+        (is (= "main" (:default-schema c)))
+        (is (= ["id" "name"] (get-in c [:schemas "main" "t"])))
+        (is (= ["name"] (get-in c [:schemas "main" "v"])))
+        (is (= ["x"] (get-in c [:schemas "main" "it's a table"])))
+        (is (not (contains? (get-in c [:schemas "main"]) "broken")))))))

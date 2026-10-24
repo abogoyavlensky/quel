@@ -1,0 +1,86 @@
+(ns quel.meta.postgres
+  (:require [quel.meta :as meta]
+            [sql.core :as sql]))
+
+;; Postgres and Redshift through pg_catalog (pg_namespace, pg_class,
+;; pg_attribute, format_type), which Redshift has from its PostgreSQL 8.0
+;; base. Every query stays in the subset both accept: no relispartition
+;; on Redshift, no string_agg, array_agg or format(), and no "char"
+;; columns in results (a CASE maps relkind to a string).
+;;
+;; The Redshift variants are unverified against Redshift: the Postgres
+;; tests run them against Postgres, which shows they parse and have the
+;; right shape, nothing more. What pg_catalog misses on Redshift - external
+;; schemas, datashares, late-binding view columns - is in docs/backlog.
+;; quel.meta.redshift comes with Redshift-only catalog work.
+
+(def ^:private schema-filter
+  "n.nspname not like 'pg\\_%' and n.nspname <> 'information_schema'")
+
+(def ^:private schemas-sql
+  (str "select n.nspname as name, n.nspname = current_schema() as is_default"
+       " from pg_namespace n where " schema-filter
+       " order by n.nspname"))
+
+(defn- schemas* [_ db]
+  (mapv (fn [{:keys [name is_default]}] {:name name :default (true? is_default)})
+        (sql/execute! db [schemas-sql])))
+
+(defmethod meta/schemas :postgres [engine db] (schemas* engine db))
+(defmethod meta/schemas :redshift [engine db] (schemas* engine db))
+
+(def ^:private kind-sql
+  "case c.relkind when 'v' then 'view' when 'm' then 'materialized-view' else 'table' end")
+
+(defn- objects-sql [partitions?]
+  (str "select c.relname as name, " kind-sql " as kind"
+       " from pg_class c join pg_namespace n on n.oid = c.relnamespace"
+       " where n.nspname = $1 and c.relkind in ('r', 'p', 'v', 'm', 'f')"
+       (when-not partitions? " and not c.relispartition")
+       " order by c.relname"))
+
+;; Postgres hides partitions under their parent; Redshift has none (and no
+;; relispartition column).
+(def ^:private postgres-objects-sql (objects-sql false))
+(def ^:private redshift-objects-sql (objects-sql true))
+
+(defmethod meta/objects :postgres [_ db schema]
+  (mapv #(select-keys % [:name :kind]) (sql/execute! db [postgres-objects-sql schema])))
+
+(defmethod meta/objects :redshift [_ db schema]
+  (mapv #(select-keys % [:name :kind]) (sql/execute! db [redshift-objects-sql schema])))
+
+(def ^:private columns-sql
+  (str "select a.attname as name, format_type(a.atttypid, a.atttypmod) as type"
+       " from pg_attribute a"
+       " join pg_class c on c.oid = a.attrelid"
+       " join pg_namespace n on n.oid = c.relnamespace"
+       " where n.nspname = $1 and c.relname = $2 and a.attnum > 0 and not a.attisdropped"
+       " order by a.attnum"))
+
+(defn- columns* [_ db schema name]
+  (mapv #(select-keys % [:name :type]) (sql/execute! db [columns-sql schema name])))
+
+(defmethod meta/columns :postgres [engine db schema name] (columns* engine db schema name))
+(defmethod meta/columns :redshift [engine db schema name] (columns* engine db schema name))
+
+(defn- completion-sql [partitions?]
+  (str "select n.nspname as schema, c.relname as tbl, a.attname as col"
+       " from pg_attribute a"
+       " join pg_class c on c.oid = a.attrelid"
+       " join pg_namespace n on n.oid = c.relnamespace"
+       " where " schema-filter
+       " and c.relkind in ('r', 'p', 'v', 'm', 'f')"
+       (when-not partitions? " and not c.relispartition")
+       " and a.attnum > 0 and not a.attisdropped"
+       " order by n.nspname, c.relname, a.attnum"
+       " limit " meta/completion-limit))
+
+(def ^:private postgres-completion-sql (completion-sql false))
+(def ^:private redshift-completion-sql (completion-sql true))
+
+(defmethod meta/completion-rows :postgres [_ db]
+  (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [postgres-completion-sql])))
+
+(defmethod meta/completion-rows :redshift [_ db]
+  (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [redshift-completion-sql])))

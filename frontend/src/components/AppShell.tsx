@@ -1,6 +1,12 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { SqlEditor } from "@/editor/SqlEditor";
+import { namespaceOf } from "@/editor/namespace";
+import type { Completion } from "@/editor/setup";
+import * as api from "@/lib/api";
+import { metaKeys } from "@/lib/query";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -8,22 +14,33 @@ import { EditorTabs } from "./EditorTabs";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { StatusBar } from "./StatusBar";
+import { StructureTree } from "./StructureTree";
 
-// The window: the connections on the left; on the right the selected
-// profile's workspace: its editor tabs, the active tab's editor above its
-// results; the status bar below all.
+// The window: the connections on the left, the selected profile's
+// structure under them; on the right that profile's workspace: its editor
+// tabs, the active tab's editor above its results; the status bar below
+// all.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
   const engine = useApp((s) => s.profiles.find((p) => p.id === s.selected)?.engine ?? null);
   const selected = useApp((s) => s.selected);
   const tab = workspace && activeTabOf(workspace);
+  const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize="22" minSize={180} className="bg-muted/20">
-          <ConnectionsPanel />
+          <ResizablePanelGroup orientation="vertical">
+            <ResizablePanel defaultSize="40" minSize={80}>
+              <ConnectionsPanel />
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel minSize={120}>
+              <StructureTree />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel minSize={360}>
@@ -41,7 +58,7 @@ export function AppShell() {
               <EditorTabs workspace={workspace} />
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="45" minSize={80}>
-                  <SqlEditor tabId={tab.id} engine={engine} />
+                  <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel minSize={120}>
@@ -62,5 +79,20 @@ export function AppShell() {
       <StatusBar />
       <ProfileDialog />
     </div>
+  );
+}
+
+// The connected database's names for the editor's completion, cached with
+// the structure tree's metadata. The same object until the data changes,
+// so the editor reconfigures only then.
+function useCompletion(connId: string | null): Completion | null {
+  const { data } = useQuery({
+    queryKey: metaKeys.completion(connId ?? ""),
+    queryFn: () => api.completionSchema(connId!),
+    enabled: connId !== null,
+  });
+  return useMemo(
+    () => (connId && data ? { schema: namespaceOf(data), defaultSchema: data["default-schema"] ?? undefined } : null),
+    [connId, data],
   );
 }

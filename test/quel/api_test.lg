@@ -33,6 +33,7 @@
 
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
+           "list-schemas" "list-objects" "list-columns" "completion-schema"
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"}
          (set (keys api/handlers))))
@@ -48,6 +49,20 @@
           (is (= [[1 "a"]] (:rows r))))
         (is (nil? (api/close-db env conn-id)))
         (is (empty? @(:conns env)))))))
+
+(deftest structure-of-an-open-database
+  (with-env
+    (fn [env path]
+      (let [{:keys [conn-id]} (api/open-db env path)]
+        (api/run env conn-id "s1" "q1" "create table t (id integer, name text)")
+        (is (= [{:name "main" :default true}] (api/list-schemas env conn-id)))
+        (is (= [{:name "t" :kind "table"}] (api/list-objects env conn-id "main")))
+        (is (= [{:name "id" :type "INTEGER"} {:name "name" :type "TEXT"}]
+               (api/list-columns env conn-id "main" "t")))
+        (is (= {:default-schema "main" :schemas {"main" {"t" ["id" "name"]}}}
+               (api/completion-schema env conn-id)))
+        (is (str/includes? (try (api/list-schemas env "nope") "" (catch e (ex-message e)))
+                           "No open database"))))))
 
 (deftest cancel-of-an-unknown-query
   (with-env

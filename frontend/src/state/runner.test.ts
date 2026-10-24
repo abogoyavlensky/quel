@@ -35,6 +35,7 @@ vi.mock("@/editor/states", () => ({
   },
 }));
 
+const { metaKeys, queryClient } = await import("@/lib/query");
 const { store, initialState, newWorkspace, activeTabOf, updateTab, updateWorkspace, MESSAGES } = await import("./store");
 const runner = await import("./runner");
 const { split } = await import("@/sql/split");
@@ -836,5 +837,46 @@ describe("rename and pin", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("cached structure", () => {
+  const cached = (connId: string) => queryClient.getQueryData(metaKeys.schemas(connId));
+  const fill = (connId: string) => queryClient.setQueryData(metaKeys.schemas(connId), [{ name: "main", default: true }]);
+
+  it("goes when the profile disconnects, and only its own", async () => {
+    fill("c1");
+    fill("c2");
+    await runner.disconnectProfile("p1");
+    expect(cached("c1")).toBeUndefined();
+    expect(cached("c2")).toBeDefined();
+    queryClient.clear();
+  });
+
+  it("goes when closing the database fails too", async () => {
+    fill("c1");
+    api.closeDb.mockRejectedValue(new Error("gone"));
+    await runner.disconnectProfile("p1");
+    expect(cached("c1")).toBeUndefined();
+    expect(ws().error).toBe("gone");
+  });
+
+  it("stays after DDL: refresh is manual", async () => {
+    fill("c1");
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    api.run.mockResolvedValue(update(0));
+    await runner.runStatements(tabId(), stmts("create table t (x int)"));
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(queryClient.getQueryState(metaKeys.schemas("c1"))?.isInvalidated).toBe(false);
+    invalidate.mockRestore();
+    queryClient.clear();
+  });
+
+  it("keeps the tree's open nodes per workspace, across a disconnect", async () => {
+    runner.setTreeExpanded("p1", ["a", "b"]);
+    expect(ws().treeExpanded).toEqual(["a", "b"]);
+    expect(ws("p2").treeExpanded).toBeNull();
+    await runner.disconnectProfile("p1");
+    expect(ws().treeExpanded).toEqual(["a", "b"]);
   });
 });

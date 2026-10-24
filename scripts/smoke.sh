@@ -73,6 +73,11 @@ p2="$(call fetch-page '["q-big"]')"
 p3="$(call fetch-page '["q-big"]')"
 [[ "$(json "$p3" "['rows'].__len__()")" == 200 && "$p3" == *'"has-more":false'* ]] || fail "page 3: ${p3:0:200}"
 [[ "$(call fetch-page '["q-big"]')" == *'"closed":true'* ]] || fail "a finished result is closed"
+# The structure handlers see the table the session made.
+objs="$(call list-objects "[\"$conn\",\"main\"]")"
+[[ "$objs" == *'"name":"t"'* ]] || fail "list-objects misses t: $objs"
+completion="$(call completion-schema "[\"$conn\"]")"
+[[ "$(json "$completion" "['schemas']['main']['t']")" == "['id']" ]] || fail "completion-schema: $completion"
 # A nil reply comes back as {} (the bridge lowers nil that way).
 nothing() { [[ -z "$1" || "$1" == null || "$1" == "{}" ]]; }
 r="$(call close-result '["nope"]')"; nothing "$r" || fail "close-result of an unknown id: $r"
@@ -103,6 +108,9 @@ if [[ -n "${QUEL_PG_URL:-}" ]]; then
     pg="$(json "$pg_opened" "['conn-id']")" || fail "open-db (postgres): $pg_opened"
     [[ "$pg_opened" == *'"engine":"postgres"'* ]] || fail "engine: $pg_opened"
     [[ "$pg_opened" != *"$QUEL_PG_URL"* ]] || fail "the label shows the password: $pg_opened"
+    pg_schemas="$(call list-schemas "[\"$pg\"]")"
+    [[ "$pg_schemas" == *'{"default":true,"name":"public"}'* || "$pg_schemas" == *'{"name":"public","default":true}'* ]] \
+        || fail "list-schemas (postgres): $pg_schemas"
     call run "[\"$pg\",\"s1\",\"pg-temp\",\"create temp table kept (x int)\"]" >/dev/null
     call run "[\"$pg\",\"s1\",\"pg-sleep\",\"select pg_sleep(30)\"]" >"$tmp/pg-sleep" &
     pg_pid=$!

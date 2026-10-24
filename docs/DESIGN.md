@@ -132,7 +132,7 @@ waiting on the network inside Go, not in bytecode.
 | `quel.cells` | Converts driver values into the cell encoding the grid renders. |
 | `quel.classify` | Decides whether a statement reads or writes. |
 | `quel.meta` | The introspection protocol: a multimethod per operation, dispatched on `:engine`. |
-| `quel.meta.redshift`, `.sqlite`, `.postgres`, `.duckdb` | Catalog SQL and DDL generation per engine. |
+| `quel.meta.redshift`, `.sqlite`, `.postgres`, `.duckdb` | Catalog SQL and DDL generation per engine. `quel.meta.postgres` covers Redshift too until Redshift-only catalog work (dist and sort keys, external schemas) needs `quel.meta.redshift`. |
 | `quel.export` | Writing DDL and results to files. |
 | `quel.api` | The handlers the frontend calls, registered by var so the nREPL can redefine them. |
 | `quel.menu` | The application menu as data; items emit events the frontend acts on. |
@@ -358,10 +358,21 @@ Redshift specifics worth designing around:
 - The structure tree shows "Dist / sort keys" where other engines show
   "Indexes": the section list is engine-defined, not fixed.
 
-The structure tree loads lazily, one level per expand. `completion-schema`
-returns `{schema {table [columns]}}` for the connected database, cached
-per connection, refreshed on demand and after DDL runs, and fed straight
-into `lang-sql`'s completion.
+For now Redshift is read through the same `pg_catalog` queries as
+Postgres, written in the subset both accept, rather than the `svv_all_*`
+views above: Redshift can only be tested once Quel ships as a Homebrew
+package, and a wrong query would stay broken for a release cycle. The
+Postgres tests run those queries against Postgres. What `pg_catalog`
+misses on Redshift (external schemas and datashares, late-binding view
+columns) is in `docs/backlog/`, waiting for a cluster.
+
+The structure tree loads lazily, one level per expand. Its queries run on
+the connection's pool, not a tab's session, so temp tables and SQLite
+`ATTACH`es made in a tab do not show (backlogged). `completion-schema`
+returns `{schema {table [columns]}}` for the connected database, fed
+straight into `lang-sql`'s completion. The frontend caches it and the
+tree's levels per connection (TanStack Query) and reloads them only with
+the tree's refresh button: running DDL does not refresh anything.
 
 ## Write safety
 
@@ -522,7 +533,7 @@ with string keys); errors reject the frontend's promise with the message.
 |---|---|
 | Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
 | Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
-| Structure | `list-schemas`, `list-objects`, `describe-object`, `object-ddl`, `schema-ddl`, `completion-schema`, `diagram-model` |
+| Structure | `list-schemas`, `list-objects` (a schema's tables and views), `list-columns`, `completion-schema`; later `describe-object` (table info), `object-ddl`, `schema-ddl`, `diagram-model` |
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-ddl`, `export-result` (both open a save dialog) |
 | History | `list-history`, `clear-history` |
@@ -621,8 +632,10 @@ package feature, not app glue.
    checked in the native macOS window as well. Third slice done
    2026-10-23: connection profiles in the app database, their passwords
    in the Keychain, created, tested, edited and connected from the
-   database panel. Then structure tree (schemas, tables, views,
-   columns) and schema completion; history. Workspace restore done
+   database panel. Structure tree done 2026-10-24: schemas, tables,
+   views and columns in the sidebar, schema completion in the editor,
+   one refresh button; Redshift through `pg_catalog`, unverified. Then
+   history. Workspace restore done
    2026-10-23: each profile's editor tabs, their names, pins and text,
    and recently closed tabs, saved as they change and restored on
    launch with the selected profile.
@@ -647,6 +660,12 @@ settles them; update this section when it does.
 - The Redshift catalog sources in the introspection table behave as
   described, including `SHOW TABLE` and `svv_all_*` permissions for
   non-superusers.
+- The structure tree on Redshift (first released build, against a real
+  cluster, as a non-superuser): `list-schemas`, `list-objects`,
+  `list-columns` and `completion-schema` answer; Redshift's internal
+  schemas stay hidden (the filter drops `pg_*` and
+  `information_schema` only); and how long `completion-schema` takes on
+  a large cluster.
 
 ### Settled by milestone 0 (2026-10-19 and 2026-10-21)
 

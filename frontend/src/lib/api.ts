@@ -1,13 +1,17 @@
 import { call } from "@/lib/bridge";
 import type {
   ClosedTab,
+  ColumnInfo,
+  CompletionSchema,
   FetchResult,
+  ObjectInfo,
   OpenResult,
   Profile,
   ProfileInput,
   RunResult,
   SavedTab,
   SavedWorkspace,
+  SchemaInfo,
   WorkspaceInput,
 } from "@/lib/types";
 
@@ -29,6 +33,27 @@ export const cancel = (queryId: string) => call<{ canceled: boolean }>("cancel",
 export const closeResult = (queryId: string) => call<void>("close-result", queryId);
 
 export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
+
+// The structure of an open database. The bridge lowers an empty list to
+// {} or null, so the list calls check the shape.
+
+const list = async <T>(p: Promise<unknown>) => {
+  const r = await p;
+  return Array.isArray(r) ? (r as T[]) : [];
+};
+
+export const listSchemas = (connId: string) => list<SchemaInfo>(call("list-schemas", connId));
+
+export const listObjects = (connId: string, schema: string) =>
+  list<ObjectInfo>(call("list-objects", connId, schema));
+
+export const listColumns = (connId: string, schema: string, name: string) =>
+  list<ColumnInfo>(call("list-columns", connId, schema, name));
+
+export const completionSchema = async (connId: string): Promise<CompletionSchema> => {
+  const r = await call<Partial<CompletionSchema> | null>("completion-schema", connId);
+  return { "default-schema": r?.["default-schema"] ?? null, schemas: r?.schemas ?? {} };
+};
 
 // Profiles. A password goes in (save, test) and never comes back.
 

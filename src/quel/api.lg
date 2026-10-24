@@ -3,6 +3,10 @@
             [quel.conn :as conn]
             [quel.exec :as exec]
             [quel.menu :as menu]
+            [quel.meta :as meta]
+            ;; Loaded for their quel.meta methods.
+            [quel.meta.postgres]
+            [quel.meta.sqlite]
             [quel.profiles :as profiles]
             [quel.workspace :as workspace]
             [wails.core :as w]))
@@ -35,6 +39,20 @@
 
 (defn close-session [{:keys [conns execs]} conn-id session-id]
   (exec/close-session! execs conns conn-id session-id))
+
+;; The structure of an open database (quel.meta), read on its pool.
+
+(defn list-schemas [{:keys [conns]} conn-id]
+  (meta/schemas (conn/engine conns conn-id) (conn/db conns conn-id)))
+
+(defn list-objects [{:keys [conns]} conn-id schema]
+  (meta/objects (conn/engine conns conn-id) (conn/db conns conn-id) schema))
+
+(defn list-columns [{:keys [conns]} conn-id schema name]
+  (meta/columns (conn/engine conns conn-id) (conn/db conns conn-id) schema name))
+
+(defn completion-schema [{:keys [conns]} conn-id]
+  (meta/completion-schema (conn/engine conns conn-id) (conn/db conns conn-id)))
 
 ;; Profiles. None of these returns a password.
 
@@ -101,6 +119,10 @@
    "cancel" #'cancel
    "close-result" #'close-result
    "close-session" #'close-session
+   "list-schemas" #'list-schemas
+   "list-objects" #'list-objects
+   "list-columns" #'list-columns
+   "completion-schema" #'completion-schema
    "list-profiles" #'list-profiles
    "save-profile" #'save-profile
    "delete-profile" #'delete-profile

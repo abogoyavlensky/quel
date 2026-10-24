@@ -38,6 +38,31 @@ export interface OpenResult {
   "profile-id"?: string;
 }
 
+// The structure of an open database (quel.meta). "default" marks the
+// schema unqualified names resolve to.
+export interface SchemaInfo {
+  name: string;
+  default: boolean;
+}
+
+export type ObjectKind = "table" | "view" | "materialized-view";
+
+export interface ObjectInfo {
+  name: string;
+  kind: ObjectKind;
+}
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+}
+
+// `completion-schema`'s reply: schema -> table -> columns, in order.
+export interface CompletionSchema {
+  "default-schema": string | null;
+  schemas: Record<string, Record<string, string[]>>;
+}
+
 export type Color = "none" | "red" | "orange" | "yellow" | "green" | "blue" | "purple";
 
 export type SslMode = "disable" | "allow" | "prefer" | "require" | "verify-ca" | "verify-full";
