@@ -27,6 +27,10 @@ const TABLE_AFTER = new Set(["from", "join", "update", "into", "table"]);
 const END_FROM = new Set(
   "where group having order union intersect except limit offset fetch for on using set values".split(" "),
 );
+// Between a table keyword and its table (`from only t`, `join lateral`).
+const TABLE_MODIFIER = new Set(["only", "lateral"]);
+// A compound query's SELECTs see their own tables only.
+const SET_OP = new Set(["union", "intersect", "except"]);
 
 // Reserved words, applied quoted. From PostgreSQL 17's Appendix C, SQL Key
 // Words: the words marked "reserved" and "reserved (can be function or
@@ -109,6 +113,7 @@ function walk(doc: Text, scope: Node, upTo: number, table?: (n: Node) => void): 
       inFrom = expect = false;
       continue;
     }
+    if (expect && kw && TABLE_MODIFIER.has(kw)) continue;
     if (expect && NAME.has(n.name)) table?.(n);
     expect = inFrom && n.name === "Punctuation" && textOf(doc, n) === ",";
   }
@@ -181,10 +186,19 @@ function partOf(doc: Text, n: Node): Part {
   return { name: m[2].split(m[3] + m[3]).join(m[3]), quoted: true };
 }
 
-// The scope's tables as paths: `[table]` or `[schema, table]`.
-function tablesIn(doc: Text, scope: Node): Part[][] {
+// The scope's tables as paths: `[table]` or `[schema, table]`. In a
+// compound query, only those of the SELECT around `pos`.
+function tablesIn(doc: Text, scope: Node, pos: number): Part[][] {
+  let from = scope.from;
+  let to = scope.to;
+  for (let n = scope.firstChild; n; n = n.nextSibling) {
+    if (!SET_OP.has(keyword(doc, n) ?? "")) continue;
+    if (n.to <= pos) from = n.to;
+    else if (n.from >= pos) to = Math.min(to, n.from);
+  }
   const paths: Part[][] = [];
-  walk(doc, scope, Infinity, (n) => {
+  walk(doc, scope, to, (n) => {
+    if (n.from < from) return;
     if (n.name !== "CompositeIdentifier") return paths.push([partOf(doc, n)]);
     const path: Part[] = [];
     for (let c = n.firstChild; c; c = c.nextSibling) if (WORD.has(c.name)) path.push(partOf(doc, c));
@@ -268,7 +282,7 @@ export function columnCompletionSource(schema: CompletionSchema, engine: Engine 
     const { doc } = context.state;
     const scope = scopeOf(doc, slot.container);
     if (!scope) return null;
-    const tables = tablesIn(doc, scope)
+    const tables = tablesIn(doc, scope, slot.from)
       .map((path) => resolve(schema, path, engine))
       .filter((t) => t !== null);
     const opts = options(tables, engine, slot.quote);

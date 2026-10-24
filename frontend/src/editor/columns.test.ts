@@ -144,6 +144,25 @@ describe("columnCompletionSource", () => {
     expect(complete("select ▮ from (select id from orders) x", { explicit: true })).toBeNull();
   });
 
+  it("keeps a compound query's SELECTs apart", () => {
+    expect(labels(complete("select * from customers union select cu▮ from orders"))).toEqual([
+      "id",
+      "customer_id",
+      "total",
+      "order",
+    ]);
+    expect(labels(complete("select na▮ from customers union all select id from orders"))).toEqual([
+      "id",
+      "name",
+      "email",
+    ]);
+  });
+
+  it("reads past ONLY and LATERAL", () => {
+    expect(labels(complete("select e▮ from only customers"))).toEqual(["id", "name", "email"]);
+    expect(labels(complete("update only customers set na▮"))).toEqual(["id", "name", "email"]);
+  });
+
   it("answers in UPDATE ... SET and an INSERT column list", () => {
     expect(labels(complete("update customers set na▮"))).toEqual(["id", "name", "email"]);
     expect(labels(complete("update customers set ▮", { explicit: true }))).toEqual(["id", "name", "email"]);
