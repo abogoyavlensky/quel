@@ -1,0 +1,46 @@
+(ns quel.meta)
+
+;; Introspection: what a database holds, for the structure tree and the
+;; editor's completion. One multimethod per operation, dispatched on the
+;; engine (:sqlite, :postgres, :redshift) and given the database's pool as
+;; a sql.core connectable. The methods live in the engine namespaces
+;; (quel.meta.sqlite, quel.meta.postgres), which require this one; quel.api
+;; loads them.
+;;
+;; Every query runs on the pool, never on a tab's session: browsing must
+;; not wait behind a running query. So objects that live in one connection
+;; only (temp tables, an ATTACH made in a tab) do not show.
+
+(defmulti schemas
+  "[{:name :default}], :default true for the schema unqualified names
+   resolve to."
+  (fn [engine _db] engine))
+
+(defmulti objects
+  "The schema's tables and views: [{:name :kind}], :kind \"table\",
+   \"view\" or \"materialized-view\", sorted by name."
+  (fn [engine _db _schema] engine))
+
+(defmulti columns
+  "The object's columns in order: [{:name :type}]. [] for an unknown
+   object."
+  (fn [engine _db _schema _name] engine))
+
+(defmulti completion-rows
+  "Every column completion offers: [{:schema :tbl :col}], ordered by
+   schema, table and column position, at most completion-limit rows."
+  (fn [engine _db] engine))
+
+;; Past this many columns, completion knows no more of the database.
+(def completion-limit 50000)
+
+(defn completion-schema
+  "What the editor completes: {:default-schema s :schemas {schema {table
+   [column ...]}}}. String keys, so names reach the frontend as they are."
+  [engine db]
+  (let [default (some #(when (:default %) (:name %)) (schemas engine db))]
+    {:default-schema default
+     :schemas (reduce (fn [m {:keys [schema tbl col]}]
+                        (update-in m [schema tbl] (fnil conj []) col))
+                      {}
+                      (take completion-limit (completion-rows engine db)))}))

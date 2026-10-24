@@ -1,0 +1,46 @@
+(ns quel.meta.sqlite
+  (:require [quel.meta :as meta]
+            [sql.core :as sql]))
+
+;; SQLite's catalog, through its table-valued pragma functions (modernc
+;; v1.57.0 is SQLite 3.5x; pragma_table_list needs 3.37).
+;;
+;; The temp schema is left out: the pool's temp schema is not any tab's.
+;; Virtual tables (FTS and the like) list as tables, their shadow tables
+;; not at all. pragma_table_xinfo rather than table_info, which omits
+;; generated columns (hidden 2 and 3); hidden 1 is a virtual table's
+;; hidden column.
+
+(defmethod meta/schemas :sqlite [_ db]
+  (mapv (fn [{:keys [name]}] {:name name :default (= "main" name)})
+        (sql/execute! db ["select name from pragma_database_list where name <> 'temp' order by seq"])))
+
+(def ^:private objects-sql
+  (str "select name, type from pragma_table_list"
+       " where schema = ? and type in ('table', 'view', 'virtual')"
+       " and name not like 'sqlite\\_%' escape '\\'"
+       " order by name"))
+
+(defmethod meta/objects :sqlite [_ db schema]
+  (mapv (fn [{:keys [name type]}] {:name name :kind (if (= "view" type) "view" "table")})
+        (sql/execute! db [objects-sql schema])))
+
+(defmethod meta/columns :sqlite [_ db schema name]
+  (mapv (fn [{:keys [name type]}] {:name name :type type})
+        (sql/execute! db ["select name, type from pragma_table_xinfo(?, ?) where hidden <> 1 order by cid"
+                          name schema])))
+
+;; Per object, catching errors one by one: a view over a dropped table
+;; makes pragma_table_xinfo fail, and that must not lose the rest. A local
+;; file, so the many small queries are cheap.
+(defmethod meta/completion-rows :sqlite [_ db]
+  (->> (meta/schemas :sqlite db)
+       (mapcat (fn [{schema :name}]
+                 (mapcat (fn [{tbl :name}]
+                           (try
+                             (mapv (fn [{col :name}] {:schema schema :tbl tbl :col col})
+                                   (meta/columns :sqlite db schema tbl))
+                             (catch _ [])))
+                         (meta/objects :sqlite db schema))))
+       (take meta/completion-limit)
+       vec))
