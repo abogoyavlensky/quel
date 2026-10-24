@@ -13,13 +13,14 @@ import { ConnectionsPanel } from "./ConnectionsPanel";
 import { EditorTabs } from "./EditorTabs";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
+import { RowDetails } from "./RowDetails";
 import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
 
 // The window: the connections on the left, the selected profile's
 // structure under them; on the right that profile's workspace: its editor
-// tabs, the active tab's editor above its results; the status bar below
-// all.
+// tabs, the active tab's editor above its results; on the far right,
+// while open, the row details panel; the status bar below all.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
@@ -27,11 +28,13 @@ export function AppShell() {
   const selected = useApp((s) => s.selected);
   const tab = workspace && activeTabOf(workspace);
   const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null);
+  const rowDetails = useApp((s) => s.rowDetails);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="22" minSize={180} className="bg-muted/20">
+        {/* Ids keep each panel's size while the row details come and go. */}
+        <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-muted/20">
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize="40" minSize={80}>
               <ConnectionsPanel />
@@ -43,7 +46,7 @@ export function AppShell() {
           </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle />
-        <ResizablePanel minSize={360}>
+        <ResizablePanel id="workspace" minSize={360}>
           {workspace?.loadError ? (
             <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm">
               <p className="max-w-md text-center break-words text-destructive">
@@ -75,6 +78,14 @@ export function AppShell() {
             </p>
           )}
         </ResizablePanel>
+        {rowDetails && (
+          <>
+            <ResizableHandle />
+            <ResizablePanel id="row-details" defaultSize="25" minSize={260}>
+              <RowDetails />
+            </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
       <StatusBar />
       <ProfileDialog />

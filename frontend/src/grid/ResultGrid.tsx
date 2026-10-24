@@ -152,6 +152,10 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                 aria-rowindex={r.index + 2}
                 aria-selected={selected}
                 onClick={() => selectRow(tabId, result.id, r.index)}
+                // A double-click selects the row, not a word in it.
+                onMouseDown={(e) => {
+                  if (e.detail > 1) e.preventDefault();
+                }}
                 onDoubleClick={() => {
                   selectRow(tabId, result.id, r.index);
                   openRowDetails();
