@@ -298,7 +298,7 @@ second completion source next to lang-sql's that offers the bare columns of
 the statement's FROM / JOIN / UPDATE / INSERT INTO tables, resolved by each
 engine's case rules, quoted when not plain lower case or reserved (word lists
 pinned to the PostgreSQL 17, Redshift and SQLite pages). Wired through
-`Completion.raw` and `languageFor`; unit tests (19), an e2e check, and a hand
+`Completion.raw` and `languageFor`; unit tests (20), an e2e check, and a hand
 check in server mode. The Codex reviews found real gaps, fixed in follow-up
 commits: tables leaking between a compound query's SELECTs and an INSERT's
 target and source, `from only t`, a FROM list after a join condition, SQLite's
@@ -312,7 +312,8 @@ Deviations, all in place above:
 - `table` is a table position for collecting too; a quoted name's doubled
   quote is undoubled when read.
 - Added past the plan from review: set-operation branches and an INSERT's
-  SELECT scope their own tables; `only` / `lateral` keep the table position;
+  SELECT scope their own tables (RETURNING and ON CONFLICT go back to the
+  target); `only` / `lateral` keep the table position;
   `ON` / `USING` no longer end the FROM list; completing inside a closed
   quoted name replaces all of it.
 - SQLite matches quoted names case-insensitively too (SQLite identifiers

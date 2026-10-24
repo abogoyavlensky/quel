@@ -173,6 +173,20 @@ describe("columnCompletionSource", () => {
     ]);
   });
 
+  it("goes back to an INSERT's target after RETURNING and ON CONFLICT", () => {
+    const target = ["id", "customer_id", "total", "order"];
+    expect(labels(complete("insert into orders select id from customers returning to▮"))).toEqual(target);
+    expect(labels(complete("insert into orders select id from customers on conflict (id) do update set to▮"))).toEqual(
+      target,
+    );
+    expect(labels(complete("insert into orders values (1) returning to▮"))).toEqual(target);
+    expect(labels(complete("insert into orders select na▮ from customers returning id"))).toEqual([
+      "id",
+      "name",
+      "email",
+    ]);
+  });
+
   it("reads a FROM list on past a join condition", () => {
     const sql = "select ▮ from customers c join orders o on o.customer_id = c.id, sales.leads l";
     expect(option(complete(sql, { explicit: true }), "id").detail).toBe("customers, orders, leads");

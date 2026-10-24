@@ -33,6 +33,8 @@ const TABLE_MODIFIER = new Set(["only", "lateral"]);
 // Each SELECT sees its own tables only: a compound query's SELECTs, and
 // the SELECT of an INSERT ... SELECT apart from the target's column list.
 const BRANCH = new Set(["select", "union", "intersect", "except"]);
+// An INSERT's clauses after its SELECT, back on the target's table.
+const TARGET_AGAIN = new Set(["returning", "conflict"]);
 
 // Reserved words, applied quoted. From PostgreSQL 17's Appendix C, SQL Key
 // Words: the words marked "reserved" and "reserved (can be function or
@@ -191,15 +193,25 @@ function partOf(doc: Text, n: Node): Part {
 }
 
 // The scope's tables as paths: `[table]` or `[schema, table]`, only those
-// of the branch around `pos` (BRANCH).
+// of the branch around `pos` (BRANCH). After RETURNING or ON CONFLICT, the
+// branch is the one before the first SELECT: an INSERT's target.
 function tablesIn(doc: Text, scope: Node, pos: number): Part[][] {
   let from = scope.from;
   let to = scope.to;
+  let firstBranch = scope.to;
+  let target = false;
   for (let n = scope.firstChild; n; n = n.nextSibling) {
-    if (!BRANCH.has(keyword(doc, n) ?? "")) continue;
+    const kw = keyword(doc, n) ?? "";
+    if (TARGET_AGAIN.has(kw)) {
+      if (n.to <= pos) target = true;
+      else to = Math.min(to, n.from);
+    }
+    if (!BRANCH.has(kw)) continue;
+    firstBranch = Math.min(firstBranch, n.from);
     if (n.to <= pos) from = n.to;
     else if (n.from >= pos) to = Math.min(to, n.from);
   }
+  if (target) [from, to] = [scope.from, firstBranch];
   const paths: Part[][] = [];
   walk(doc, scope, to, (n) => {
     if (n.from < from) return;
