@@ -1,5 +1,7 @@
 # Unqualified Column Completion Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The editor offers bare column names from the tables in the current statement (`select em▮ from customers` offers `email`), alongside lang-sql's own completions.
@@ -270,19 +272,50 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
 **Files:**
 - Modify: `frontend/e2e/structure.spec.ts`, `docs/backlog/unqualified-column-completion.md`, `docs/DESIGN.md`, this plan
 
-- [ ] **Step 1: E2E.** After the `select t.` check in
+- [x] **Step 1: E2E.** After the `select t.` check in
   `structure.spec.ts`, add: completions for `select na` with ` from t`
   after the cursor contain `name`. Run `lgx e2e`. Expected: all specs
   pass.
-- [ ] **Step 2: Commit.** `git commit -m "E2E: bare column completion"`
-- [ ] **Step 3: Docs.** In DESIGN's Introspection section, the
+- [x] **Step 2: Commit.** `git commit -m "E2E: bare column completion"`
+- [x] **Step 3: Docs.** In DESIGN's Introspection section, the
   `completion-schema` sentence: completion offers schema, table and
   qualified column names (lang-sql), and bare columns of the tables in
   the statement under the cursor (`editor/columns.ts`). Set the backlog
   entry to `**Status: done**` with a line naming this plan and the PR.
   Mark this plan `**Status: completed**` with a summary.
-- [ ] **Step 4: Commit.** `git commit -m "Record bare column completion"`
+- [x] **Step 4: Commit.** `git commit -m "Record bare column completion"`
 - [ ] **Step 5: Review and PR.** Run the full frontend checks and `lgx
   e2e`, review the branch (/review-with-codex against master), fix what
   is real, push, and open a PR against master titled "Complete bare
   column names".
+
+> Deviation: `lgx e2e` ran with mise's lgx 0.5.1 first on PATH (the shell's `lgx` was 0.4.2; `scripts/server-mode.sh` runs `$LGX` as one word, so `LGX="mise exec -- lgx"` does not work).
+
+## Summary
+
+Implemented `columnCompletionSource` (`frontend/src/editor/columns.ts`), a
+second completion source next to lang-sql's that offers the bare columns of
+the statement's FROM / JOIN / UPDATE / INSERT INTO tables, resolved by each
+engine's case rules, quoted when not plain lower case or reserved (word lists
+pinned to the PostgreSQL 17, Redshift and SQLite pages). Wired through
+`Completion.raw` and `languageFor`; unit tests (17), an e2e check, and a hand
+check in server mode. The Codex review of Task 1 found two real gaps, fixed in
+a follow-up commit: a compound query's SELECTs leaked tables into each other,
+and `from only t` lost the table.
+
+Deviations, all in place above:
+- `Keyword` and `Type` nodes count as names (lang-sql parses `name`, `user`,
+  `data`, `text` and others so on Postgres).
+- `notnull` is quoted on Postgres (Appendix C reserves it; the plan's test
+  said otherwise).
+- `table` is a table position for collecting too; a quoted name's doubled
+  quote is undoubled when read.
+- Added past the plan from review: set-operation branches scope their tables;
+  `only` / `lateral` keep the table position.
+- The hand check ran on another port through a throwaway Playwright script;
+  e2e ran with lgx 0.5.1 put on PATH.
+
+What the plan could have specified better: check how lang-sql tokenises
+everyday names (many are `Keyword` nodes on Postgres) and check the reserved-word
+claims against the cited pages before pinning test expectations; and name
+compound queries (UNION) as in or out of scope.

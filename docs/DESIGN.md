@@ -369,8 +369,10 @@ columns) is in `docs/backlog/`, waiting for a cluster.
 The structure tree loads lazily, one level per expand. Its queries run on
 the connection's pool, not a tab's session, so temp tables and SQLite
 `ATTACH`es made in a tab do not show (backlogged). `completion-schema`
-returns `{schema {table [columns]}}` for the connected database, fed
-straight into `lang-sql`'s completion. The frontend caches it and the
+returns `{schema {table [columns]}}` for the connected database. From it
+the editor completes schema, table and qualified column names (`lang-sql`),
+and the bare columns of the tables in the statement under the cursor
+(`editor/columns.ts`). The frontend caches it and the
 tree's levels per connection (TanStack Query) and reloads them only with
 the tree's refresh button: running DDL does not refresh anything.
 
