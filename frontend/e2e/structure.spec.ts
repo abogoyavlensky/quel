@@ -59,6 +59,8 @@ test("browse the structure, refresh it, and complete its names", async ({ page }
 
   // Columns complete after the table's name.
   expect(await completions(page, "select t.", " from t")).toEqual(expect.arrayContaining(["id", "name"]));
+  // And bare, from the statement's tables.
+  expect(await completions(page, "select na", " from t")).toContain("name");
 
   // DDL does not refresh anything; the button does, tree and completion.
   await runText(page, `create table ${table} (a int)`);
