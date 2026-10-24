@@ -207,8 +207,8 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
 **Files:**
 - Create: `frontend/src/editor/columns.ts`, `frontend/src/editor/columns.test.ts`
 
-- [ ] **Step 1: Branch.** `git switch -c unqualified-column-completion master`.
-- [ ] **Step 2: Write the failing tests** listed under Testing. A helper
+- [x] **Step 1: Branch.** `git switch -c unqualified-column-completion master`.
+- [x] **Step 2: Write the failing tests** listed under Testing. A helper
   `complete(text, { dialect, explicit })` finds `▮` in `text`, removes
   it, builds the state with that dialect's `sql()` (no schema: only the
   syntax tree is needed), and returns the source's result, or null. A
@@ -223,15 +223,19 @@ On Linux without GTK4/WebKitGTK headers, prefix `lgx` commands with
   "main", schemas: { main: { Mixed: ["Col", "autoincrement", "notnull"]
   } } }`. Assert on
   labels, `apply`, `detail` and `from`.
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: the new
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: the new
   tests fail (no module).
-- [ ] **Step 4: Implement `columns.ts`** as in the Design's five steps.
+- [x] **Step 4: Implement `columns.ts`** as in the Design's five steps.
   Keep each step a small named function (`shouldAnswer`, `scopeOf`,
   `tablesIn`, `resolve`, `options`). A file comment says what lang-sql
   covers and what this adds. Match the module style of
   `editor/namespace.ts`.
-- [ ] **Step 5: Run** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "Complete bare column names from the statement's tables"`
+- [x] **Step 5: Run** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -m "Complete bare column names from the statement's tables"`
+
+> Deviation: `Keyword` and `Type` nodes count as names, both at the cursor and in table positions. lang-sql's Postgres dialect parses `name`, `id`, `type`, `user`, `data`, `source` as keywords and `text`, `date` as types, so the plan's Identifier-only rule would miss a table named `user` and an explicit request on `select name▮`. lang-sql's own `sourceContext` accepts `Keyword` too.
+> Deviation: `notnull` is applied quoted on Postgres too. The plan's test said unquoted, but PostgreSQL 17's Appendix C marks `notnull` and `isnull` "reserved (can be function or type)", which the plan's own rule includes. The Postgres test checks `autoincrement` unquoted and `notnull` quoted.
+> Deviation: `table` is a table position for collecting as well as for declining (one state machine for both); a quoted name's doubled closing quote is undoubled when read, to match how `apply` doubles it.
 
 ### Task 2: Wire it into the editor
 
