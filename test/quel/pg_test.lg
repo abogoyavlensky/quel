@@ -3,6 +3,8 @@
             [quel.api :as api]
             [quel.conn :as conn]
             [quel.exec :as exec]
+            [quel.meta :as meta]
+            [quel.meta.postgres]
             [sql.core :as sql]
             [string :as str]
             [clojure.test :refer [deftest is]]))
@@ -319,3 +321,68 @@
               msg (message-of #(api/test-connection env (assoc (pg-form) "password" bad)))]
           (is (str/includes? (str msg) "password authentication failed") (str "got " (pr-str msg)))
           (is (not (str/includes? (str msg) "wr0ng")) msg))))))
+
+;; Introspection. Each run makes a schema of its own and drops it, so
+;; reruns against a kept database stay clean.
+
+(defn- with-meta-schema
+  "Run (f db schema) over a pool on Postgres and a fresh schema holding a
+   table, a view, a materialized view, a partitioned table with one
+   partition and a mixed-case table."
+  [f]
+  (with-registry
+    (fn [registry]
+      (let [{:keys [conn-id]} (conn/open! registry pg-url)
+            db (conn/db registry conn-id)
+            schema (str "quel_meta_" (rand-int 1000000000))
+            q (fn [s] (sql/execute! db [s]))]
+        (q (str "create schema " schema))
+        (try
+          (doseq [s [(str "create table " schema ".items (id int4, label varchar(20), price numeric(10,2))")
+                     (str "create view " schema ".item_labels as select label from " schema ".items")
+                     (str "create materialized view " schema ".item_prices as select price from " schema ".items")
+                     (str "create table " schema ".events (at date) partition by range (at)")
+                     (str "create table " schema ".events_2026 partition of " schema ".events"
+                          " for values from ('2026-01-01') to ('2027-01-01')")
+                     (str "create table " schema ".\"MixedCase\" (x int)")]]
+            (q s))
+          (f db schema)
+          (finally (q (str "drop schema " schema " cascade"))))))))
+
+(deftest postgres-introspection
+  (with-pg
+    (with-meta-schema
+      (fn [db schema]
+        (let [names (set (map :name (meta/schemas :postgres db)))]
+          (is (contains? names schema))
+          (is (some #(= {:name "public" :default true} %) (meta/schemas :postgres db)))
+          (is (not-any? names ["pg_catalog" "pg_toast" "information_schema"])))
+        (is (= [{:name "MixedCase" :kind "table"}
+                {:name "events" :kind "table"}
+                {:name "item_labels" :kind "view"}
+                {:name "item_prices" :kind "materialized-view"}
+                {:name "items" :kind "table"}]
+               (meta/objects :postgres db schema)))
+        (is (= [{:name "id" :type "integer"}
+                {:name "label" :type "character varying(20)"}
+                {:name "price" :type "numeric(10,2)"}]
+               (meta/columns :postgres db schema "items")))
+        (is (= [] (meta/columns :postgres db schema "nope")))
+        (let [c (meta/completion-schema :postgres db)]
+          (is (= "public" (:default-schema c)))
+          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"])))
+          (is (= ["x"] (get-in c [:schemas schema "MixedCase"])))
+          (is (not (contains? (get-in c [:schemas schema]) "events_2026"))))))))
+
+(deftest redshift-introspection-parses-on-postgres
+  (with-pg
+    (with-meta-schema
+      (fn [db schema]
+        (is (= (meta/schemas :postgres db) (meta/schemas :redshift db)))
+        (is (= ["MixedCase" "events" "events_2026" "item_labels" "item_prices" "items"]
+               (mapv :name (meta/objects :redshift db schema)))
+            "no relispartition filter: the partition is listed")
+        (is (= (meta/columns :postgres db schema "items") (meta/columns :redshift db schema "items")))
+        (let [c (meta/completion-schema :redshift db)]
+          (is (= "public" (:default-schema c)))
+          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"]))))))))
