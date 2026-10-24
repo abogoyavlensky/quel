@@ -1,6 +1,11 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
 import { SqlEditor } from "@/editor/SqlEditor";
+import type { Completion } from "@/editor/setup";
+import * as api from "@/lib/api";
+import { metaKeys } from "@/lib/query";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -20,6 +25,7 @@ export function AppShell() {
   const engine = useApp((s) => s.profiles.find((p) => p.id === s.selected)?.engine ?? null);
   const selected = useApp((s) => s.selected);
   const tab = workspace && activeTabOf(workspace);
+  const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -51,7 +57,7 @@ export function AppShell() {
               <EditorTabs workspace={workspace} />
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="45" minSize={80}>
-                  <SqlEditor tabId={tab.id} engine={engine} />
+                  <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel minSize={120}>
@@ -72,5 +78,20 @@ export function AppShell() {
       <StatusBar />
       <ProfileDialog />
     </div>
+  );
+}
+
+// The connected database's names for the editor's completion, cached with
+// the structure tree's metadata. The same object until the data changes,
+// so the editor reconfigures only then.
+function useCompletion(connId: string | null): Completion | null {
+  const { data } = useQuery({
+    queryKey: metaKeys.completion(connId ?? ""),
+    queryFn: () => api.completionSchema(connId!),
+    enabled: connId !== null,
+  });
+  return useMemo(
+    () => (connId && data ? { schema: data.schemas, defaultSchema: data["default-schema"] ?? undefined } : null),
+    [connId, data],
   );
 }

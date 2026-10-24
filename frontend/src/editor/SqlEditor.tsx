@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { sql } from "@codemirror/lang-sql";
 import { EditorView } from "@codemirror/view";
 import type { Engine } from "@/lib/types";
-import { dialectFor, language, newState } from "./setup";
+import { type Completion, language, languageFor, newState } from "./setup";
 import { mountView, savedState, seedOf, unmountView } from "./states";
 
 // The SQL editor: one EditorView, showing the active tab's EditorState.
@@ -10,7 +9,15 @@ import { mountView, savedState, seedOf, unmountView } from "./states";
 // come along) and keeps the outgoing one in editor/states.ts. A restored
 // tab, never shown yet, starts from its seed.
 
-export function SqlEditor({ tabId, engine }: { tabId: string; engine: Engine | null }) {
+export function SqlEditor({
+  tabId,
+  engine,
+  completion,
+}: {
+  tabId: string;
+  engine: Engine | null;
+  completion: Completion | null;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const shown = useRef<string | null>(null);
@@ -33,19 +40,20 @@ export function SqlEditor({ tabId, engine }: { tabId: string; engine: Engine | n
     if (!v || shown.current === tabId) return;
     if (shown.current) unmountView(shown.current);
     v.setState(savedState(tabId) ?? newState(engine, seedOf(tabId), tabId));
-    v.dispatch({ effects: language.reconfigure(sql({ dialect: dialectFor(engine) })) });
+    v.dispatch({ effects: language.reconfigure(languageFor(engine, completion)) });
     mountView(tabId, v);
     shown.current = tabId;
     v.focus();
-    // engine is applied by the next effect; a tab switch alone must not
-    // re-run this one.
+    // engine and completion are applied by the next effect; a tab switch
+    // alone must not re-run this one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId]);
 
-  // A different profile's engine: re-highlight for its dialect.
+  // A different profile's engine, or its schema loaded or refreshed:
+  // re-highlight for its dialect and complete its names.
   useEffect(() => {
-    view.current?.dispatch({ effects: language.reconfigure(sql({ dialect: dialectFor(engine) })) });
-  }, [engine]);
+    view.current?.dispatch({ effects: language.reconfigure(languageFor(engine, completion)) });
+  }, [engine, completion]);
 
   return <div ref={host} className="h-full min-h-0 overflow-hidden" />;
 }

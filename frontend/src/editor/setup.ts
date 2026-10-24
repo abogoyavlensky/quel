@@ -1,6 +1,6 @@
 import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { PostgreSQL, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
+import { PostgreSQL, type SQLNamespace, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
 import { HighlightStyle, bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/state";
@@ -22,14 +22,25 @@ import type { Seed } from "./states";
 // selection a restored tab starts from (its seed, editor/states.ts). An
 // edit or a selection change schedules a save of the tab's workspace.
 
-// The dialect follows the open database. lang-sql completes its keywords;
-// schema completion comes with the structure browser.
+// The dialect follows the open database, and lang-sql completes its
+// keywords plus, while connected, the database's schema, table and column
+// names (completion-schema, refreshed with the structure tree).
 export const language = new Compartment();
 
 export function dialectFor(engine: Engine | null) {
   if (engine === "sqlite") return SQLite;
   if (engine === "postgres" || engine === "redshift") return PostgreSQL;
   return StandardSQL;
+}
+
+export interface Completion {
+  schema: SQLNamespace;
+  defaultSchema?: string;
+}
+
+export function languageFor(engine: Engine | null, completion: Completion | null) {
+  const dialect = dialectFor(engine);
+  return completion ? sql({ dialect, schema: completion.schema, defaultSchema: completion.defaultSchema }) : sql({ dialect });
 }
 
 // SQL colours from CSS variables (index.css), so the editor follows light
@@ -106,7 +117,7 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       highlightActiveLine(),
       highlightSelectionMatches(),
       keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
-      language.of(sql({ dialect: dialectFor(engine) })),
+      language.of(languageFor(engine, null)),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
       // An edit clears the status bar's "Not connected." notice.
       EditorView.updateListener.of((u) => {
