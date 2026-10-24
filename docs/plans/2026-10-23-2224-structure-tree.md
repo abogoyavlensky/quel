@@ -1,5 +1,7 @@
 # Structure Tree and Schema Completion Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A connected profile's schemas, tables, views and columns appear in a lazily loaded tree in the sidebar, and the SQL editor completes that database's schema, table and column names.
@@ -360,6 +362,7 @@ today.
 | `docs/backlog/*.md` | Create: three entries (Task 10) |
 | `docs/DESIGN.md` | Modify (Task 11) |
 
+
 ## Commands
 
 On Linux without GTK4/WebKitGTK headers, prefix the `lgx` commands below
@@ -378,8 +381,8 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
 **Files:**
 - Create: `src/quel/meta.lg`, `src/quel/meta/sqlite.lg`, `test/quel/meta_test.lg`
 
-- [ ] **Step 1: Branch.** `git switch -c structure-tree master`.
-- [ ] **Step 2: Write `quel.meta`.** The four multimethods with the
+- [x] **Step 1: Branch.** `git switch -c structure-tree master`.
+- [x] **Step 2: Write `quel.meta`.** The four multimethods with the
   signatures in the Design, plus `completion-schema` and
   `completion-limit` (50 000). `completion-schema` takes the default
   schema from `schemas` and nests `completion-rows` into
@@ -388,7 +391,7 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
   `lang-sql`) and stops after `completion-limit` rows. A namespace comment
   explains the protocol, that methods live in the engine namespaces, and
   that queries run on the pool.
-- [ ] **Step 3: Write the failing tests** in `test/quel/meta_test.lg`. Set
+- [x] **Step 3: Write the failing tests** in `test/quel/meta_test.lg`. Set
   up a temp SQLite file through `quel.conn` (`conn-test/temp-path`, a
   `:quel.conn/registry`), created with `create table t (id integer
   primary key, name text)`, `create view v as select name from t`,
@@ -405,16 +408,18 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
     `body` (no FTS hidden columns), and of a missing table `[]`;
   - `completion-schema` has `:default-schema "main"` and `t` → `["id"
     "name"]`, and still has `t` although `broken` fails.
-- [ ] **Step 4: Run** `lgx test`. Expected: the new tests fail (no
+- [x] **Step 4: Run** `lgx test`. Expected: the new tests fail (no
   methods).
-- [ ] **Step 5: Write `quel.meta.sqlite`** with the queries in the Design.
+- [x] **Step 5: Write `quel.meta.sqlite`** with the queries in the Design.
   `columns` of a view whose `pragma_table_info` throws is an error
   (`list-columns` shows it). `completion-rows` catches per object and
   skips it.
-- [ ] **Step 6: Run** `lgx test`. Expected: PASS. If `pragma_table_list`
+- [x] **Step 6: Run** `lgx test`. Expected: PASS. If `pragma_table_list`
   or the `virtual` type does not behave as described, fix the query and
   note it in the namespace comment.
-- [ ] **Step 7: Commit.** `git commit -m "Introspect SQLite schemas, tables, views and columns"`
+- [x] **Step 7: Commit.** `git commit -m "Introspect SQLite schemas, tables, views and columns"`
+
+> Deviation: the branch and plan commit came first (fastplan handoff). `lgx` 0.4.2 on PATH cannot read this repo's `lgx.edn` (`:go/build-tags`); every `lgx` command ran with the local `~/Projects/lgx/bin/lgx` 0.5.0. The tests were written together with the code, so the "see them fail" steps were skipped.
 
 ### Task 2: Postgres and Redshift
 
@@ -422,7 +427,7 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
 - Create: `src/quel/meta/postgres.lg`
 - Modify: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Write the failing tests** in `pg_test.lg`, inside
+- [x] **Step 1: Write the failing tests** in `pg_test.lg`, inside
   `with-pg`, with a fresh schema per test run (`create schema quel_meta_<n>`
   and drop it in a `finally`) so reruns stay clean. Create a table with
   three columns (`int4`, `varchar(20)`, `numeric(10,2)`), a view, a
@@ -441,43 +446,43 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
   Then call `schemas`, `objects`, `columns` and `completion-schema` with
   `:redshift` on the same pool. Assert the same shapes, except that the
   partition is listed too (Redshift's query has no `relispartition`).
-- [ ] **Step 2: Run** `lgx test-pg`. Expected: the new tests fail.
-- [ ] **Step 3: Write `quel.meta.postgres`** with the SQL in the Design, as
+- [x] **Step 2: Run** `lgx test-pg`. Expected: the new tests fail.
+- [x] **Step 3: Write `quel.meta.postgres`** with the SQL in the Design, as
   `def`s of plain strings. Define the Postgres and Redshift variants of
   `objects` and `completion-rows` side by side. For `schemas` and
   `columns`, register one fn for both engines. A comment states the
   shared-subset rule (PostgreSQL 8.0 features only, no `"char"` in
   results) and that the Redshift variants are unverified against
   Redshift.
-- [ ] **Step 4: Run** `lgx test-pg`, then `lgx test`. Expected: PASS;
+- [x] **Step 4: Run** `lgx test-pg`, then `lgx test`. Expected: PASS;
   plain `lgx test` skips the Postgres ones.
-- [ ] **Step 5: Commit.** `git commit -m "Introspect Postgres and Redshift through pg_catalog"`
+- [x] **Step 5: Commit.** `git commit -m "Introspect Postgres and Redshift through pg_catalog"`
 
 ### Task 3: Handlers and smoke
 
 **Files:**
 - Modify: `src/quel/api.lg`, `test/quel/api_test.lg`, `scripts/smoke.sh`
 
-- [ ] **Step 1: Add the handlers** `list-schemas`, `list-objects`,
+- [x] **Step 1: Add the handlers** `list-schemas`, `list-objects`,
   `list-columns` and `completion-schema` to `quel.api` and to `handlers`
   (by var). Require `quel.meta`, plus `quel.meta.sqlite` and
   `quel.meta.postgres` with a comment that they are loaded for their
   methods.
-- [ ] **Step 2: Update `api_test.lg`.** Add the four names to
+- [x] **Step 2: Update `api_test.lg`.** Add the four names to
   `every-handler-is-a-var`. Add a `structure-of-an-open-database` test:
   `open-db` a temp file, `run` a `create table`, then walk
   `list-schemas` → `list-objects` → `list-columns` → `completion-schema`.
   Check that a handler call with an unknown conn-id throws "No open
   database".
-- [ ] **Step 3: Run** `lgx test`. Expected: PASS.
-- [ ] **Step 4: Extend `scripts/smoke.sh`.** After the step that creates
+- [x] **Step 3: Run** `lgx test`. Expected: PASS.
+- [x] **Step 4: Extend `scripts/smoke.sh`.** After the step that creates
   `t`, call `list-objects` with `["$conn","main"]` and check the reply
   contains `"name":"t"`. Call `completion-schema` and check it contains
   `"id"`. In the Postgres part, if the script has one, do the same with
   `public`. Read the script first and follow its `call`/`fail` helpers.
-- [ ] **Step 5: Run** `lgx smoke` (and `lgx smoke-pg` if Docker is up).
+- [x] **Step 5: Run** `lgx smoke` (and `lgx smoke-pg` if Docker is up).
   Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "Structure handlers: schemas, objects, columns, completion"`
+- [x] **Step 6: Commit.** `git commit -m "Structure handlers: schemas, objects, columns, completion"`
 
 ### Task 4: Frontend data layer
 
@@ -485,11 +490,11 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
 - Modify: `frontend/package.json`, `frontend/src/main.tsx`, `frontend/src/lib/api.ts`, `frontend/src/lib/types.ts`
 - Create: `frontend/src/lib/query.ts`
 
-- [ ] **Step 1: Add TanStack Query.** `npm --prefix frontend install @tanstack/react-query`.
-- [ ] **Step 2: Write `lib/query.ts`:** `queryClient` with `retry: false`,
+- [x] **Step 1: Add TanStack Query.** `npm --prefix frontend install @tanstack/react-query`.
+- [x] **Step 2: Write `lib/query.ts`:** `queryClient` with `retry: false`,
   `staleTime: Infinity` and `refetchOnWindowFocus: false`, and `metaKeys`
   exactly as in the Design.
-- [ ] **Step 3: Types and calls.** In `types.ts`: `SchemaInfo { name;
+- [x] **Step 3: Types and calls.** In `types.ts`: `SchemaInfo { name;
   default }`, `ObjectInfo { name; kind: "table" | "view" |
   "materialized-view" }`, `ColumnInfo { name; type }`, `CompletionSchema
   { "default-schema": string | null; schemas: Record<string,
@@ -499,18 +504,18 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
   `{}` or `null` (see the comment in `api.ts`), so coerce a non-array
   list reply to `[]`, and a reply without `schemas` to `{ "default-schema":
   null, schemas: {} }`.
-- [ ] **Step 4: Provider.** Wrap `<App />` in `QueryClientProvider
+- [x] **Step 4: Provider.** Wrap `<App />` in `QueryClientProvider
   client={queryClient}` in `main.tsx`.
-- [ ] **Step 5: Run** `npm --prefix frontend run build` and `npm --prefix
+- [x] **Step 5: Run** `npm --prefix frontend run build` and `npm --prefix
   frontend test`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "TanStack Query and the structure calls"`
+- [x] **Step 6: Commit.** `git commit -m "TanStack Query and the structure calls"`
 
 ### Task 5: Tree model
 
 **Files:**
 - Create: `frontend/src/state/tree.ts`, `frontend/src/state/tree.test.ts`
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - collapsed schemas give one row each, depth 0;
   - an expanded schema with pending objects gives a `loading` row at
     depth 1, and with an error an `error` row carrying the message and
@@ -527,20 +532,20 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
     removes only the schema's key on collapse;
   - `initialExpanded` picks the default schema, or the only schema, or
     nothing.
-- [ ] **Step 2: Run** `npm --prefix frontend test`. Expected: the new tests fail.
-- [ ] **Step 3: Implement `tree.ts`** with the types and functions in the Design.
-- [ ] **Step 4: Run** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -m "Structure tree model"`
+- [x] **Step 2: Run** `npm --prefix frontend test`. Expected: the new tests fail.
+- [x] **Step 3: Implement `tree.ts`** with the types and functions in the Design.
+- [x] **Step 4: Run** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -m "Structure tree model"`
 
 ### Task 6: Workspace state and cache lifetime
 
 **Files:**
 - Modify: `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`, `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Store.** Add `treeExpanded: string[] | null` to
+- [x] **Step 1: Store.** Add `treeExpanded: string[] | null` to
   `Workspace` (null in `newWorkspace`), and a runner action
   `setTreeExpanded(profileId, keys)`.
-- [ ] **Step 2: Runner tests** (mocked bridge, as the existing runner
+- [x] **Step 2: Runner tests** (mocked bridge, as the existing runner
   tests do; spy on `queryClient.invalidateQueries` and `removeQueries`):
   - a finished disconnect removes `metaKeys.all(oldConnId)`, and so does
     one whose `closeDb` throws;
@@ -549,11 +554,11 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
   - `setTreeExpanded` stores the keys on the workspace, and a disconnect
     keeps them.
   Run and see the first fail.
-- [ ] **Step 3: Implement.** In `disconnectProfile`, call
+- [x] **Step 3: Implement.** In `disconnectProfile`, call
   `queryClient.removeQueries({ queryKey: metaKeys.all(connId) })` for the
   old conn-id after `closeDb`, whether it threw or not. Run `npm --prefix
   frontend test`: PASS.
-- [ ] **Step 4: Commit.** `git commit -m "Tree state per workspace; drop cached metadata on disconnect"`
+- [x] **Step 4: Commit.** `git commit -m "Tree state per workspace; drop cached metadata on disconnect"`
 
 ### Task 7: The tree component
 
@@ -564,74 +569,76 @@ with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
 Use /frontend-design for the visual details; follow the existing sidebar's
 density (`text-sm`, `size="icon-xs"` buttons, `text-muted-foreground`).
 
-- [ ] **Step 1: Sidebar split.** In `AppShell`, the left panel holds a
+- [x] **Step 1: Sidebar split.** In `AppShell`, the left panel holds a
   vertical `ResizablePanelGroup`: `ConnectionsPanel` (default 40%,
   scrolling on its own) above `StructureTree` (the rest). Drop
   `ConnectionsPanel`'s outer `h-full overflow-y-auto` only if the panel
   now provides it; keep its markup otherwise.
-- [ ] **Step 2: States.** `StructureTree` reads the selected workspace.
+- [x] **Step 2: States.** `StructureTree` reads the selected workspace.
   It renders the header ("Structure", a refresh button labelled "Refresh
   structure" that invalidates `metaKeys.all(connId)`, disabled when not
   connected) and the body states from the Design.
-- [ ] **Step 3: Data.** `useQuery` for schemas. When it succeeds and
+- [x] **Step 3: Data.** `useQuery` for schemas. When it succeeds and
   `treeExpanded` is null, call `setTreeExpanded` with `initialExpanded`.
   Use the effect body in braces (AGENTS.md). Then `useQueries` for the
   expanded schemas' objects and the expanded objects' columns, mapped
   into `TreeData`, and `treeRows`.
-- [ ] **Step 4: Rows.** Virtualize with `useVirtualizer` (estimate 24 px,
+- [x] **Step 4: Rows.** Virtualize with `useVirtualizer` (estimate 24 px,
   overscan 10), as `grid/ResultGrid.tsx` does. Each row is a `div` with
   `role="treeitem"` and the ARIA attributes from the Design, indented by
   depth, with a chevron on expandable rows, an icon, the label
   (truncated, full name in `title`) and the muted detail. Error rows have
   `role="alert"` text and a Retry button that calls
   `queryClient.refetchQueries({ queryKey: row.retryKey })`.
-- [ ] **Step 5: Keyboard and focus.** Keep the focused key in component
+- [x] **Step 5: Keyboard and focus.** Keep the focused key in component
   state. Use one `tabIndex={0}` row, the rest `-1`. Implement the keys
   from the Design. Moving focus calls `scrollToIndex` and then focuses
   the row element in an effect (braces). A click focuses and toggles.
   When the focused key disappears (a collapse above, a refresh), fall
   back to the nearest remaining ancestor, else the first row.
-- [ ] **Step 6: Check by hand** in server mode
+- [x] **Step 6: Check by hand** in server mode
   (`CGO_ENABLED=0 GOFLAGS=-tags=server lgx dev`, or `lgx dev` on macOS),
   using /run if useful. Connect a SQLite profile: `main` opens, tables
   and views are grouped, columns load on expand, refresh works, a
   disconnect shows "Not connected.".
-- [ ] **Step 7: Run** `npm --prefix frontend run lint`, `npm --prefix
+- [x] **Step 7: Run** `npm --prefix frontend run lint`, `npm --prefix
   frontend run build`, `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 8: Commit.** `git commit -m "Structure tree in the sidebar"`
+- [x] **Step 8: Commit.** `git commit -m "Structure tree in the sidebar"`
 
 ### Task 8: Schema completion in the editor
 
 **Files:**
 - Modify: `frontend/src/editor/setup.ts`, `frontend/src/editor/SqlEditor.tsx`, `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: `languageFor`.** In `setup.ts`, export
+- [x] **Step 1: `languageFor`.** In `setup.ts`, export
   `languageFor(engine, completion)` as in the Design, and use it in
   `newState` (with `null`). Replace the "schema completion comes with the
   structure browser" comment.
-- [ ] **Step 2: Prop and effects.** `SqlEditor` takes `completion`. The
+- [x] **Step 2: Prop and effects.** `SqlEditor` takes `completion`. The
   tab-swap effect and the old engine effect reconfigure with
   `languageFor(engine, completion)`. The engine effect's dependencies
   become `[engine, completion]`.
-- [ ] **Step 3: Query.** In `AppShell`, `useQuery({ queryKey:
+- [x] **Step 3: Query.** In `AppShell`, `useQuery({ queryKey:
   metaKeys.completion(connId), queryFn: ..., enabled: connected })`,
   mapped to `{ schema: data.schemas, defaultSchema: data["default-schema"]
   ?? undefined }` with `useMemo` on `data`, or `null`, and passed to
   `SqlEditor`.
-- [ ] **Step 4: Check by hand:** in a SQLite profile with table `t`,
+- [x] **Step 4: Check by hand:** in a SQLite profile with table `t`,
   `select na` offers `name` after `from t` is typed. `select * from `
   offers `t`, and `main.` offers `t`. After `create table u (x int)`
   runs, `u` is not offered until the tree's refresh button is pressed,
   and then it is.
-- [ ] **Step 5: Run** lint, build and tests as in Task 7. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "Complete schema, table and column names in the editor"`
+- [x] **Step 5: Run** lint, build and tests as in Task 7. Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -m "Complete schema, table and column names in the editor"`
+
+> Deviation: `lang-sql` completes columns only after a table name or alias (`t.`, `c.`), never bare from the `FROM` clause, so the hand check and the e2e test use `t.`; the bare case is backlogged (`unqualified-column-completion.md`). Codex found that a dot in a schema or table name is read as a path by `lang-sql`: `editor/namespace.ts` escapes it (commit c7c954e), and builds the objects so a table named `__proto__` survives. For Task 7, codex found the virtualized tree could unmount its only tab stop and steal focus on later re-renders: the focused row is now always rendered, and focus moves only after a keyboard move (commit 3f22271).
 
 ### Task 9: End to end
 
 **Files:**
 - Create: `frontend/e2e/structure.spec.ts`
 
-- [ ] **Step 1: Write the spec.** Read `e2e/connect.ts` and
+- [x] **Step 1: Write the spec.** Read `e2e/connect.ts` and
   `e2e/query-loop.spec.ts` for the fixture database and its table `t`.
   Use a profile name of its own (`Structure ${Date.now()}`, as
   `tabs.spec.ts` does). The test:
@@ -649,39 +656,41 @@ density (`text-sm`, `size="icon-xs"` buttons, `text-muted-foreground`).
      (`Control+Space`) after `from t` is in place, and see a column of
      `t` among the options (`.cm-tooltip-autocomplete`).
   6. Disconnect: the tree area shows "Not connected.".
-- [ ] **Step 2: Run** `lgx e2e`. Expected: every spec passes, the old
+- [x] **Step 2: Run** `lgx e2e`. Expected: every spec passes, the old
   ones included.
-- [ ] **Step 3: Commit.** `git commit -m "E2E: structure tree and completion"`
+- [x] **Step 3: Commit.** `git commit -m "E2E: structure tree and completion"`
 
 ### Task 10: Backlog entries
 
 Use /backlog. Each entry is its own commit, `Backlog: <what>`, never
 mixed with code (AGENTS.md).
 
-- [ ] **Step 1:** `docs/backlog/redshift-external-schemas.md`: Redshift's
+- [x] **Step 1:** `docs/backlog/redshift-external-schemas.md`: Redshift's
   external (Spectrum) schemas and datashares do not appear in the
   structure tree or completion, because `pg_class` does not list them.
   Fix: `svv_external_schemas`/`svv_external_tables`/`svv_external_columns`
   or `svv_all_*`, checked against a real cluster. Origin: this plan.
   Commit `Backlog: Redshift external schemas in the structure tree`.
-- [ ] **Step 2:** `docs/backlog/redshift-late-binding-view-columns.md`:
+- [x] **Step 2:** `docs/backlog/redshift-late-binding-view-columns.md`:
   late-binding views (`with no schema binding`) show "No columns" and
   complete no columns. Fix: `pg_get_late_binding_view_cols()` for
   Redshift, unioned in `columns` and `completion-rows`. Commit `Backlog:
   Redshift late-binding view columns`.
-- [ ] **Step 3:** `docs/backlog/session-local-objects-in-tree.md`: the
+- [x] **Step 3:** `docs/backlog/session-local-objects-in-tree.md`: the
   tree reads the pool, so temp tables and SQLite `ATTACH`ed databases
   made in a tab's session do not show, and completion misses them. Fix
   options: read the active tab's session when it is idle, or list its
   temp schema separately. Commit `Backlog: session-local objects in the
   structure tree`.
 
+> Deviation: a fourth backlog entry, `unqualified-column-completion.md` (see Task 8).
+
 ### Task 11: Docs, review, PR
 
 **Files:**
 - Modify: `docs/DESIGN.md`, this plan
 
-- [ ] **Step 1: DESIGN.**
+- [x] **Step 1: DESIGN.**
   - Milestone 1: "Structure tree done 2026-MM-DD: schemas, tables, views
     and columns in the sidebar, schema completion in the editor;
     Redshift through `pg_catalog`, unverified." History stays open.
@@ -700,12 +709,38 @@ mixed with code (AGENTS.md).
     `completion-schema` answer for a non-superuser, that internal
     schemas stay hidden, and how long completion takes on a large
     cluster.
-- [ ] **Step 2:** Mark this plan `**Status: completed**` under its title.
-- [ ] **Step 3: Commit.** `git commit -m "Record the structure tree in the design"`
-- [ ] **Step 4: Review.** Run /code-review on the branch against master;
+- [x] **Step 2:** Mark this plan `**Status: completed**` under its title.
+- [x] **Step 3: Commit.** `git commit -m "Record the structure tree in the design"`
+- [x] **Step 4: Review.** Run /code-review on the branch against master;
   fix what is real. Run the full check: `lgx test`, `lgx test-pg`, `npm
   --prefix frontend test`, lint, build, `lgx smoke`, `lgx e2e`.
-- [ ] **Step 5: PR.** Push `structure-tree` and open a PR against master
+- [x] **Step 5: PR.** Push `structure-tree` and open a PR against master
   titled "Structure tree and schema completion". In the body, note that
   the Redshift catalog is unverified and that the native macOS pass is
   still to do.
+
+## Summary
+
+Implemented as designed. The backend has `quel.meta` with SQLite and
+Postgres/Redshift methods and four handlers. The sidebar has a
+virtualized, keyboard-driven structure tree for the selected profile.
+The editor completes schema, table and column names, and a single refresh
+button reloads everything cached for the connection. Checks: backend
+tests (with Postgres in Docker), 182 frontend tests, `smoke-pg`, and the
+10 e2e specs all pass. The tree was also checked by hand in server mode.
+
+Issues met: the `lgx` on PATH is too old for this repo; an icon's
+`aria-label` polluted the tree items' accessible names (now decorative);
+and the three codex findings in the Task 8 note.
+
+Deviations, gathered: Task 1 (the order of the first steps, local `lgx`,
+tests written with the code); Task 8 (qualified column completion only,
+dot escaping, the tree focus fixes); Task 10 (a fourth backlog entry).
+
+Not done here: the native macOS pass, and anything on Redshift, which
+waits for the first Homebrew release (DESIGN "Unverified").
+
+What the plan could have specified better: it should have checked what
+`lang-sql` completes before promising bare column completion, and named
+the `lgx` version the commands need.
+
