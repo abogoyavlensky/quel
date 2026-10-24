@@ -17,7 +17,19 @@ import { MESSAGES, activeTabOf, selectedWorkspace, store, useApp } from "@/state
 const COPIED_MS = 1500;
 
 // A copy button whose icon turns into a check for a moment after a copy.
-function CopyButton({ label, text, className }: { label: string; text: string | null; className?: string }) {
+// text is called on click (a row's JSON is built only then); null
+// disables the button.
+function CopyButton({
+  label,
+  text,
+  icon = <Copy />,
+  className,
+}: {
+  label: string;
+  text: (() => string) | null;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -28,7 +40,7 @@ function CopyButton({ label, text, className }: { label: string; text: string | 
   }, [copied]);
   const onClick = async () => {
     if (text === null) return;
-    if (await copyText(text)) setCopied(true);
+    if (await copyText(text())) setCopied(true);
     else store.setState({ notice: "Could not copy." });
   };
   return (
@@ -41,7 +53,7 @@ function CopyButton({ label, text, className }: { label: string; text: string | 
       onClick={() => void onClick()}
       className={className}
     >
-      {copied ? <Check /> : <Copy />}
+      {copied ? <Check /> : icon}
     </Button>
   );
 }
@@ -66,7 +78,7 @@ const Field = memo(function Field({
         {/* Hidden in a wrapper: the button's own disabled style sets its
             opacity, which would show it on NULL. */}
         <span className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
-          <CopyButton label={`Copy ${name}`} text={cell === null ? null : String(cell)} />
+          <CopyButton label={`Copy ${name}`} text={cell === null ? null : () => String(cell)} />
         </span>
       </div>
       <div className="mt-0.5 font-mono text-xs">
@@ -102,19 +114,7 @@ export function RowDetails() {
           {result && row ? `Row ${(index! + 1).toLocaleString()} of ${result.rows.length.toLocaleString()}` : "Row details"}
         </span>
         {result && row ? (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Copy row as JSON"
-            title="Copy row as JSON"
-            onClick={() =>
-              void copyText(rowAsJson(result.columns, row)).then(
-                (ok) => ok || store.setState({ notice: "Could not copy." }),
-              )
-            }
-          >
-            <Braces />
-          </Button>
+          <CopyButton label="Copy row as JSON" text={() => rowAsJson(result.columns, row)} icon={<Braces />} />
         ) : null}
         <Button variant="ghost" size="icon-xs" aria-label="Close row details" title="Close" onClick={toggleRowDetails}>
           <X />
