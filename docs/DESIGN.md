@@ -406,16 +406,19 @@ mutation.
 Layout, in resizable panes (shadcn `Resizable`):
 
 ```
-┌──────────────┬───────────────────────────────────────────┐
-│ ● Prod   🔌  │ [Query 1 ×] [Query 2 ×] [+]               │
-│ ○ Local  🔌  │  CodeMirror editor                         │
-│ (selected:   ├───────────────────────────────────────────┤
-│  its tabs →) │ [Messages] [select … 📌 ×] [select … ×]    │
-│ structure    │  virtualized grid                          │
-│ tree         │                                           │
-└──────────────┴───────────────────────────────────────────┘
+┌──────────────┬───────────────────────────────────────────┬──────────────┐
+│ ● Prod   🔌  │ [Query 1 ×] [Query 2 ×] [+]          [◫]  │ Row 3 of 500 │
+│ ○ Local  🔌  │  CodeMirror editor                         │ [filter]     │
+│ (selected:   ├───────────────────────────────────────────┤ id           │
+│  its tabs →) │ [Messages] [select … 📌 ×] [select … ×]    │ 3            │
+│ structure    │  virtualized grid                          │ doc  jsonb ⧉ │
+│ tree         │                                           │ { … }        │
+└──────────────┴───────────────────────────────────────────┴──────────────┘
  status bar: profile · state (Ready / Running… / Not connected) · rows · elapsed · cancel
 ```
+
+The right-hand column is the row details panel, there only while open
+(see [Row details](#row-details)).
 
 The sidebar lists the saved profiles, each with its status mark (filled
 when connected, a hollow ring when not, pulsing while connecting) and a
@@ -448,6 +451,36 @@ and the bodies of SQLite triggers and `BEGIN ATOMIC` functions, where a
   [Saved tabs](#saved-tabs).
 - The schema tree is built with a headless tree on shadcn primitives;
   shadcn has no tree component.
+
+### Row details
+
+A click on a result row selects it, and ↑/↓ move the selection while the
+grid has focus. The selection belongs to the result (`selectedRow`, in
+memory): each result tab keeps its own, a pinned result keeps it across
+runs, and a new run's results start without one.
+
+The row details panel shows the selected row of the active result, one
+read-only block per column, and follows the selection, the result tab,
+the editor tab and the profile. It opens and closes with the tab bar's
+button, `⌘I` (`Ctrl+I`), or a double-click on a row, which only opens.
+A single click never opens it. `⌘I` is caught on `window` in the capture
+phase rather than made a native menu item: CodeMirror binds `Mod-i`
+itself, and a toggle cannot take the double delivery (menu plus page)
+that Run tolerates. The panel's open state is app-wide and in memory.
+
+JSON values are formatted and highlighted: values of `JSON`, `JSONB` and
+`SUPER` columns, and in SQLite text that starts with `{` or `[`.
+Formatting re-indents the value's own text (`grid/json.ts`) instead of
+`JSON.stringify(JSON.parse(v))`, which would round big integers and
+rewrite `1.10` as `1.1`; `JSON.parse` only checks validity. Values over
+256 KiB, or whose formatted text would pass 1 MiB (deep nesting), show
+as plain text. Highlighting is `@lezer/json` through `highlightCode`
+with the SQL editor's colour variables.
+
+Each value's copy button copies it as stored (never the formatted
+JSON) and is disabled for NULL. "Copy row as JSON" maps column names to
+cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
+`navigator.clipboard` and falls back to the Wails runtime's clipboard.
 
 ### Workspaces
 
@@ -640,7 +673,9 @@ package feature, not app glue.
    history. Workspace restore done
    2026-10-23: each profile's editor tabs, their names, pins and text,
    and recently closed tabs, saved as they change and restored on
-   launch with the selected profile.
+   launch with the selected profile. Row details done 2026-10-24: a
+   selectable row in the grid and a read-only panel of its values, JSON
+   formatted and highlighted, values and rows copied.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
    procedures, table info; DDL view and export; write confirmation and
    read-only profiles; `Cmd+K`.
