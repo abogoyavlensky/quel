@@ -95,6 +95,10 @@ describe("rowAsJson", () => {
     expect(JSON.parse(out)).toEqual({ id: "12345678901234567890", name: "ann", gone: null });
   });
 
+  it("keeps a column named __proto__", () => {
+    expect(rowAsJson([col("__proto__"), col("a")], [1, 2])).toBe('{\n  "__proto__": 1,\n  "a": 2\n}');
+  });
+
   it("suffixes repeated names, skipping ones already taken", () => {
     expect(JSON.parse(rowAsJson([col("id"), col("id")], [1, 2]))).toEqual({ id: 1, id_2: 2 });
     expect(JSON.parse(rowAsJson([col("id"), col("id_2"), col("id")], [1, 2, 3]))).toEqual({ id: 1, id_2: 2, id_3: 3 });

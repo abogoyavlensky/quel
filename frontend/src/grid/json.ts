@@ -107,7 +107,8 @@ export function rowAsJson(columns: Column[], row: Cell[]): string {
   // column's name.
   const taken = new Set(columns.map((c) => c.name));
   const seen = new Set<string>();
-  const obj: Record<string, Cell> = {};
+  // No prototype: a column named __proto__ must stay a column.
+  const obj: Record<string, Cell> = Object.create(null);
   columns.forEach((c, i) => {
     let key = c.name;
     if (seen.has(key)) {
