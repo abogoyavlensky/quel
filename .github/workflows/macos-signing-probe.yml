@@ -1,13 +1,8 @@
 name: macOS signing probe
 
 on:
-  push:
-    branches: [macos-homebrew-release]
-    paths:
-      - .github/workflows/macos-signing-probe.yml
-      - scripts/probe-macos-signing.sh
-      - lgx.edn
-      - .mise.toml
+  # Run only after the user explicitly approves the signing experiment.
+  workflow_dispatch:
 
 permissions:
   contents: read

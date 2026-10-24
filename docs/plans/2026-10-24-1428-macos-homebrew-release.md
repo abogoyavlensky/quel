@@ -8,7 +8,7 @@
 
 ---
 
-**Status: proposed.** The release design is ready for review. Task 1 is a prerequisite experiment, not a claim that today's executable can be signed. If it fails, release implementation depends on a separately scoped upstream packaging fix. Do not mark this plan complete with that dependency unresolved.
+**Status: in progress; signing experiment awaiting user approval.** The user approved implementation on branch `macos-homebrew-release`, then requested that signing experiment steps be asked about first. Do not launch further signing experiments without explicit approval. Task 1 is a prerequisite experiment, not a claim that today's executable can be signed. If it fails, release implementation depends on a separately scoped upstream packaging fix. Do not mark this plan complete with that dependency unresolved.
 
 ## Design
 
@@ -115,6 +115,8 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 ### Task 1: Prove signing compatibility before choosing a production package layout
 
 **Files:** Read `lgx.edn`, `src/quel/app.lg`, `src/quel/system.lg`, pinned upstream `pkg/bundle/bundle.go` and `pkg/cli/cli.go`; record results in this plan.
+
+> Progress 2026-10-24: branch created and approved plan committed (`6120360`). Added a secret-free probe workflow/script (`882697a`) because the workspace is Linux. The initial push started Actions run 40107553708 before the user's instruction to ask first arrived. Cancellation via API returned HTTP 403; the user was given the cancellation link. Automatic push triggering was removed immediately. No further experiment execution is authorized yet. A workflow_dispatch-only workflow generally needs to exist on the default branch to be dispatchable; do not merge it or restore push triggering just to bypass the approval checkpoint. No signing pass or native UI verification is claimed.
 
 - [ ] **Step 1:** Create branch `macos-homebrew-release` from current master after preserving any unrelated work. Locate an ARM64 Mac or GitHub-hosted macOS experiment environment; do not run a release tag to obtain one. Verify `uname -m` is `arm64` and record toolchain versions.
 - [ ] **Step 2:** On that Mac run `lgx fe-install && lgx build` with desktop cgo enabled and no server build tag. Launch the unsigned production output from a temporary directory with a fresh `QUEL_DATA_DIR` and `QUEL_SECRETS=memory`. Confirm the UI and SQLite query work. Keep the original binary for comparison.
