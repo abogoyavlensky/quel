@@ -414,7 +414,7 @@ Layout, in resizable panes (shadcn `Resizable`):
 │ structure    │  virtualized grid                          │
 │ tree         │                                           │
 └──────────────┴───────────────────────────────────────────┘
- status bar: profile · state (Ready / Running… / Not connected [Connect]) · rows · elapsed · cancel
+ status bar: profile · state (Ready / Running… / Not connected) · rows · elapsed · cancel
 ```
 
 The sidebar lists the saved profiles, each with its status mark (filled
@@ -461,15 +461,15 @@ results, messages and connection are not.
 - **Select** (a click on a profile row) shows that workspace, connected
   or not; it never connects. The editor's dialect comes from the
   profile's engine, so a disconnected workspace is still editable.
-- **Connect** and **Disconnect** (the row's button, or the status bar's
-  Connect) act on one profile and leave the selection and every other
+- **Connect** and **Disconnect** (the row's button, or the structure
+  panel's Connect) act on one profile and leave the selection and every other
   workspace alone, so several profiles can be connected at once.
   Disconnecting closes the profile's database on the backend (its
   sessions, cursors and pool) and marks its open results closed; the tabs
   and their text stay.
 - **Running** (⌘Enter, ⌘⇧Enter, the menu) on a workspace that is not
-  connected sends nothing and shows "Not connected." with a Connect
-  button in the status bar; the notice clears on the next edit, select or
+  connected sends nothing and shows "Not connected." in the status bar;
+  the notice clears on the next edit, select or
   connect. While connecting, a run is dropped.
 - The menu's tab actions (new, close, run, cancel) act on the selected
   workspace's active tab.
