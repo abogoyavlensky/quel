@@ -13,4 +13,11 @@ describe("namespaceOf", () => {
       "a\\.b": { "order\\.items": ["x.y"] },
     });
   });
+
+  it("keeps a table named __proto__", () => {
+    const schemas = JSON.parse('{"main": {"__proto__": ["x"]}}') as Record<string, Record<string, string[]>>;
+    const ns = namespaceOf({ "default-schema": "main", schemas }) as Record<string, Record<string, string[]>>;
+    expect(Object.keys(ns.main)).toEqual(["__proto__"]);
+    expect(Object.getOwnPropertyDescriptor(ns.main, "__proto__")?.value).toEqual(["x"]);
+  });
 });

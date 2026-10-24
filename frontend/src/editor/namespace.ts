@@ -7,11 +7,12 @@ import type { CompletionSchema } from "@/lib/types";
 const escape = (name: string) => name.replace(/\./g, "\\.");
 
 export function namespaceOf(c: CompletionSchema): SQLNamespace {
-  const ns: { [schema: string]: { [table: string]: string[] } } = {};
-  for (const [schema, tables] of Object.entries(c.schemas)) {
-    const t: { [table: string]: string[] } = {};
-    for (const [table, columns] of Object.entries(tables)) t[escape(table)] = columns;
-    ns[escape(schema)] = t;
-  }
-  return ns;
+  // fromEntries defines own properties, so a table named __proto__ stays
+  // a table rather than setting the object's prototype.
+  return Object.fromEntries(
+    Object.entries(c.schemas).map(([schema, tables]) => [
+      escape(schema),
+      Object.fromEntries(Object.entries(tables).map(([table, columns]) => [escape(table), columns])),
+    ]),
+  );
 }
