@@ -9,6 +9,7 @@ EXECUTABLE="quel"
 MACOS_MIN="15.0"
 DIST="$MACOS_ROOT/dist"
 APP="$DIST/$APP_NAME.app"
+CHECKSUMS="$DIST/checksums.txt"
 
 die() { echo "${0##*/}: $1" >&2; exit 1; }
 
@@ -27,3 +28,6 @@ require_apple_silicon() {
     [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]] ||
         die "needs an Apple Silicon Mac (this is $(uname -s) $(uname -m))"
 }
+
+# The release archive's file name for a version.
+archive_name() { echo "quel_$1_darwin_arm64.zip"; }

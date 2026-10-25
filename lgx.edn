@@ -99,5 +99,9 @@
             :do {:sh "bash scripts/with-postgres.sh bash scripts/smoke.sh"}}
   package-macos {:doc "Build dist/Quel.app (unsigned) on an Apple Silicon Mac"
                  :do {:sh "bash scripts/package-macos.sh"}}
-  verify-macos {:doc "Check dist/Quel.app and launch an ad-hoc signed copy"
-                :do {:sh "bash scripts/verify-macos.sh"}}}}
+  verify-macos {:doc "Check dist/Quel.app and launch an ad-hoc signed copy; --distribution checks the signed release archive"
+                :do {:sh ["bash" "scripts/verify-macos.sh" :args/rest]}}
+  sign-macos {:doc "Sign with Developer ID, notarize and archive dist/Quel.app (APPLE_SIGNING_IDENTITY, APPLE_NOTARY_PROFILE)"
+              :do {:sh "bash scripts/sign-macos.sh"}}
+  test-release {:doc "Test the release scripts with stand-ins for Apple's tools"
+                :do {:sh "bash scripts/test-release.sh"}}}}

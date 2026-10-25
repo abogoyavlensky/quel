@@ -1,21 +1,59 @@
 #!/usr/bin/env bash
-# Check dist/Quel.app: bundle metadata, architecture, deployment target,
-# linkage and build tags; then ad-hoc sign a copy under a path with spaces
-# and launch it with isolated data. The launch check is liveness only: the
-# process stays up and creates its app database. It does not see the window,
-# the frontend or the bridge; that is a manual pass.
+# Check Quel's macOS app: bundle metadata, architecture, deployment target,
+# linkage and build tags, then launch it with isolated data from a path with
+# spaces. The launch check is liveness only: the process stays up and
+# creates its app database. It does not see the window, the frontend or the
+# bridge; that is a manual pass.
 #
-#   lgx verify-macos     (after lgx package-macos)
+#   lgx verify-macos                 dist/Quel.app, as an ad-hoc signed copy
+#   lgx verify-macos --distribution  the release archive from sign-macos:
+#                                    its checksum, Developer ID signature,
+#                                    notarization ticket and Gatekeeper
 set -euo pipefail
 source "$(dirname "$0")/macos-common.sh"
 
+mode=development
+case "${1:-}" in
+"") ;;
+--distribution) mode=distribution ;;
+*) die "unknown argument '$1' (expected nothing or --distribution)" ;;
+esac
+
 require_apple_silicon
 version="$(read_version)"
-[[ -d "$APP" ]] || die "$APP is missing: run lgx package-macos"
-bin="$APP/Contents/MacOS/$EXECUTABLE"
-plist="$APP/Contents/Info.plist"
 
 ok() { echo "  ok: $1"; }
+
+work="$(mktemp -d)"
+pid=""
+cleanup() {
+    if [[ -n "$pid" ]]; then
+        kill "$pid" 2>/dev/null || true
+        wait "$pid" 2>/dev/null || true
+    fi
+    rm -rf "$work"
+}
+trap cleanup EXIT
+place="$work/Quel check"
+mkdir -p "$place"
+app="$place/$APP_NAME.app"
+
+if [[ "$mode" == development ]]; then
+    [[ -d "$APP" ]] || die "$APP is missing: run lgx package-macos"
+    ditto "$APP" "$app"
+else
+    archive="$(archive_name "$version")"
+    [[ -f "$DIST/$archive" ]] || die "$DIST/$archive is missing: run lgx sign-macos"
+    [[ -f "$CHECKSUMS" ]] || die "$CHECKSUMS is missing: run lgx sign-macos"
+    echo "==> Archive"
+    (cd "$DIST" && shasum -a 256 -c checksums.txt >/dev/null) || die "$archive does not match checksums.txt"
+    ok "$archive matches checksums.txt"
+    ditto -x -k "$DIST/$archive" "$place"
+    [[ -d "$app" ]] || die "$archive does not unpack to $APP_NAME.app"
+    ok "unpacks to $APP_NAME.app"
+fi
+bin="$app/Contents/MacOS/$EXECUTABLE"
+plist="$app/Contents/Info.plist"
 
 echo "==> Bundle"
 plutil -lint -s "$plist" || die "Info.plist does not lint"
@@ -31,7 +69,7 @@ expect_key CFBundleShortVersionString "$version"
 expect_key CFBundleVersion "$version"
 expect_key LSMinimumSystemVersion "$MACOS_MIN"
 expect_key CFBundleIconFile quel
-[[ -s "$APP/Contents/Resources/quel.icns" ]] || die "Resources/quel.icns is missing"
+[[ -s "$app/Contents/Resources/quel.icns" ]] || die "Resources/quel.icns is missing"
 ok "Info.plist: $BUNDLE_ID $version, macOS $MACOS_MIN, icon"
 
 echo "==> Binary"
@@ -60,31 +98,36 @@ else
     echo "  skip: build tags (go is not on PATH)"
 fi
 
-echo "==> Ad-hoc signed copy, launched with isolated data"
-work="$(mktemp -d)"
-pid=""
-cleanup() {
-    if [[ -n "$pid" ]]; then
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
-    fi
-    rm -rf "$work"
-}
-trap cleanup EXIT
-copy="$work/Quel check/$APP_NAME.app"
-mkdir -p "$(dirname "$copy")"
-ditto "$APP" "$copy"
-# Ad-hoc: a development check, not distribution signing.
-codesign --force --options runtime --sign - "$copy"
-codesign --verify --deep --strict "$copy" || die "the ad-hoc signed copy does not verify"
-ok "ad-hoc signature verifies (development only)"
+echo "==> Signature"
+if [[ "$mode" == development ]]; then
+    # Ad-hoc: a development check, not distribution signing.
+    codesign --force --options runtime --sign - "$app" 2>/dev/null
+    codesign --verify --deep --strict "$app" || die "the ad-hoc signed copy does not verify"
+    ok "ad-hoc signature verifies (development only)"
+else
+    codesign --verify --deep --strict --verbose=2 "$app" 2>/dev/null || die "the signature does not verify"
+    details="$(codesign -dvv "$app" 2>&1)"
+    [[ "$details" == *"Authority=Developer ID Application: "* ]] || die "not signed with a Developer ID Application identity"
+    [[ "$details" == *"Authority=Developer ID Certification Authority"* ]] || die "the signature does not chain to Developer ID"
+    [[ "$details" == *"Timestamp="* ]] || die "the signature has no secure timestamp"
+    [[ "$details" == *"flags="*"(runtime)"* ]] || die "hardened runtime is off"
+    ok "Developer ID signature with hardened runtime and a secure timestamp"
+    xcrun stapler validate "$app" >/dev/null || die "the notarization ticket is not stapled"
+    ok "notarization ticket stapled"
+    assessment="$(spctl --assess --type execute -vv "$app" 2>&1)" ||
+        { echo "$assessment" >&2; die "Gatekeeper rejects the app"; }
+    [[ "$assessment" == *"source=Notarized Developer ID"* ]] ||
+        { echo "$assessment" >&2; die "Gatekeeper does not see a notarized Developer ID app"; }
+    ok "Gatekeeper: accepted, Notarized Developer ID"
+fi
 
+echo "==> Launch with isolated data"
 data="$work/data"
 log="$work/quel.log"
 # No dev variables and nothing from the dev toolchain on PATH.
 (cd "$work" && exec env -i HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
     QUEL_SECRETS=memory QUEL_DATA_DIR="$data" \
-    "$copy/Contents/MacOS/$EXECUTABLE") >"$log" 2>&1 &
+    "$bin") >"$log" 2>&1 &
 pid=$!
 for _ in $(seq 1 30); do
     [[ -s "$data/quel.db" ]] && break
@@ -96,4 +139,4 @@ sleep 3
 kill -0 "$pid" 2>/dev/null || { cat "$log" >&2; die "the app exited after startup"; }
 ok "launch (liveness only): running, app database created in an isolated dir"
 
-echo "All checks passed for $APP_NAME $version."
+echo "All $mode checks passed for $APP_NAME $version."
