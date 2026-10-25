@@ -142,10 +142,12 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 
 **Files:** Create `build/macos/icon-source.png`, `build/macos/icon.png`.
 
-- [ ] **Step 1:** Copy the attachment into the source path and verify its SHA-256 against the Design section. If the attachment is unavailable in a future session, ask for it again rather than drawing a replacement.
-- [ ] **Step 2:** Use `/imagegen` to remove only the exterior pale background with transparent output, preserving the existing mark, navy tile, proportions, and colors. Save a normalized 1024x1024 RGBA master. Keep the source unchanged.
-- [ ] **Step 3:** Inspect at full size and at 16, 32, 128, and 512 pixels on light/dark backgrounds. Check silhouette, no pale fringe or white plate, and a readable Q tail. Correct an unacceptable edit before proceeding; do not redesign the logo.
-- [ ] **Step 4:** Commit with `git commit -m "Add Quel's macOS icon"`.
+- [x] **Step 1:** Copy the attachment into the source path and verify its SHA-256 against the Design section. If the attachment is unavailable in a future session, ask for it again rather than drawing a replacement.
+- [x] **Step 2:** Use `/imagegen` to remove only the exterior pale background with transparent output, preserving the existing mark, navy tile, proportions, and colors. Save a normalized 1024x1024 RGBA master. Keep the source unchanged.
+- [x] **Step 3:** Inspect at full size and at 16, 32, 128, and 512 pixels on light/dark backgrounds. Check silhouette, no pale fringe or white plate, and a readable Q tail. Correct an unacceptable edit before proceeding; do not redesign the logo.
+- [x] **Step 4:** Commit with `git commit -m "Add Quel's macOS icon"`.
+
+> Done 2026-10-25. The user re-attached the icon; its pixels are identical to the original attachment (0 differing pixels), so `icon-source.png` is the original file, SHA-256 `357ee654…` as in the Design section. Deviation from Step 2: no `/imagegen`. The edit needed is a cut, not a redraw, so a throwaway Go program (outside the repo, `golang.org/x/image/draw`) did it deterministically: the background is every pixel with luminance >= 140 that a flood fill from the image border reaches (the pale backdrop, the drop shadow below the tile, and a 1px white rim on the tile's edge); the tile is the rest, minus its outermost ring (a blend with the rim), with edge colours taken from the pixels just inside. The tile (1057x1063, centred in the source) was scaled as a 1063px square with Catmull-Rom to 824px and centred on a transparent 1024x1024 canvas, Apple's macOS icon grid, so it sits at the size of other Dock icons. Geometry and colours are otherwise untouched. Checked on white, light gray, dark gray and black at 512, 128, 32 and 16 px plus 8x edge crops: no pale fringe (the brightest partly transparent pixel is the tile's own top highlight, `(69,102,148)`), the Q tail stays readable at 32 px and is a hint at 16 px. No drop shadow is baked in; add one only if the Dock rendering on the Mac (Task 3) looks flat beside other apps.
 
 ### Task 3: Build and inspect the app bundle
 
