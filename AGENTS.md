@@ -22,6 +22,7 @@ built into `resources/public`.
 | `lgx smoke` / `lgx smoke-pg` | server-mode smoke test over HTTP; `-pg` adds Postgres in Docker |
 | `lgx e2e` | Playwright UI tests against the app in server mode |
 | `lgx build` | frontend + binary at `bin/quel` |
+| `lgx package-macos` / `lgx verify-macos` | `dist/Quel.app` (unsigned) on an Apple Silicon Mac; check it and launch an ad-hoc signed copy |
 
 On Linux without GTK4/WebKitGTK headers, prefix `lgx dev`, `lgx run` and
 the test, smoke and e2e tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`

@@ -96,4 +96,8 @@
   smoke {:doc "Run the app in server mode and drive the bridge over HTTP"
          :do {:sh "bash scripts/smoke.sh"}}
   smoke-pg {:doc "The smoke test, plus Postgres, with a throwaway one in Docker"
-            :do {:sh "bash scripts/with-postgres.sh bash scripts/smoke.sh"}}}}
+            :do {:sh "bash scripts/with-postgres.sh bash scripts/smoke.sh"}}
+  package-macos {:doc "Build dist/Quel.app (unsigned) on an Apple Silicon Mac"
+                 :do {:sh "bash scripts/package-macos.sh"}}
+  verify-macos {:doc "Check dist/Quel.app and launch an ad-hoc signed copy"
+                :do {:sh "bash scripts/verify-macos.sh"}}}}
