@@ -6,6 +6,8 @@ Frontend: Vite + React + TypeScript + Tailwind + shadcn in `frontend/`,
 built into `resources/public`.
 
 - Design: `docs/DESIGN.md`. Plans: `docs/plans/`. Backlog: `docs/backlog/`.
+  Developer setup: `docs/DEVELOPMENT.md`.
+  Releases: `docs/RELEASE.md`.
 - Reference app for the patterns used here: `examples/wails-tasks` in the
   lgx repo.
 
@@ -50,6 +52,9 @@ tasks need Docker.
   `scripts/server-mode.sh` sets `QUEL_SECRETS=memory` and a temporary
   `QUEL_DATA_DIR`; backend tests use `{:backend :memory}` and a temp
   `:dir`. Linux boxes usually have no Secret Service at all.
+- A pushed `v*` tag publishes a release (signed app, GitHub Release, tap
+  update). Push one tag by name, never `git push --tags`, and only when
+  asked to release.
 - Every SQLite file opens through `quel.conn/sqlite-uri` (a `file:` URI):
   a raw path with `?` or `#` opens a different file.
 

@@ -620,6 +620,23 @@ The code has to stay compatible with the native build:
 - no `with-redefs` / `alter-var-root` in application code;
 - no SQL or other runtime data loaded from resources.
 
+### Releases
+
+Quel ships as a signed and notarized `Quel.app` for Apple Silicon and
+macOS 15+, installed through a Homebrew cask in `abogoyavlensky/homebrew-tap`;
+[RELEASE.md](RELEASE.md) is the procedure. `lgx package-macos` wraps the
+native binary into the bundle (bundle ID `io.github.abogoyavlensky.quel`,
+version from `VERSION`, deployment target 15.0 for cgo, the linker and
+`Info.plist` alike, the icon from `build/macos/icon.png`).
+`scripts/sign-macos.sh` signs with Developer ID, hardened runtime and a
+secure timestamp, with no entitlements: none proved necessary. It
+notarizes, staples, and only then writes the zip and `checksums.txt`. A
+`v*` tag runs it on a `macos-15` runner with the certificate in a
+temporary keychain, publishes the GitHub Release and regenerates
+`Casks/quel.rb`. The cask has no `zap`, so an uninstall keeps profiles,
+tabs and passwords. No Intel or universal build, DMG, in-app updater or
+App Store: users upgrade through Homebrew.
+
 ### Testing
 
 - **Backend**: `lgx test` against SQLite (and later DuckDB) in-process.
@@ -638,6 +655,16 @@ The code has to stay compatible with the native build:
   surviving, paging). `lgx e2e` drives the UI with Playwright in server
   mode: paging as the grid scrolls, scripts, pinning, cancel, and one
   session per tab. CI runs all three.
+- **The macOS app**: server mode never compiles the desktop build, so it
+  is checked on its own. `lgx package-macos && lgx verify-macos` on an
+  Apple Silicon Mac builds the real app, checks the bundle, architecture,
+  deployment target, linked libraries and build tags, and launches an
+  ad-hoc signed copy with `QUEL_SECRETS=memory` and a scratch
+  `QUEL_DATA_DIR`. CI's `macos` job runs it on every PR. The launch
+  check is liveness only; the window, frontend and bridge need a manual
+  pass (`open -n --env QUEL_SECRETS=memory --env QUEL_DATA_DIR=...`).
+  `lgx test-release` covers the signing, cask, publishing and tap scripts
+  with stand-ins for Apple's tools and GitHub.
 
 ## Upstream work
 
@@ -690,7 +717,7 @@ package feature, not app glue.
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
    JSON; copy-as formats.
 5. **Later.** SSH tunnels, Redshift IAM authentication, inline editing,
-   Redis, Linux, signed and notarized releases.
+   Redis, Linux.
 
 ## Unverified
 
@@ -710,6 +737,9 @@ settles them; update this section when it does.
   schemas stay hidden (the filter drops `pg_*` and
   `information_schema` only); and how long `completion-schema` takes on
   a large cluster.
+- The released app, installed from the cask and launched from Finder,
+  saves and reads a profile's password in the Keychain under the hardened
+  runtime (checked at the first release, with a scratch profile).
 
 ### Settled by milestone 0 (2026-10-19 and 2026-10-21)
 
@@ -736,9 +766,6 @@ settles them; update this section when it does.
 
 ## Open questions
 
-- **Distribution.** Signing and notarization need a paid Apple Developer
-  account. Without it, the app ships unsigned and users clear the
-  quarantine flag. Decide before the first public release.
 - **Redshift authentication** beyond user and password: IAM
   (`GetClusterCredentials`, Serverless `GetCredentials`) or SSO - which
   ones, and when.

@@ -28,7 +28,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       published: ${{ steps.published.outputs.published }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # A tag must be exactly v plus VERSION; a rehearsal checks VERSION only.
       - id: version
@@ -102,7 +102,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/package-macos
 
@@ -121,7 +121,7 @@ jobs:
       - name: Verify the release archive
         run: lgx verify-macos --distribution
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: quel-${{ needs.gate.outputs.version }}
           path: |
@@ -137,9 +137,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: quel-${{ needs.gate.outputs.version }}
           path: release
@@ -162,11 +162,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # The token stays in the clone's git config for the push and is
-      # removed when the job ends; it never appears in a URL or a command.
-      - uses: actions/checkout@v4
+      # checkout keeps the token in a credentials file outside the clone,
+      # used by the push and removed when the job ends; it never appears in
+      # a URL or a command.
+      - uses: actions/checkout@v7
         with:
           repository: abogoyavlensky/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}

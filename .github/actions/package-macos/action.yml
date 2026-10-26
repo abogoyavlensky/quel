@@ -18,9 +18,9 @@ runs:
         xcodebuild -version
 
     # lg, lgx, go and node, at the versions in .mise.toml.
-    - uses: jdx/mise-action@v3
+    - uses: jdx/mise-action@v5
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       with:
         path: |
           ~/Library/Caches/go-build

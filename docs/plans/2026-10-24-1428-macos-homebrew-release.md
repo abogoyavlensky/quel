@@ -8,7 +8,7 @@
 
 ---
 
-**Status: Tasks 1-5 done; Task 6 written and checked locally, not yet run on GitHub; Task 7 not started.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
+**Status: Tasks 1-6 done; Task 7 Steps 1-2 done, review and the first release pending.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
 
 ## Design
 
@@ -198,7 +198,7 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 - [x] **Step 3:** Implement temporary keychain import, partition-list access for `codesign`, and a named notary profile. Register unconditional cleanup early, remove temporary P12/profile files, restore the original keychain search list, and delete the temporary keychain even on failure.
 - [x] **Step 4:** Publish a draft GitHub Release only after artifact checks, upload ZIP/checksum and generated notes, then publish. Existing published assets are immutable; rerunning a successful publication must not silently replace them. Preserve a recovery path that retries only the failed tap job against the existing release.
 - [x] **Step 5:** Update only `Casks/quel.rb` in the shared tap from published checksums. Use the existing token convention with credential-safe checkout, no token in printed commands or persistent remote URLs. Skip unchanged files; reject version rollback; handle concurrent updates with bounded rebase/reapply retries. Do not force-push.
-- [ ] **Step 6:** Validate workflow syntax with `actionlint` and inspect all job permissions/dependencies. Verify a normal PR can run without release secrets and cannot publish. Exercise tag mismatch and unavailable-secret failures without creating a real release. If CI is used for an experiment, use a nonpublishing workflow invocation, not a throwaway public tag.
+- [x] **Step 6:** Validate workflow syntax with `actionlint` and inspect all job permissions/dependencies. Verify a normal PR can run without release secrets and cannot publish. Exercise tag mismatch and unavailable-secret failures without creating a real release. If CI is used for an experiment, use a nonpublishing workflow invocation, not a throwaway public tag.
 - [x] **Step 7:** Commit with `git commit -m "Publish signed macOS releases and update the Homebrew tap"`.
 
 > Progress 2026-10-26. `ci.yml` gains `workflow_call`, `contents: read`, a concurrency group of `ci-<calling workflow>-<ref>` that cancels only direct CI runs, `lgx test-release` in the Linux job, cache keys with OS, architecture, build mode and `.mise.toml`, and a secret-free `macos` job on `macos-15`: `.github/actions/package-macos` (arm64 check, `sw_vers` and `xcodebuild -version` in the log, mise, cache, `lgx package-macos`), then `lgx verify-macos`. `release.yml` runs on `v*` tags and on `workflow_dispatch` as a rehearsal that signs, notarizes, verifies and uploads a workflow artifact but never publishes or touches the tap. Concurrency is one `release` group, never cancelled. Its top-level permissions are empty; only `publish` has `contents: write`. The jobs:
@@ -217,12 +217,37 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 >
 > Not yet verified on GitHub: the PR run of both CI jobs (the `macos` job's GUI launch on a hosted runner included) and a release rehearsal. `workflow_dispatch` needs `release.yml` on the default branch. The intermediate certificate: if the runner lacks the Developer ID intermediate, `sign-macos.sh`'s preflight fails with "no signing identity" before signing, and the fix is to import Apple's Developer ID G2 CA into the temporary keychain. `docs/RELEASE.md`, referenced by the gate's error message, is Task 7.
 
+> Done 2026-10-27. The PR (#10, squash-merged as `289c1ac`) ran both CI jobs without release secrets; the `macos` job built, checked and launched the app on the hosted runner. After the user set the seven secrets, a rehearsal (`workflow_dispatch` on `master`, run 40418842023) passed:
+>
+> - Runner: macOS 15.7.9, Xcode 16.4.
+> - `gate`: VERSION 0.1.0 and all secrets present.
+> - `ci`: both jobs passed (`test` and `macos`).
+> - `build`: certificate imported (the runner already trusts the Developer ID intermediate), notary profile stored, submission `b2347642-9cd5-492d-a2df-c10636587d2d` Accepted, stapled. The zip's SHA-256 is `292b566ae8c1c8de7fef5a54c61bc069d58f8e1960685891b6ff667328baac79`. `verify-macos --distribution` passed every check, including Gatekeeper `Notarized Developer ID` and the launch.
+> - `publish` and `tap`: skipped, as a rehearsal should.
+>
+> The artifact `quel-0.1.0` was kept. The tag-mismatch and missing-secret failures are covered by `lgx test-release` and the gate's checks, not by a live failing run. The annotations warn that `actions/checkout@v4`, `actions/cache@v4`, `actions/upload-artifact@v4` and `jdx/mise-action@v3` target the deprecated Node 20 and are forced onto Node 24; they still work.
+
 ### Task 7: Document, review, and prepare the first release
 
 **Files:** Create `docs/RELEASE.md`; modify `README.md`, `docs/DESIGN.md`, and this plan.
 
-- [ ] **Step 1:** Document installation/upgrade, macOS 15+/Apple Silicon scope, ZIP download, preserved user data, stable bundle ID, required private CI setup, version bump and annotated tag commands, notarization diagnostics, and tap-job retry. Use `git tag -a v0.1.0 -m "Quel 0.1.0"` and `git push origin v0.1.0` as the explicit first-release example. Do not add a helper that pushes all repository tags.
-- [ ] **Step 2:** Update DESIGN's earlier signing/distribution deferral, packaging claim, and upstream dependency status accurately. Keep Redshift unverified until real-cluster testing occurs. Document how to reproduce native validation separately from server-mode tests.
+- [x] **Step 1:** Document installation/upgrade, macOS 15+/Apple Silicon scope, ZIP download, preserved user data, stable bundle ID, required private CI setup, version bump and annotated tag commands, notarization diagnostics, and tap-job retry. Use `git tag -a v0.1.0 -m "Quel 0.1.0"` and `git push origin v0.1.0` as the explicit first-release example. Do not add a helper that pushes all repository tags.
+- [x] **Step 2:** Update DESIGN's earlier signing/distribution deferral, packaging claim, and upstream dependency status accurately. Keep Redshift unverified until real-cluster testing occurs. Document how to reproduce native validation separately from server-mode tests.
+> Steps 1-2 progress 2026-10-27 (branch `macos-release-docs`):
+>
+> - `docs/RELEASE.md`: one-time setup (the seven secrets, the `.p12` export and upload, a separate CI app-specific password, renewals), cutting a release with `git tag -a v0.1.0 -m "Quel 0.1.0"` and `git push origin v0.1.0` (never `--tags`), what each job does, a rehearsal, what to do when each job fails (notarization logs, draft resume, tap-only retry), signing on a Mac, and what users keep across versions.
+> - README: an Install section (cask, zip, macOS 15+ on Apple Silicon, upgrades and uninstall keep data) and the packaging commands in Build.
+> - DESIGN: a Releases section; native app checks under Testing; signed releases removed from milestone 5; the Distribution open question removed; the Keychain-under-hardened-runtime check added to Unverified for the first release. Redshift stays unverified.
+> - AGENTS.md: points to RELEASE.md and forbids `git push --tags`.
+
+> Step 3 progress 2026-10-27: `/code-review` of `cab78d0..b2f23ef` found nothing blocking. The rehearsal artifact unpacks flat (`quel_0.1.0_darwin_arm64.zip`, `checksums.txt`) as `publish-release.sh` expects, and its checksum verifies.
+>
+> - Fixed both Should-fix findings. Actions moved off Node 20: `checkout@v7`, `cache@v6`, `upload-artifact@v7`, `download-artifact@v8`, `mise-action@v5`; their breaking changes (checkout's separate credentials file, download's digest check and non-zip handling, mise's 24 h release age) do not affect this use. RELEASE.md now says to push one release tag at a time, because GitHub keeps one waiting run per concurrency group.
+> - Of the nits, the argument-passed secrets in `ci-sign-macos.sh` now have a comment. The README's Install section waits on the first release, so merge right before tagging. A tag ruleset restricting `v*` to `master` is left to the user.
+> - The README was rewritten for users (icon, features, install, update, uninstall, data, status), and the developer notes moved to `docs/DEVELOPMENT.md`.
+>
+> `actionlint` and `lgx test-release` pass. The upgraded workflows still need a CI run and a rehearsal on GitHub.
+
 - [ ] **Step 3:** Run `/code-review` on the final implementation. Run existing Linux CI checks and the new native/distribution checks on the appropriate hosts. Record unavailable checks rather than treating them as passes. Link any created PR to the current T3 thread.
 - [ ] **Step 4:** Commit with `git commit -m "Document macOS installation and release setup"`. Present the implementation, verification evidence, exact credentials still missing, and the concrete first-release action. Do not push a release tag without live-release authorization.
 - [ ] **Step 5:** Once explicitly authorized, push the version tag, inspect the resulting workflow, then install the actual cask with `brew install --cask abogoyavlensky/tap/quel`. Run the first-release native acceptance checks in the Design section. Record release URL, checksum, and tap commit; update status to completed only after the agreed release scope is achieved.
