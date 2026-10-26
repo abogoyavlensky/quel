@@ -13,6 +13,22 @@ runs the statement under the cursor, the selection or the whole script
 into result tabs. The results load page by page as you scroll, and a
 result can be pinned. A runaway query can be cancelled.
 
+## Install
+
+Quel runs on Apple Silicon Macs with macOS 15 (Sequoia) or newer.
+
+```sh
+brew install --cask abogoyavlensky/tap/quel
+brew upgrade --cask quel       # later, for a new version
+```
+
+Or download `quel_VERSION_darwin_arm64.zip` from
+[Releases](https://github.com/abogoyavlensky/quel/releases), unzip it and
+move `Quel.app` to Applications. The app is signed and notarized, so it
+opens without a security override. Upgrades and `brew uninstall` keep your
+profiles, saved tabs and passwords (see
+[Where Quel keeps its data](#where-quel-keeps-its-data)).
+
 ## Prerequisites
 
 - [mise](https://mise.jdx.dev): `mise install` brings lg, lgx, Go and Node
@@ -92,5 +108,9 @@ lgx build && ./bin/quel
 ```
 
 The binary embeds the frontend and is built with Wails' `production`
-tag (no devtools, no dev asset server). Packaging into a `.app` is the `wails3`
-CLI's job and is not wired up yet.
+tag (no devtools, no dev asset server).
+
+On an Apple Silicon Mac, `lgx package-macos` wraps it into `dist/Quel.app`
+(unsigned) and `lgx verify-macos` checks the bundle and launches an ad-hoc
+signed copy with scratch data. Signing, notarization and releases are in
+[docs/RELEASE.md](docs/RELEASE.md).
