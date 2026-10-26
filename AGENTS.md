@@ -6,6 +6,7 @@ Frontend: Vite + React + TypeScript + Tailwind + shadcn in `frontend/`,
 built into `resources/public`.
 
 - Design: `docs/DESIGN.md`. Plans: `docs/plans/`. Backlog: `docs/backlog/`.
+  Developer setup: `docs/DEVELOPMENT.md`.
   Releases: `docs/RELEASE.md`.
 - Reference app for the patterns used here: `examples/wails-tasks` in the
   lgx repo.

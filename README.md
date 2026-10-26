@@ -1,116 +1,99 @@
-# Quel
+<p align="center">
+  <img src="build/macos/icon.png" alt="Quel" width="128" height="128">
+</p>
 
-Quel is a desktop database client for writing SQL and browsing database
-structure, in the spirit of TablePlus. It is written in
-[let-go](https://github.com/nooga/let-go) on [Wails v3](https://v3.wails.io),
-with a React frontend. macOS comes first. See [docs/DESIGN.md](docs/DESIGN.md)
-for the design and [docs/plans/](docs/plans/) for the implementation plans.
+<h1 align="center">Quel</h1>
 
-Status: milestone 1 in progress. Quel connects through saved profiles
-for SQLite, Postgres and Redshift (passwords in the macOS Keychain); it
-has editor tabs, each with its own session; and it
-runs the statement under the cursor, the selection or the whole script
-into result tabs. The results load page by page as you scroll, and a
-result can be pinned. A runaway query can be cancelled.
+<p align="center">A desktop database client for writing SQL and browsing database structure.</p>
+
+Quel is a native macOS app in the spirit of TablePlus: connect to a
+database, write queries in a proper editor, and page through results of
+any size without the app freezing. It is open source and in early
+development.
+
+## Features
+
+- **Databases:** SQLite, PostgreSQL and Amazon Redshift. Redshift uses the
+  PostgreSQL protocol and has not been tested against a real cluster yet.
+- **Saved connections:** profiles for each database, with passwords stored
+  in the macOS Keychain. Several can be connected at once.
+- **SQL editor:** syntax highlighting, completion of keywords, tables and
+  columns, and several tabs per connection. Tabs are saved as you type and
+  restored on the next launch; closed tabs can be reopened.
+- **Running queries:** run the statement under the cursor, the selection
+  or the whole script. A long-running query can be cancelled.
+- **Results:** a fast grid that loads rows as you scroll, several result
+  tabs, and pinning to keep a result while you run others. A row's values
+  open in a side panel, with JSON formatted.
+- **Structure:** schemas, tables, views and columns in the sidebar.
 
 ## Install
 
-Quel runs on Apple Silicon Macs with macOS 15 (Sequoia) or newer.
+Quel needs an Apple Silicon Mac (M1 or newer) with macOS 15 Sequoia or
+later.
+
+With [Homebrew](https://brew.sh):
 
 ```sh
 brew install --cask abogoyavlensky/tap/quel
-brew upgrade --cask quel       # later, for a new version
 ```
 
 Or download `quel_VERSION_darwin_arm64.zip` from
-[Releases](https://github.com/abogoyavlensky/quel/releases), unzip it and
-move `Quel.app` to Applications. The app is signed and notarized, so it
-opens without a security override. Upgrades and `brew uninstall` keep your
-profiles, saved tabs and passwords (see
-[Where Quel keeps its data](#where-quel-keeps-its-data)).
+[Releases](https://github.com/abogoyavlensky/quel/releases), unzip it, and
+move `Quel.app` to Applications. Quel is signed and notarized, so it opens
+like any other app downloaded from the internet.
 
-## Prerequisites
-
-- [mise](https://mise.jdx.dev): `mise install` brings lg, lgx, Go and Node
-  at the versions in `.mise.toml`.
-- Wails is cgo on the Unix desktops:
-
-  | Platform | Needs |
-  |---|---|
-  | macOS | Xcode command line tools |
-  | Linux | `libgtk-4-dev libwebkitgtk-6.0-dev` and a C compiler |
-
-The first `lgx run` or `lgx test` builds a custom `lg` runtime with Wails
-and SQLite linked in. It takes a few minutes and is cached afterwards.
-
-## Develop
+### Update
 
 ```sh
-lgx fe-install     # once
-lgx dev            # the app, its frontend from Vite's dev server (HMR)
+brew upgrade --cask quel
 ```
 
-`lgx dev` starts Vite on port 5173 and the app with
-`FRONTEND_DEVSERVER_URL` pointing at it: saving a frontend file updates
-the window in place, keeping its state. The nREPL port is in
-`.nrepl-port`; handlers are registered by var, so redefining one from
-your editor changes what the next call runs.
+Updates keep your connections, saved tabs and passwords.
 
-Without the dev server, `lgx fe-watch` in one terminal rebuilds the
-frontend into `resources/public` on every change, and `lgx run` in
-another reloads the window when it does (start `lgx run` once the first
-build is done).
-
-### Without a desktop
-
-On a machine without the webview headers, Wails' server mode runs the
-same app as an HTTP server you open in a browser:
+### Uninstall
 
 ```sh
-CGO_ENABLED=0 GOFLAGS=-tags=server lgx dev    # http://localhost:8080
+brew uninstall --cask quel
 ```
 
-Menus and file dialogs do nothing there.
+This removes the app and keeps your data. To remove that too, delete
+`~/Library/Application Support/Quel` and the Keychain items under the
+service `Quel` (Keychain Access, search for "Quel").
 
-### Where Quel keeps its data
+## Your data
 
-Profiles live in `~/Library/Application Support/Quel/quel.db` on macOS
-(`$XDG_DATA_HOME/quel` or `~/.local/share/quel` on Linux), their
-passwords in the Keychain under the service `Quel`. Two variables
-redirect them, for tests or a scratch run:
+Quel stores connection profiles and editor tabs in
+`~/Library/Application Support/Quel/quel.db`, and connection passwords in
+the macOS Keychain, never in that file. Quel has no telemetry: it talks
+only to the databases you connect to.
+
+## Status
+
+Quel is at an early stage: the features above work, and the rest is on
+the way. Next up are indexes, constraints and other structure details,
+DDL export, confirmation before statements that change data, and
+read-only connections. After that: DuckDB, ER diagrams, and export of
+results to CSV and JSON. The full plan is in
+[docs/DESIGN.md](docs/DESIGN.md).
+
+Bug reports and ideas are welcome in
+[Issues](https://github.com/abogoyavlensky/quel/issues).
+
+## Development
+
+Quel is written in [let-go](https://github.com/nooga/let-go), a Clojure
+dialect, on [Wails v3](https://v3.wails.io), with a React frontend.
 
 ```sh
-QUEL_DATA_DIR=/tmp/quel-scratch QUEL_SECRETS=memory lgx run
+mise install       # lg, lgx, Go and Node
+lgx fe-install     # frontend packages, once
+lgx dev            # the app, with hot reload
 ```
 
-`QUEL_SECRETS=memory` keeps passwords in memory for the run. The smoke and
-e2e tasks set both, so they never touch your profiles or Keychain.
+Setup, tests and builds are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md),
+and releases in [docs/RELEASE.md](docs/RELEASE.md).
 
-## Test
+## License
 
-```sh
-lgx test                    # backend (the Postgres tests skip)
-lgx test-pg                 # backend, with a throwaway Postgres in Docker
-npm --prefix frontend test  # frontend
-lgx smoke                   # the app in server mode, driven over HTTP
-lgx smoke-pg                # the same, plus Postgres in Docker
-lgx e2e                     # the UI, with Playwright, in server mode
-```
-
-The `-pg` tasks need Docker. `lgx e2e` needs Playwright's Chromium once:
-`npx --prefix frontend playwright install chromium`. Without the webview headers, prefix the test,
-smoke and e2e tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`.
-
-## Build
-
-```sh
-lgx build && ./bin/quel
-```
-
-The binary embeds the frontend and is built with Wails' `production`
-tag (no devtools, no dev asset server).
-
-On an Apple Silicon Mac, `lgx package-macos` wraps it into `dist/Quel.app`
-(unsigned) and `lgx verify-macos` checks the bundle and launches an ad-hoc
-signed copy with scratch data. Signing, notarization and releases are in
-[docs/RELEASE.md](docs/RELEASE.md).
+[MIT](LICENSE)
