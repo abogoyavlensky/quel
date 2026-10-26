@@ -13,14 +13,17 @@ CHECKSUMS="$DIST/checksums.txt"
 
 die() { echo "${0##*/}: $1" >&2; exit 1; }
 
-# The release version: VERSION with surrounding whitespace trimmed, and only
-# a stable MAJOR.MINOR.PATCH.
+# Only a stable MAJOR.MINOR.PATCH is a release version.
+valid_version() {
+    [[ "$1" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+}
+
+# The release version: VERSION with surrounding whitespace trimmed.
 read_version() {
     local v
     [[ -f "$MACOS_ROOT/VERSION" ]] || die "VERSION is missing"
     v="$(tr -d '[:space:]' <"$MACOS_ROOT/VERSION")"
-    [[ "$v" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
-        die "VERSION must be MAJOR.MINOR.PATCH, got '$v'"
+    valid_version "$v" || die "VERSION must be MAJOR.MINOR.PATCH, got '$v'"
     echo "$v"
 }
 

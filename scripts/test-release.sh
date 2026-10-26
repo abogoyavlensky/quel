@@ -104,6 +104,63 @@ sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" APP
 check "APPLE_KEYCHAIN reaches security, codesign and notarytool" \
     'grep -q "^security find-identity.*/tmp/ci.keychain-db" "$STUB_LOG" && grep -q "^codesign.*--keychain /tmp/ci.keychain-db" "$STUB_LOG" && grep -q "notarytool submit.*--keychain /tmp/ci.keychain-db" "$STUB_LOG"'
 
+echo "==> generate-cask.sh"
+
+sha_a="$(printf 'a%.0s' {1..64})"
+sha_b="$(printf 'b%.0s' {1..64})"
+# cask VERSION CHECKSUMS_CONTENT: run generate-cask.sh; output in $out, status in $rc.
+cask() {
+    printf '%s' "$2" >"$stubs/checksums.txt"
+    set +e
+    out="$(bash "$ROOT/scripts/generate-cask.sh" "$1" "$stubs/checksums.txt" 2>&1)"
+    rc=$?
+    set -e
+}
+# The cask's url with #{version} expanded the way Homebrew does.
+cask_url() {
+    local v
+    v="$(sed -n 's/^  version "\(.*\)"$/\1/p' <<<"$out")"
+    sed -n 's/^  url "\(.*\)"$/\1/p' <<<"$out" | sed "s/#{version}/$v/g"
+}
+
+cask 1.2.3 "$sha_b  quel_1.2.2_darwin_arm64.zip
+$sha_a  quel_1.2.3_darwin_arm64.zip
+"
+check "valid: succeeds" '[[ $rc -eq 0 ]]' || echo "$out" >&2
+check "valid: the version is the input" 'grep -qx "  version \"1.2.3\"" <<<"$out"'
+check "valid: the checksum of this version's archive" 'grep -qx "  sha256 \"$sha_a\"" <<<"$out"'
+check "valid: the url is the release asset" \
+    '[[ "$(cask_url)" == "https://github.com/abogoyavlensky/quel/releases/download/v1.2.3/quel_1.2.3_darwin_arm64.zip" ]]'
+check "valid: Apple Silicon and macOS 15+ only" 'grep -q "depends_on arch: :arm64" <<<"$out" && grep -q "depends_on macos: \">= :sequoia\"" <<<"$out"'
+check "valid: installs Quel.app" 'grep -qx "  app \"Quel.app\"" <<<"$out"'
+
+cask 1.2.3 "$sha_a  quel_1.2.2_darwin_arm64.zip
+"
+check "no archive for the version: fails" '[[ $rc -ne 0 && "$out" == *"no checksum for quel_1.2.3_darwin_arm64.zip"* ]]'
+
+cask 1.2.3 "$sha_a  quel_1.2.3_darwin_arm64.zip
+$sha_b  quel_1.2.3_darwin_arm64.zip
+"
+check "duplicate archive entry: fails" '[[ $rc -ne 0 && "$out" == *"more than one checksum"* ]]'
+
+for bad in "${sha_a:1}" "${sha_a}a" "$(tr a A <<<"$sha_a")" "$(printf 'g%.0s' {1..64})"; do
+    cask 1.2.3 "$bad  quel_1.2.3_darwin_arm64.zip
+"
+    check "malformed hash ${bad:0:6}... (${#bad} chars): fails" '[[ $rc -ne 0 && "$out" == *"malformed checksum"* ]]'
+done
+
+for bad in v1.2.3 1.2 1.2.3-rc1 01.2.3 ""; do
+    cask "$bad" "$sha_a  quel_${bad}_darwin_arm64.zip
+"
+    check "invalid version '$bad': fails" '[[ $rc -ne 0 && "$out" == *"VERSION must be MAJOR.MINOR.PATCH"* ]]'
+done
+
+set +e
+out="$(bash "$ROOT/scripts/generate-cask.sh" 1.2.3 "$stubs/missing.txt" 2>&1)"
+rc=$?
+set -e
+check "missing checksums file: fails" '[[ $rc -ne 0 && "$out" == *"checksums file not found"* ]]'
+
 if [[ $fails -gt 0 ]]; then
     echo "$fails check(s) failed" >&2
     exit 1
