@@ -4,10 +4,17 @@ on:
   push:
     branches: [master]
   pull_request:
+  # release.yml runs these checks on the tagged commit.
+  workflow_call:
 
+# Called from release.yml, github.workflow is "release": a release's checks
+# get their own group and are never cancelled by, or cancel, ordinary runs.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.workflow == 'ci' }}
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -34,8 +41,13 @@ jobs:
             ~/go/pkg/mod
             ~/.lgx/runtimes
             ~/.npm
-          key: deps-${{ runner.os }}-${{ hashFiles('lgx.edn', 'frontend/package-lock.json') }}
-          restore-keys: deps-${{ runner.os }}-
+          key: deps-${{ runner.os }}-${{ runner.arch }}-server-${{ hashFiles('.mise.toml', 'lgx.edn', 'frontend/package-lock.json') }}
+          restore-keys: deps-${{ runner.os }}-${{ runner.arch }}-server-
+
+      # The signing, publishing and tap scripts, with stand-ins for Apple's
+      # tools and GitHub.
+      - name: Release script tests
+        run: lgx test-release
 
       - name: Frontend tests
         run: |
@@ -70,3 +82,16 @@ jobs:
             frontend/test-results
             frontend/playwright-report
           if-no-files-found: ignore
+
+  macos:
+    # The real desktop build, packaged as Quel.app, ad-hoc signed and
+    # launched. No secrets: Developer ID signing happens only in release.yml.
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/package-macos
+
+      - name: Verify
+        run: lgx verify-macos

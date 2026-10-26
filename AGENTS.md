@@ -22,6 +22,9 @@ built into `resources/public`.
 | `lgx smoke` / `lgx smoke-pg` | server-mode smoke test over HTTP; `-pg` adds Postgres in Docker |
 | `lgx e2e` | Playwright UI tests against the app in server mode |
 | `lgx build` | frontend + binary at `bin/quel` |
+| `lgx package-macos` / `lgx verify-macos` | `dist/Quel.app` (unsigned) on an Apple Silicon Mac; check it and launch an ad-hoc signed copy |
+| `lgx sign-macos` / `lgx verify-macos --distribution` | Developer ID signing, notarization and the release zip in `dist/`; check the zip as a user gets it. Needs `APPLE_SIGNING_IDENTITY` and `APPLE_NOTARY_PROFILE` |
+| `lgx test-release` | release script tests (signing, cask, GitHub Release, tap), with stand-ins for Apple's tools and GitHub (runs on Linux) |
 
 On Linux without GTK4/WebKitGTK headers, prefix `lgx dev`, `lgx run` and
 the test, smoke and e2e tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`

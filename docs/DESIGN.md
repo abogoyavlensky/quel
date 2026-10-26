@@ -595,16 +595,23 @@ about a second per edit.
 
 ### Builds
 
-`lgx build` bundles the app (`lg -b`) with `resources/public` embedded
-and the `production` build tag (`:go/build-tags`, lgx 0.5.1), which drops
-Wails' devtools and dev asset server, and makes the wails package ignore
-`FRONTEND_DEVSERVER_URL`. Packaging into a `.app`, icons, a dmg,
-signing and notarization is the `wails3` CLI's job on the built binary.
+`lgx build` compiles the app natively (`:target :native`, lgx 0.5.2): let-go
+lowers Quel's own namespaces to Go, its dependencies run as embedded
+bytecode, and `go build` links the result with the custom runtime's Go
+packages. The binary is a plain Go executable, so it can be codesigned;
+an `lg -b` bundle appends its payload after the executable and fails
+`codesign --verify --strict`. `resources/public` is embedded through
+`go:embed`, and the `production` build tag (`:go/build-tags`) drops Wails'
+devtools and dev asset server and makes the wails package ignore
+`FRONTEND_DEVSERVER_URL`. `:lg-version` pins a let-go `main` commit, because
+`lg compile -module` and `-import` came after 1.13.0.
 
-`:target :native` is a later goal, not on the critical path. It cannot
-build Quel today: native binaries do not embed `:resource-paths`, and
-`:go/build-tags` under `:targets :bin` is rejected for native targets. The
-code stays native-compatible so switching later is cheap:
+Only Quel's namespaces are lowered (lgx's default `:lower :project`).
+Lowering a dependency that uses syntax-quoted macros from its own namespace
+fails to compile today (nooga/let-go#1098). `lgx run`, `dev` and the tests
+run bytecode, so a native-only failure shows up in `lgx build`.
+
+The code has to stay compatible with the native build:
 
 - the entry namespace is `quel.app`, not `main` (`lg compile` rejects a
   namespace whose last segment is `main`);
@@ -645,7 +652,7 @@ package feature, not app glue.
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
 | `letgo-packages/keyring` | Done in `keyring-v0.1.0`: `put!`, `get`, `delete!` over `zalando/go-keyring` (macOS Keychain, Secret Service), and `use-memory!` for tests | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
-| `lgx` / let-go | Resource embedding and per-target build tags for `:target :native` | the native build |
+| `lgx` | Done in lgx 0.5.2: `:target :native` embeds `:resource-paths`, lowers only project namespaces, and takes `:go/build-tags` under `:targets :bin` | the native build |
 
 ## Milestones
 
@@ -683,7 +690,7 @@ package feature, not app glue.
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
    JSON; copy-as formats.
 5. **Later.** SSH tunnels, Redshift IAM authentication, inline editing,
-   Redis, `:target :native`, Linux, signed and notarized releases.
+   Redis, Linux, signed and notarized releases.
 
 ## Unverified
 

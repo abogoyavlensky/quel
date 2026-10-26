@@ -1,4 +1,5 @@
 bin/
+dist/
 resources/public/
 frontend/node_modules/
 *.db
