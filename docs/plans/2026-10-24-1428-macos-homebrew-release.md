@@ -8,7 +8,7 @@
 
 ---
 
-**Status: Tasks 1-5 done; Tasks 6-7 not started.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
+**Status: Tasks 1-5 done; Task 6 written and checked locally, not yet run on GitHub; Task 7 not started.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
 
 ## Design
 
@@ -193,13 +193,29 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 
 **Files:** Modify `.github/workflows/ci.yml`; create `.github/workflows/release.yml`.
 
-- [ ] **Step 1:** Make CI reusable with `workflow_call`; keep existing push/PR triggers. Ensure concurrency groups distinguish direct CI from release-invoked checks so jobs do not cancel or deadlock each other. Add the release script tests to Linux checks and the native secret-free package/ad-hoc validation job on `macos-15`.
-- [ ] **Step 2:** Add the `v*` release trigger and an exact stable-version/tag gate. Reuse CI on the tagged SHA. Build and sign on ARM macOS, checking the runner architecture. Use dependency caches keyed by OS, architecture, pinned versions, build mode, and dependency files. Never cache the signing keychain or secret files.
-- [ ] **Step 3:** Implement temporary keychain import, partition-list access for `codesign`, and a named notary profile. Register unconditional cleanup early, remove temporary P12/profile files, restore the original keychain search list, and delete the temporary keychain even on failure.
-- [ ] **Step 4:** Publish a draft GitHub Release only after artifact checks, upload ZIP/checksum and generated notes, then publish. Existing published assets are immutable; rerunning a successful publication must not silently replace them. Preserve a recovery path that retries only the failed tap job against the existing release.
-- [ ] **Step 5:** Update only `Casks/quel.rb` in the shared tap from published checksums. Use the existing token convention with credential-safe checkout, no token in printed commands or persistent remote URLs. Skip unchanged files; reject version rollback; handle concurrent updates with bounded rebase/reapply retries. Do not force-push.
+- [x] **Step 1:** Make CI reusable with `workflow_call`; keep existing push/PR triggers. Ensure concurrency groups distinguish direct CI from release-invoked checks so jobs do not cancel or deadlock each other. Add the release script tests to Linux checks and the native secret-free package/ad-hoc validation job on `macos-15`.
+- [x] **Step 2:** Add the `v*` release trigger and an exact stable-version/tag gate. Reuse CI on the tagged SHA. Build and sign on ARM macOS, checking the runner architecture. Use dependency caches keyed by OS, architecture, pinned versions, build mode, and dependency files. Never cache the signing keychain or secret files.
+- [x] **Step 3:** Implement temporary keychain import, partition-list access for `codesign`, and a named notary profile. Register unconditional cleanup early, remove temporary P12/profile files, restore the original keychain search list, and delete the temporary keychain even on failure.
+- [x] **Step 4:** Publish a draft GitHub Release only after artifact checks, upload ZIP/checksum and generated notes, then publish. Existing published assets are immutable; rerunning a successful publication must not silently replace them. Preserve a recovery path that retries only the failed tap job against the existing release.
+- [x] **Step 5:** Update only `Casks/quel.rb` in the shared tap from published checksums. Use the existing token convention with credential-safe checkout, no token in printed commands or persistent remote URLs. Skip unchanged files; reject version rollback; handle concurrent updates with bounded rebase/reapply retries. Do not force-push.
 - [ ] **Step 6:** Validate workflow syntax with `actionlint` and inspect all job permissions/dependencies. Verify a normal PR can run without release secrets and cannot publish. Exercise tag mismatch and unavailable-secret failures without creating a real release. If CI is used for an experiment, use a nonpublishing workflow invocation, not a throwaway public tag.
-- [ ] **Step 7:** Commit with `git commit -m "Publish signed macOS releases and update the Homebrew tap"`.
+- [x] **Step 7:** Commit with `git commit -m "Publish signed macOS releases and update the Homebrew tap"`.
+
+> Progress 2026-10-26. `ci.yml` gains `workflow_call`, `contents: read`, a concurrency group of `ci-<calling workflow>-<ref>` that cancels only direct CI runs, `lgx test-release` in the Linux job, cache keys with OS, architecture, build mode and `.mise.toml`, and a secret-free `macos` job on `macos-15`: `.github/actions/package-macos` (arm64 check, `sw_vers` and `xcodebuild -version` in the log, mise, cache, `lgx package-macos`), then `lgx verify-macos`. `release.yml` runs on `v*` tags and on `workflow_dispatch` as a rehearsal that signs, notarizes, verifies and uploads a workflow artifact but never publishes or touches the tap. Concurrency is one `release` group, never cancelled. Its top-level permissions are empty; only `publish` has `contents: write`. The jobs:
+>
+> - `gate`: `scripts/release-version.sh` checks that the tag is exactly `v` plus VERSION. It checks that every secret is set without reading any value, and treats a tag whose release is already published as tap-only.
+> - `ci`: the reusable CI on the tagged commit.
+> - `build` (`macos-15`): `scripts/ci-sign-macos.sh` makes a temporary keychain in `RUNNER_TEMP`, imports the `.p12`, sets the partition list, puts the keychain first in the search list and stores the `quel-ci` notary profile. It runs `sign-macos.sh` with `APPLE_KEYCHAIN`, then restores the search list and deletes the keychain and temp files in an `EXIT` trap, also on failure. Then `lgx verify-macos --distribution` and the artifact upload.
+> - `publish`: `scripts/publish-release.sh` creates a draft or resumes one, uploads, checks that the release holds exactly the archive and `checksums.txt`, downloads them back and checks them, and then publishes. It refuses a published release.
+> - `tap`: checks out the tap with `HOMEBREW_TAP_TOKEN` through `actions/checkout`, so the token stays out of URLs and commands. `scripts/update-tap.sh` stages only `Casks/quel.rb`, skips an unchanged cask, refuses to replace a newer Quel, and retries a rejected push up to 5 times from the latest tap head without force. "Re-run failed jobs", or a rerun of the workflow on a published tag, retries only the tap.
+>
+> Local evidence:
+>
+> - `lgx test-release`: 80 checks pass. They cover the scripts above with stand-ins for `security`, `xcrun` and `gh`, and a real bare git repository as the tap: a pre-receive hook simulates a race, and a stale clone a newer Quel landing mid-job.
+> - Mutations caught: removing the cleanup trap (3 failures), allowing a published release (1), the rollback check (2), the per-attempt refresh (2).
+> - `actionlint` 1.7.12 with shellcheck finds no errors in either workflow. Shellcheck on the scripts reports only unused-variable false positives (variables used by sourced scripts and in eval'd checks).
+>
+> Not yet verified on GitHub: the PR run of both CI jobs (the `macos` job's GUI launch on a hosted runner included) and a release rehearsal. `workflow_dispatch` needs `release.yml` on the default branch. The intermediate certificate: if the runner lacks the Developer ID intermediate, `sign-macos.sh`'s preflight fails with "no signing identity" before signing, and the fix is to import Apple's Developer ID G2 CA into the temporary keychain. `docs/RELEASE.md`, referenced by the gate's error message, is Task 7.
 
 ### Task 7: Document, review, and prepare the first release
 

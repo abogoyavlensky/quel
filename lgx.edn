@@ -103,5 +103,5 @@
                 :do {:sh ["bash" "scripts/verify-macos.sh" :args/rest]}}
   sign-macos {:doc "Sign with Developer ID, notarize and archive dist/Quel.app (APPLE_SIGNING_IDENTITY, APPLE_NOTARY_PROFILE)"
               :do {:sh "bash scripts/sign-macos.sh"}}
-  test-release {:doc "Test the release scripts with stand-ins for Apple's tools"
+  test-release {:doc "Test the release scripts with stand-ins for Apple's tools and GitHub"
                 :do {:sh "bash scripts/test-release.sh"}}}}

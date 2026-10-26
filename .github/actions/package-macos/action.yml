@@ -1,0 +1,37 @@
+name: Package Quel.app
+description: >
+  On an Apple Silicon runner: install the pinned tools, restore the
+  dependency cache, then build the unsigned dist/Quel.app with
+  lgx package-macos. Used by CI's macOS check and by the release build.
+
+runs:
+  using: composite
+  steps:
+    - name: Runner
+      shell: bash
+      run: |
+        if [[ "$(uname -m)" != arm64 ]]; then
+          echo "::error::expected an Apple Silicon runner, got $(uname -m)"
+          exit 1
+        fi
+        sw_vers
+        xcodebuild -version
+
+    # lg, lgx, go and node, at the versions in .mise.toml.
+    - uses: jdx/mise-action@v3
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/Library/Caches/go-build
+          ~/go/pkg/mod
+          ~/.lgx/runtimes
+          ~/.npm
+        key: deps-${{ runner.os }}-${{ runner.arch }}-desktop-${{ hashFiles('.mise.toml', 'lgx.edn', 'frontend/package-lock.json') }}
+        restore-keys: deps-${{ runner.os }}-${{ runner.arch }}-desktop-
+
+    - name: Package
+      shell: bash
+      run: |
+        lgx fe-install
+        lgx package-macos

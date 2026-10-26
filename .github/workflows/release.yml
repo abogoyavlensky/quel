@@ -1,0 +1,182 @@
+name: release
+
+# A v* tag push builds, signs and notarizes Quel.app on Apple Silicon,
+# publishes it as a GitHub Release and updates Casks/quel.rb in
+# abogoyavlensky/homebrew-tap. See docs/RELEASE.md.
+#
+# Running it by hand (workflow_dispatch) is a rehearsal: the same build,
+# signing, notarization and checks on any branch, with the archive kept as a
+# workflow artifact. It never publishes a release or touches the tap.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# One release at a time; a running one is never cancelled.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      published: ${{ steps.published.outputs.published }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A tag must be exactly v plus VERSION; a rehearsal checks VERSION only.
+      - id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$EVENT" == push ]]; then
+            version="$(bash scripts/release-version.sh "$TAG")"
+          else
+            version="$(bash scripts/release-version.sh)"
+          fi
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      # Only whether each secret is set; no value reaches this job.
+      - name: Secrets
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 != '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY != '' }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID != '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+          HOMEBREW_TAP_TOKEN: ${{ github.event_name != 'push' || secrets.HOMEBREW_TAP_TOKEN != '' }}
+        run: |
+          missing=""
+          for name in APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY \
+              APPLE_TEAM_ID APPLE_ID APPLE_APP_SPECIFIC_PASSWORD HOMEBREW_TAP_TOKEN; do
+            [[ "${!name}" == true ]] || missing="$missing $name"
+          done
+          if [[ -n "$missing" ]]; then
+            echo "::error::missing repository secrets:$missing (see docs/RELEASE.md)"
+            exit 1
+          fi
+
+      # A tag whose release is already published skips straight to the tap
+      # update: rerunning a release never rebuilds or replaces its assets.
+      - id: published
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if state="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>&1)"; then
+            :
+          elif [[ "$state" == *"release not found"* ]]; then
+            state=none
+          else
+            echo "::error::gh release view failed: $state"
+            exit 1
+          fi
+          if [[ "$state" == false ]]; then
+            echo "::notice::$TAG is already published; only the tap is updated"
+            echo "published=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "published=false" >>"$GITHUB_OUTPUT"
+          fi
+
+  ci:
+    needs: gate
+    if: needs.gate.outputs.published != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    needs: [gate, ci]
+    if: needs.gate.outputs.published != 'true'
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/package-macos
+
+      # Imports the certificate into a temporary keychain, signs, notarizes
+      # and staples, then deletes the keychain even when a step fails.
+      - name: Sign and notarize
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash scripts/ci-sign-macos.sh
+
+      - name: Verify the release archive
+        run: lgx verify-macos --distribution
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quel-${{ needs.gate.outputs.version }}
+          path: |
+            dist/quel_${{ needs.gate.outputs.version }}_darwin_arm64.zip
+            dist/checksums.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [gate, build]
+    if: github.event_name == 'push' && needs.gate.outputs.published != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: quel-${{ needs.gate.outputs.version }}
+          path: release
+
+      - name: Publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: bash scripts/publish-release.sh "$TAG" release
+
+  # A failed tap update is retried alone with "Re-run failed jobs", or by
+  # rerunning the workflow: the release is published by then, so the gate
+  # skips everything else.
+  tap:
+    needs: [gate, publish]
+    if: >-
+      always() && github.event_name == 'push' && needs.gate.result == 'success' &&
+      (needs.publish.result == 'success' || needs.gate.outputs.published == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # The token stays in the clone's git config for the push and is
+      # removed when the job ends; it never appears in a URL or a command.
+      - uses: actions/checkout@v4
+        with:
+          repository: abogoyavlensky/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update Casks/quel.rb
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern checksums.txt --dir "$RUNNER_TEMP"
+          bash scripts/update-tap.sh "$VERSION" "$RUNNER_TEMP/checksums.txt" tap

@@ -1,3 +1,4 @@
+# shellcheck shell=bash disable=SC2034
 # Shared by the macOS packaging scripts: the app's identity, its minimum
 # macOS and the release version. Sourced, not run.
 
