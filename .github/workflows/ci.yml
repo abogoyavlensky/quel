@@ -27,14 +27,14 @@ jobs:
       CGO_ENABLED: "0"
       GOFLAGS: -tags=server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # lg, lgx, go and node, at the versions in .mise.toml.
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v5
 
       # The custom lg runtime (Wails, sqlite) is cached by its inputs, so a
       # run with an unchanged lgx.edn reuses it.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/go-build
@@ -75,7 +75,7 @@ jobs:
 
       - name: UI test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright
           path: |
@@ -89,7 +89,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: ./.github/actions/package-macos
 

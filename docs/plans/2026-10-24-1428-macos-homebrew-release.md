@@ -240,6 +240,14 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 > - DESIGN: a Releases section; native app checks under Testing; signed releases removed from milestone 5; the Distribution open question removed; the Keychain-under-hardened-runtime check added to Unverified for the first release. Redshift stays unverified.
 > - AGENTS.md: points to RELEASE.md and forbids `git push --tags`.
 
+> Step 3 progress 2026-10-27: `/code-review` of `cab78d0..b2f23ef` found nothing blocking. The rehearsal artifact unpacks flat (`quel_0.1.0_darwin_arm64.zip`, `checksums.txt`) as `publish-release.sh` expects, and its checksum verifies.
+>
+> - Fixed both Should-fix findings. Actions moved off Node 20: `checkout@v7`, `cache@v6`, `upload-artifact@v7`, `download-artifact@v8`, `mise-action@v5`; their breaking changes (checkout's separate credentials file, download's digest check and non-zip handling, mise's 24 h release age) do not affect this use. RELEASE.md now says to push one release tag at a time, because GitHub keeps one waiting run per concurrency group.
+> - Of the nits, the argument-passed secrets in `ci-sign-macos.sh` now have a comment. The README's Install section waits on the first release, so merge right before tagging. A tag ruleset restricting `v*` to `master` is left to the user.
+> - The README was rewritten for users (icon, features, install, update, uninstall, data, status), and the developer notes moved to `docs/DEVELOPMENT.md`.
+>
+> `actionlint` and `lgx test-release` pass. The upgraded workflows still need a CI run and a rehearsal on GitHub.
+
 - [ ] **Step 3:** Run `/code-review` on the final implementation. Run existing Linux CI checks and the new native/distribution checks on the appropriate hosts. Record unavailable checks rather than treating them as passes. Link any created PR to the current T3 thread.
 - [ ] **Step 4:** Commit with `git commit -m "Document macOS installation and release setup"`. Present the implementation, verification evidence, exact credentials still missing, and the concrete first-release action. Do not push a release tag without live-release authorization.
 - [ ] **Step 5:** Once explicitly authorized, push the version tag, inspect the resulting workflow, then install the actual cask with `brew install --cask abogoyavlensky/tap/quel`. Run the first-release native acceptance checks in the Design section. Record release URL, checksum, and tap commit; update status to completed only after the agreed release scope is achieved.

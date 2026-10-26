@@ -51,6 +51,9 @@ security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
 printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode >"$work/certificate.p12" ||
     die "APPLE_CERTIFICATE_P12_BASE64 is not valid base64"
+# The .p12 and app-specific passwords go in as arguments: neither tool takes
+# them any other way without a prompt. Other processes could read them, which
+# is acceptable on GitHub's single-use hosted runners; logs mask secrets.
 security import "$work/certificate.p12" -k "$keychain" -f pkcs12 \
     -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign >/dev/null ||
     die "could not import the certificate: check APPLE_CERTIFICATE_P12_BASE64 and APPLE_CERTIFICATE_PASSWORD"

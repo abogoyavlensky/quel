@@ -66,6 +66,12 @@ means replacing the matching secrets; nothing else changes.
 
    Do not use `git push --tags`: every tag it pushes that matches `v*`
    starts a release.
+
+   Push one release tag at a time and wait for its run to finish. Release
+   runs queue behind each other, but GitHub keeps only one waiting run: a
+   third tag (or a rehearsal) pushed while one runs and another waits
+   cancels the waiting one, and that version is never published until its
+   workflow is rerun.
 3. Watch the run: `gh run watch -R abogoyavlensky/quel`. When it is green,
    the release is on GitHub and `Casks/quel.rb` in the tap names the new
    version.
