@@ -14,6 +14,7 @@ import { ConnectionsPanel } from "./ConnectionsPanel";
 import { EditorTabs } from "./EditorTabs";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
+import { RunButton } from "./RunButton";
 import { RowDetails } from "./RowDetails";
 import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
@@ -62,7 +63,10 @@ export function AppShell() {
               <EditorTabs workspace={workspace} />
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="45" minSize={80}>
-                  <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
+                  <div className="relative h-full">
+                    <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
+                    <RunButton key={tab.id} tab={tab} />
+                  </div>
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel minSize={120}>

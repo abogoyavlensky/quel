@@ -1,17 +1,15 @@
-import { Button } from "@/components/ui/button";
-import { cancel } from "@/state/runner";
-import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
+import { activeTabOf, isRunning, selectedWorkspace, useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
-// The selected profile and its connection, the active tab's state, and
-// Cancel while something runs there. Connecting is the sidebar's job.
+// The selected profile and its connection, and the active tab's state.
+// Rows and time are in the grid's footer, Stop is in the editor, and
+// connecting is the sidebar's job.
 export function StatusBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
   const notice = useApp((s) => s.notice);
   const tab = w && activeTabOf(w);
-  const result = tab?.results.find((r) => r.id === tab.active);
-  const running = !!tab?.runningQueryId;
+  const running = !!tab && isRunning(tab);
   const status = w?.status ?? "disconnected";
 
   let state = "";
@@ -36,17 +34,6 @@ export function StatusBar() {
       <span role="status" className="flex-1 truncate">
         {state}
       </span>
-      {result && !running && (
-        <span className="flex gap-3 tabular-nums">
-          <span>{result.rows.length.toLocaleString()} rows</span>
-          <span>{result.elapsedMs.toLocaleString()} ms</span>
-        </span>
-      )}
-      {running && tab && (
-        <Button size="xs" variant="outline" disabled={tab.stopping} onClick={() => cancel(tab.id)}>
-          Cancel
-        </Button>
-      )}
     </footer>
   );
 }
