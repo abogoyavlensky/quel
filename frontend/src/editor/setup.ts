@@ -161,7 +161,7 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       ]),
       language.of(languageFor(engine, null)),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
-      // An edit clears the status bar's "Not connected." notice.
+      // An edit clears the status bar's notice.
       EditorView.updateListener.of((u) => {
         if (u.docChanged) clearNotice();
         if (tabId && (u.docChanged || u.selectionSet)) onEdit(tabId);

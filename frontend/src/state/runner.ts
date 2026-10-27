@@ -184,13 +184,14 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
 // Run from the selected workspace's active editor: the statement under the
 // cursor (or the selection's statements), or the whole script. A
-// disconnected workspace sends nothing and says so in the status bar; one
-// that is connecting drops the run, as a second run in flight is dropped.
+// disconnected workspace sends nothing and marks the run refused (the
+// results say so, with a Connect button); one that is connecting drops the
+// run, as a second run in flight is dropped.
 export async function runCurrent(mode: RunMode): Promise<void> {
   const w = selectedWorkspace(store.getState());
   if (!w || w.status === "connecting") return;
   if (w.status !== "connected") {
-    store.setState({ notice: "Not connected." });
+    updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
     return;
   }
   const tabId = w.activeTab;
@@ -571,7 +572,7 @@ export async function connectProfile(id: string): Promise<void> {
       void api.closeDb(opened["conn-id"]).catch(() => {});
       return;
     }
-    updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"] }));
+    updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
   } catch (e) {
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }

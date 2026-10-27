@@ -290,14 +290,18 @@ describe("runCurrent", () => {
     expect(api.run).toHaveBeenCalledWith("c2", tabId("p2"), expect.any(String), "select 1");
   });
 
-  it("sends nothing on a disconnected profile and says so", async () => {
+  it("sends nothing on a disconnected profile and marks the run refused until a connect", async () => {
     await runner.disconnectProfile("p1");
+    expect(ws().runRefused).toBe(false);
+    api.connect.mockResolvedValueOnce({ "conn-id": "c3", engine: "sqlite", label: "P1" });
     editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
-    expect(store.getState().notice).toBe("Not connected.");
-    runner.clearNotice();
+    expect(ws().runRefused).toBe(true);
     expect(store.getState().notice).toBeNull();
+    await runner.connectProfile("p1");
+    expect(ws().status).toBe("connected");
+    expect(ws().runRefused).toBe(false);
   });
 
   it("drops a run while the profile connects", async () => {
@@ -305,10 +309,12 @@ describe("runCurrent", () => {
     const opening = deferred<{ "conn-id": string; engine: string; label: string }>();
     api.connect.mockReturnValueOnce(opening.promise);
     const connecting = runner.connectProfile("p1");
+    await vi.waitFor(() => expect(ws().status).toBe("connecting"));
     editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
     expect(store.getState().notice).toBeNull();
+    expect(ws().runRefused).toBe(false);
     opening.resolve({ "conn-id": "c3", engine: "sqlite", label: "P1" });
     await connecting;
   });

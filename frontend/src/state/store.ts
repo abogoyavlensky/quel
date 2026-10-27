@@ -53,6 +53,9 @@ export interface EditorTab {
   messages: Message[]; // newest last, capped at MAX_MESSAGES
 }
 
+// A statement or script is running, not just a page loading.
+export const isRunning = (t: EditorTab) => t.runningQueryId !== null && !t.results.some((r) => r.fetching);
+
 // A workspace's connection: connecting and disconnecting are in flight
 // while the backend opens or closes the database.
 export type ConnStatus = "disconnected" | "connecting" | "connected" | "disconnecting";
@@ -76,6 +79,9 @@ export interface Workspace {
   // null until the tree first opens the default schema. Names, not ids, so
   // they hold across a reconnect.
   treeExpanded: string[] | null;
+  // A run was refused while disconnected: the results say so until a
+  // connect. In memory only.
+  runRefused: boolean;
 }
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
@@ -122,6 +128,7 @@ export function newWorkspace(profileId: string): Workspace {
     closed: [],
     loadError: null,
     treeExpanded: null,
+    runRefused: false,
   };
 }
 

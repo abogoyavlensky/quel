@@ -4,6 +4,7 @@ import {
   closeCursors,
   findTab,
   initialState,
+  isRunning,
   newWorkspace,
   selectedWorkspace,
   store,
@@ -65,5 +66,17 @@ describe("workspaces", () => {
     expect(selectedWorkspace(store.getState())?.profileId).toBe("b");
     store.setState({ selected: "gone" });
     expect(selectedWorkspace(store.getState())).toBeUndefined();
+  });
+});
+
+describe("isRunning", () => {
+  it("is true while a statement or script runs, not while a page loads", () => {
+    const { a } = seed();
+    const tab = () => findTab(a)!;
+    expect(isRunning(tab())).toBe(false);
+    updateTab(a, (t) => ({ ...t, runningQueryId: "q1" }));
+    expect(isRunning(tab())).toBe(true);
+    updateTab(a, (t) => ({ ...t, results: t.results.map((r) => ({ ...r, fetching: true })) }));
+    expect(isRunning(tab())).toBe(false);
   });
 });
