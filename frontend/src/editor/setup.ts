@@ -7,7 +7,6 @@ import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/sta
 import {
   EditorView,
   drawSelection,
-  highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
@@ -17,6 +16,7 @@ import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
 import { clearNotice, runCurrent } from "@/state/runner";
 import { columnCompletionSource } from "./columns";
+import { statementHighlight } from "./statementHighlight";
 import type { Seed } from "./states";
 
 // A tab's editor state: the extensions every tab shares, and the text and
@@ -70,8 +70,14 @@ const chrome = EditorView.theme({
     color: "var(--muted-foreground)",
     borderRight: "1px solid var(--border)",
   },
-  ".cm-activeLine, .cm-activeLineGutter": {
+  ".cm-activeLineGutter": {
     backgroundColor: "color-mix(in oklch, var(--muted) 45%, transparent)",
+  },
+  // The statement Mod-Enter will run, a quiet card behind the text.
+  ".cm-currentStatement": {
+    borderRadius: "6px",
+    backgroundColor: "color-mix(in oklch, var(--muted) 70%, transparent)",
+    boxShadow: "0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent), 0 1px 2px rgb(0 0 0 / 0.05)",
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
@@ -140,7 +146,7 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       bracketMatching(),
       closeBrackets(),
       autocompletion(),
-      highlightActiveLine(),
+      statementHighlight,
       highlightSelectionMatches(),
       // Tab accepts an open completion, otherwise it indents (Shift-Tab
       // dedents). Escape then Tab leaves the editor.

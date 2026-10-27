@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { split } from "./split";
-import { statementAt, toRun } from "./target";
+import { statementAt, statementUnder, toRun } from "./target";
 
 const sql = "select 1;\n\nselect 2;\nselect 3";
 const stmts = split(sql);
@@ -61,5 +61,34 @@ describe("toRun", () => {
 
   it("runs nothing in an empty document", () => {
     expect(toRun("", { from: 0, to: 0 }, "statement")).toEqual([]);
+  });
+});
+
+describe("statementUnder", () => {
+  const two = "select 1;\n\nselect 2;";
+  const at = (pos: number) => ({ from: pos, to: pos });
+
+  it("picks the statement the cursor is in", () => {
+    expect(statementUnder(split(two), at(3))?.text).toBe("select 1");
+  });
+
+  it("picks the statement the cursor sits just after", () => {
+    expect(statementUnder(split(two), at(two.indexOf(";") + 1))?.text).toBe("select 1");
+  });
+
+  it("picks the nearest one before from a blank line", () => {
+    expect(statementUnder(split(two), at(two.indexOf("\n\n") + 1))?.text).toBe("select 1");
+  });
+
+  it("picks the statement after when nothing is before", () => {
+    expect(statementUnder(split("\n\nselect 1;"), at(0))?.text).toBe("select 1");
+  });
+
+  it("is undefined for a non-empty selection: the selection is what runs", () => {
+    expect(statementUnder(split(two), { from: 0, to: 5 })).toBeUndefined();
+  });
+
+  it("is undefined when there are no statements", () => {
+    expect(statementUnder([], at(0))).toBeUndefined();
   });
 });
