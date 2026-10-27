@@ -1,5 +1,5 @@
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { PostgreSQL, type SQLNamespace, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
 import { HighlightStyle, bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
@@ -121,7 +121,17 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       autocompletion(),
       highlightActiveLine(),
       highlightSelectionMatches(),
-      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
+      // Tab accepts an open completion, otherwise it indents (Shift-Tab
+      // dedents). Escape then Tab leaves the editor.
+      keymap.of([
+        { key: "Tab", run: acceptCompletion },
+        indentWithTab,
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...searchKeymap,
+        ...historyKeymap,
+        ...completionKeymap,
+      ]),
       language.of(languageFor(engine, null)),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
       // An edit clears the status bar's "Not connected." notice.
