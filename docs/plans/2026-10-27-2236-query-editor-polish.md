@@ -340,7 +340,7 @@ goes. 12 rows come out 32px wide, and 2,000 rows 47px.
 
 ### Task 3: Completion icons
 
-> Deviation: the popup's look was checked in a Playwright screenshot (light and dark) from a throwaway spec, not in `lgx dev`. Quoting uses `||` like lang-sql, not `??`.
+> Deviation: the visual checks (popup badges, the statement block while scrolling and after a resize, Run/Stop, the banner, the empty-tab message; light and dark) were made on screenshots from a throwaway Playwright spec, not in `lgx dev`. Quoting uses `||` like lang-sql, not `??`.
 
 **Files:**
 - Modify: `frontend/src/editor/namespace.ts`,
@@ -378,8 +378,6 @@ goes. 12 rows come out 32px wide, and 2,000 rows 47px.
 - [x] **Step 7:** Commit: `Completion icons for database objects only`.
 
 ### Task 4: Highlight the current statement
-
-> Deviation: step 7 done with temporary Playwright screenshots in light and dark (block follows the cursor, hides with a selection); scrolling and pane resizing were not checked by eye.
 
 **Files:**
 - Modify: `frontend/src/sql/target.ts`, `frontend/src/editor/setup.ts`
@@ -470,7 +468,7 @@ goes. 12 rows come out 32px wide, and 2,000 rows 47px.
 
 ### Task 7: Run/Stop button, the Stop key, a leaner status bar
 
-> Deviation: `useDelayed` resets its state in the effect cleanup, not in the effect body (oxlint `set-state-in-effect`). Codex advisory, not acted on: the floating Run button can cover text at the editor's bottom right (the design places it there).
+> Deviation: `useDelayed` resets its state in the effect cleanup, not in the effect body (oxlint `set-state-in-effect`). Codex flagged that the floating Run button can cover the last lines; a screenshot confirmed it, so the `chrome` theme gives `.cm-content` `paddingBottom: 40px` (not in the design) and the last line scrolls clear.
 
 **Files:**
 - Create: `frontend/src/components/RunButton.tsx`
@@ -591,9 +589,11 @@ schema/table/column completion icons with keywords bare, a rounded block
 behind the statement ⌘↵ runs (a CodeMirror layer), a Run/Stop button with
 ⌘. as the Stop key, rows and time only in the grid footer, and a
 not-connected message or banner with a Connect button in the results.
-Final run: 236 unit tests, build, lint, and 18 e2e tests pass. A codex
-review followed each task; its only findings were the two advisories above
-and one e2e retry bug, fixed.
+Final run: 236 unit tests, build, lint (the 3 baseline warnings), and 18 e2e
+tests pass; backend tests were not run (frontend and docs only). A codex
+review followed each task; its findings were the Run-button overlap (fixed),
+the not-yet-consumed `runRefused` (consumed by Task 6) and one e2e retry
+bug (fixed).
 
 Deviations: see the `> Deviation:` notes under Tasks 3, 4, 5, 7 and 9.
 
