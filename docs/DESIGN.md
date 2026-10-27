@@ -360,11 +360,11 @@ Redshift specifics worth designing around:
 
 For now Redshift is read through the same `pg_catalog` queries as
 Postgres, written in the subset both accept, rather than the `svv_all_*`
-views above: Redshift can only be tested once Quel ships as a Homebrew
-package, and a wrong query would stay broken for a release cycle. The
-Postgres tests run those queries against Postgres. What `pg_catalog`
+views above. Until 0.1.0 Redshift could only be tested on a released
+build, and a wrong query would have stayed broken for a release cycle.
+The Postgres tests run those queries against Postgres. What `pg_catalog`
 misses on Redshift (external schemas and datashares, late-binding view
-columns) is in `docs/backlog/`, waiting for a cluster.
+columns) is in `docs/backlog/`.
 
 The structure tree loads lazily, one level per expand. Its queries run on
 the connection's pool, not a tab's session, so temp tables and SQLite
@@ -645,9 +645,9 @@ App Store: users upgrade through Homebrew.
   tests skip. CI runs `test-pg`.
 - **Redshift**: no Docker image runs it. LocalStack's Redshift is a paid
   plan that emulates the AWS API, not the SQL engine. Postgres covers
-  what Quel does over pgx (connect, query, sessions, cancel, value types);
-  the Redshift-specific questions under [Unverified](#unverified) wait for
-  a real cluster.
+  what Quel does over pgx (connect, query, sessions, cancel, value types).
+  Redshift itself is checked by hand, on a real cluster with a released
+  build; what is still open is under [Unverified](#unverified).
 - **Frontend**: Vitest for logic: the splitter, statement targeting, cell
   display and widths, and the runner against a mocked bridge.
 - **End to end**: `lgx smoke` drives the app in Wails' server mode over
@@ -692,8 +692,9 @@ package feature, not app glue.
    on 2026-10-21.
 1. **Workhorse core - Redshift and SQLite.** First slice done 2026-10-22:
    Postgres and Redshift URLs open, run and cancel with the session
-   surviving, tested against Postgres in Docker. The Redshift-specific
-   checks (see [Unverified](#unverified)) wait for a cluster. Second
+   surviving, tested against Postgres in Docker. Connecting and querying
+   a real Redshift cluster checked with 0.1.0 on 2026-10-27; the rest is
+   under [Unverified](#unverified). Second
    slice done 2026-10-22: editor tabs with a session each; CodeMirror
    with highlighting and keyword completion; run statement, selection or
    script; a virtualized grid paging through open cursors, with cancel;
@@ -724,9 +725,6 @@ package feature, not app glue.
 Assumptions this design rests on that have not been checked yet. The spike
 settles them; update this section when it does.
 
-- pgx (through `database/sql`) connects to Redshift and runs queries
-  without type or protocol errors. Fallback:
-  `default_query_exec_mode=simple_protocol` in the DSN.
 - Cancelling a context sends a cancel request that Redshift honours.
 - The Redshift catalog sources in the introspection table behave as
   described, including `SHOW TABLE` and `svv_all_*` permissions for
@@ -737,9 +735,16 @@ settles them; update this section when it does.
   schemas stay hidden (the filter drops `pg_*` and
   `information_schema` only); and how long `completion-schema` takes on
   a large cluster.
-- The released app, installed from the cask and launched from Finder,
-  saves and reads a profile's password in the Keychain under the hardened
-  runtime (checked at the first release, with a scratch profile).
+
+### Settled by the 0.1.0 release (2026-10-27)
+
+Checked by hand on an Apple Silicon Mac with Quel 0.1.0 installed from
+the cask and launched from Finder.
+
+- The released app saves and reads a profile's password in the Keychain
+  under the hardened runtime, with no entitlements (a scratch profile).
+- pgx (through `database/sql`) connects to a real Redshift cluster and
+  runs queries without type or protocol errors.
 
 ### Settled by milestone 0 (2026-10-19 and 2026-10-21)
 
