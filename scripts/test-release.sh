@@ -38,7 +38,13 @@ case "$1 $2" in
 "notarytool store-credentials") [[ "${STUB_STORE:-ok}" == ok ]] ;;
 "notarytool submit") echo "{\"id\":\"sub-1\",\"status\":\"${STUB_NOTARY:-Accepted}\",\"message\":\"done\"}" ;;
 "notarytool log") echo "{\"issues\":[{\"message\":\"stub rejection\"}]}" ;;
-"stapler staple"|"stapler validate") ;;
+"stapler staple"|"stapler validate")
+    # flaky: the first call of each action fails; bad: every call does.
+    case "${STUB_STAPLE:-ok}" in
+    ok) ;;
+    flaky) [[ $(grep -c "^xcrun stapler $2" "$STUB_LOG") -gt 1 ]] || { echo "stub: the request timed out"; exit 68; } ;;
+    *) echo "stub: the request timed out"; exit 68 ;;
+    esac ;;
 *) echo "unexpected xcrun $*" >&2; exit 1 ;;
 esac'
 
@@ -125,6 +131,16 @@ check "accepted: signed with hardened runtime and a timestamp" 'grep -q -- "--op
 check "accepted: submitted once, waiting for the result" '[[ $(grep -c "notarytool submit" "$STUB_LOG") -eq 1 ]] && grep -q "notarytool submit.*--wait" "$STUB_LOG"'
 check "accepted: stapled before archiving" 'awk "/stapler staple/ {s=NR} /ditto -c.*$archive/ {a=NR} END {exit !(s && a && s < a)}" "$STUB_LOG"'
 check "accepted: the unsigned dist/Quel.app is not signed" '! grep -q "^codesign.*$proj/dist/Quel.app" "$STUB_LOG"'
+
+new_project
+sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" STUB_STAPLE=flaky STAPLER_RETRY_DELAY=0
+check "stapler fails once: retried, succeeds" '[[ $rc -eq 0 && $(grep -c "stapler staple" "$STUB_LOG") -eq 2 && $(grep -c "stapler validate" "$STUB_LOG") -eq 2 ]]' || echo "$out" >&2
+check "stapler fails once: its output is shown" '[[ "$out" == *"stapler staple failed (attempt 1 of 3)"* && "$out" == *"the request timed out"* ]]'
+
+new_project
+sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" STUB_STAPLE=bad STAPLER_RETRY_DELAY=0
+check "stapler always fails: fails after 3 attempts" '[[ $rc -ne 0 && "$out" == *"could not staple"* && $(grep -c "stapler staple" "$STUB_LOG") -eq 3 ]]'
+check "stapler always fails: nothing written" no_artifact
 
 new_project
 sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" APPLE_KEYCHAIN=/tmp/ci.keychain-db

@@ -112,7 +112,7 @@ else
     [[ "$details" == *"Timestamp="* ]] || die "the signature has no secure timestamp"
     [[ "$details" == *"flags="*"(runtime)"* ]] || die "hardened runtime is off"
     ok "Developer ID signature with hardened runtime and a secure timestamp"
-    xcrun stapler validate "$app" >/dev/null || die "the notarization ticket is not stapled"
+    stapler_retry validate "$app" || die "the notarization ticket is not stapled or does not validate"
     ok "notarization ticket stapled"
     assessment="$(spctl --assess --type execute -vv "$app" 2>&1)" ||
         { echo "$assessment" >&2; die "Gatekeeper rejects the app"; }
