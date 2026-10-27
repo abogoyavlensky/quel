@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHAR_W, MAX_W, MIN_W, PAD, initialWidths } from "./widths";
+import { CHAR_W, MAX_W, MIN_W, PAD, initialWidths, numberWidth } from "./widths";
 
 describe("initialWidths", () => {
   it("fits the header when there are no rows", () => {
@@ -26,5 +26,30 @@ describe("initialWidths", () => {
       [[null, "z".repeat(500)]],
     );
     expect(w).toEqual([MIN_W, MAX_W]);
+  });
+});
+
+describe("numberWidth", () => {
+  const w = (digits: number) => Math.ceil(digits * CHAR_W + 17);
+
+  it("fits a small single-page result's own count, at least 2 digits", () => {
+    expect(numberWidth(12, false)).toBe(w(2));
+    expect(numberWidth(7, false)).toBe(w(2));
+    expect(numberWidth(212, false)).toBe(w(3));
+  });
+
+  it("leaves room for 4 digits once a result is a full page or may be paged", () => {
+    expect(numberWidth(500, false)).toBe(w(4));
+    expect(numberWidth(12, true)).toBe(w(4));
+  });
+
+  it("grows with the digits past that", () => {
+    expect(numberWidth(2000, false)).toBe(w(4));
+    expect(numberWidth(100000, false)).toBe(w(6));
+  });
+
+  it("is 32px for 12 rows and 47px for 2,000", () => {
+    expect(numberWidth(12, false)).toBe(32);
+    expect(numberWidth(2000, false)).toBe(47);
   });
 });
