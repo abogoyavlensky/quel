@@ -86,6 +86,27 @@ const chrome = EditorView.theme({
     backgroundColor: "var(--accent)",
     color: "var(--accent-foreground)",
   },
+  // An icon marks a database object: a schema, a table (or an alias, which
+  // stands for one) or a column. Keywords, SQL types and builtins get an
+  // empty slot, so the labels stay aligned.
+  ".cm-completionIcon": {
+    width: "1.1em",
+    textAlign: "center",
+    fontFamily: "var(--font-sans)",
+    fontSize: "9px",
+    fontWeight: "600",
+    color: "var(--muted-foreground)",
+    opacity: "1",
+  },
+  ".cm-completionIcon-keyword:after, .cm-completionIcon-type:after, .cm-completionIcon-variable:after": {
+    content: "''",
+  },
+  ".cm-completionIcon-schema:after": { content: "'S'", fontFamily: "var(--font-sans)" },
+  ".cm-completionIcon-table:after, .cm-completionIcon-constant:after": {
+    content: "'T'",
+    fontFamily: "var(--font-sans)",
+  },
+  ".cm-completionIcon-property:after": { content: "'C'", fontFamily: "var(--font-sans)" },
 });
 
 const runKeys = Prec.highest(
