@@ -227,7 +227,10 @@ the statement under the cursor (or the selection), `Cmd+Shift+Enter` runs
 the whole script. The splitter is a small tokenizer that respects
 `'...'`, `"..."`, `$tag$...$tag$` (Postgres and Redshift procedure
 bodies), and `--` / `/* */` comments. The backend always receives a list
-of single statements.
+of single statements. The editor marks the statement `Cmd+Enter` will run
+with a soft block behind its lines (none while text is selected). The Run
+button in the editor runs it too, and becomes Stop (`Cmd+.`) after 300ms
+of a run.
 
 ### Running
 
@@ -372,7 +375,9 @@ the connection's pool, not a tab's session, so temp tables and SQLite
 returns `{schema {table [columns]}}` for the connected database. From it
 the editor completes schema, table and qualified column names (`lang-sql`),
 and the bare columns of the tables in the statement under the cursor
-(`editor/columns.ts`). The frontend caches it and the
+(`editor/columns.ts`). Schemas and tables carry their kind, so the popup
+marks database objects (S, T, C) and leaves keywords bare. The frontend
+caches it and the
 tree's levels per connection (TanStack Query) and reloads them only with
 the tree's refresh button: running DDL does not refresh anything.
 
@@ -414,8 +419,11 @@ Layout, in resizable panes (shadcn `Resizable`):
 │ structure    │  virtualized grid                          │ doc  jsonb ⧉ │
 │ tree         │                                           │ { … }        │
 └──────────────┴───────────────────────────────────────────┴──────────────┘
- status bar: profile · state (Ready / Running… / Not connected) · rows · elapsed · cancel
+ status bar: profile · state (Ready / Running… / Not connected)
 ```
+
+The editor has a Run/Stop button at its bottom right, and the grid footer
+has the rows and the time.
 
 The right-hand column is the row details panel, there only while open
 (see [Row details](#row-details)).
@@ -500,10 +508,11 @@ results, messages and connection are not.
   Disconnecting closes the profile's database on the backend (its
   sessions, cursors and pool) and marks its open results closed; the tabs
   and their text stay.
-- **Running** (⌘Enter, ⌘⇧Enter, the menu) on a workspace that is not
-  connected sends nothing and shows "Not connected." in the status bar;
-  the notice clears on the next edit, select or
-  connect. While connecting, a run is dropped.
+- **Running** (⌘Enter, ⌘⇧Enter, the Run button, the menu) on a workspace
+  that is not connected sends nothing and says so in the results: the
+  empty tab's message, or a banner above the results, with a Connect
+  button that only connects. The banner stays until the profile connects.
+  While connecting, a run is dropped.
 - The menu's tab actions (new, close, run, cancel) act on the selected
   workspace's active tab.
 - A connect error shows under its profile's row.
