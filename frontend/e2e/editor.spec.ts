@@ -48,8 +48,8 @@ test("a keyword in the popup has no icon", async ({ page }) => {
 test("a table in the popup has its icon", async ({ page }) => {
   await connectFixture(page, db);
   // The completion schema loads after connecting: type until the table is offered.
-  await write(page, "select * from ");
   await expect(async () => {
+    await write(page, "select * from ");
     await page.keyboard.type("t");
     await expect(page.locator(".cm-completionIcon-table").first()).toBeVisible({ timeout: 500 });
   }).toPass({ timeout: 10_000 });
