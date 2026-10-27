@@ -8,7 +8,7 @@
 
 ---
 
-**Status: Tasks 1-6 done; Task 7 Steps 1-2 done, review and the first release pending.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
+**Status: Tasks 1-6 done; Task 7 Steps 1-4 done; the first release (Step 5) waits for authorization.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
 
 ## Design
 
@@ -247,9 +247,18 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 > - The README was rewritten for users (icon, features, install, update, uninstall, data, status), and the developer notes moved to `docs/DEVELOPMENT.md`.
 >
 > `actionlint` and `lgx test-release` pass. The upgraded workflows still need a CI run and a rehearsal on GitHub.
+>
+> Step 3 result 2026-10-27:
+>
+> - The review fixes merged as `2409db5` (#12). Its rehearsal, run 40422942776, failed in `verify-macos --distribution`. Apple accepted the submission, and the ticket stapled and validated in `sign-macos`. Seconds later, `stapler validate` rejected the app unpacked from the zip. The check discarded stapler's output, so the cause was not recorded. Apple's forum answers attribute intermittent stapler failures to the network.
+> - `9b1fc7f` (#13) adds `stapler_retry`: up to 3 attempts, 15 s apart, printing stapler's verbose output after each failure, used by both scripts. `lgx test-release` gained 4 checks (84 pass), and a mutation to a single attempt fails 3 of them.
+> - Rehearsal run 40554022877 on `9b1fc7f` passed: gate, CI (test and macos), and build. Submission 4821276a-de45-43d0-ad7e-fde3b12b657d was Accepted. stapler succeeded on the first attempt, so the retry path is still unexercised on GitHub. The zip's sha256 is `af303a4a831ca86f9bfd7abf9b1f9b3a72dd67e511d53dbd16a300eeef216264`. All distribution checks passed, including Gatekeeper ("Notarized Developer ID") and the launch. Publish and tap were skipped, as a rehearsal should.
+> - Not yet checked on GitHub: the publish and tap jobs, which only run on a tag push. `lgx test-release` covers them with stand-ins.
+>
+> Step 4: the docs were squash-merged as `2409db5` (#12), not as a separate "Document macOS installation and release setup" commit. The six Apple secrets are set and work: the rehearsal's gate checked them, and the build signed and notarized with them. A rehearsal does not check `HOMEBREW_TAP_TOKEN`. The gate checks it on a tag push, and only the tap job uses it.
 
-- [ ] **Step 3:** Run `/code-review` on the final implementation. Run existing Linux CI checks and the new native/distribution checks on the appropriate hosts. Record unavailable checks rather than treating them as passes. Link any created PR to the current T3 thread.
-- [ ] **Step 4:** Commit with `git commit -m "Document macOS installation and release setup"`. Present the implementation, verification evidence, exact credentials still missing, and the concrete first-release action. Do not push a release tag without live-release authorization.
+- [x] **Step 3:** Run `/code-review` on the final implementation. Run existing Linux CI checks and the new native/distribution checks on the appropriate hosts. Record unavailable checks rather than treating them as passes. Link any created PR to the current T3 thread.
+- [x] **Step 4:** Commit with `git commit -m "Document macOS installation and release setup"`. Present the implementation, verification evidence, exact credentials still missing, and the concrete first-release action. Do not push a release tag without live-release authorization.
 - [ ] **Step 5:** Once explicitly authorized, push the version tag, inspect the resulting workflow, then install the actual cask with `brew install --cask abogoyavlensky/tap/quel`. Run the first-release native acceptance checks in the Design section. Record release URL, checksum, and tap commit; update status to completed only after the agreed release scope is achieved.
 
 ## Plan review
