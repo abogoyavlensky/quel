@@ -82,8 +82,9 @@ if [[ "$status" != "Accepted" ]]; then
 fi
 
 echo "==> Stapling"
-xcrun stapler staple "$app"
-xcrun stapler validate "$app"
+stapler_retry staple "$app" || die "could not staple the notarization ticket; nothing was written to dist/"
+stapler_retry validate "$app" || die "the stapled ticket does not validate; nothing was written to dist/"
+echo "  ticket stapled"
 assessment="$(spctl --assess --type execute -vv "$app" 2>&1)" ||
     { echo "$assessment" >&2; die "Gatekeeper rejects the notarized app"; }
 [[ "$assessment" == *"source=Notarized Developer ID"* ]] ||

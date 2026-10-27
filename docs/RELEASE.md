@@ -127,6 +127,11 @@ Read the failed job's log; each step names what it checked.
   available later with
   `xcrun notarytool log SUBMISSION_ID --keychain-profile quel-notary` on a
   Mac set up as in [Signing on a Mac](#signing-on-a-mac).
+- **build: "stapler ... failed (attempt N of 3)".** stapler asks Apple's
+  servers for the ticket, and a runner's request sometimes fails. Each
+  attempt prints the end of stapler's own output. If all three fail and
+  the output names a network error, rerun the workflow. That makes a new
+  submission, which Apple accepts again.
 - **publish failed.** Use "Re-run failed jobs": it takes the signed zip
   from the same run's **build** and resumes the draft release. A published
   release is never changed; if one is wrong, release a new version.
