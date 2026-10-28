@@ -10,6 +10,10 @@ import { statementUnder } from "@/sql/target";
 
 // Keeps the block off the gutter's border and the right edge.
 const INSET = 4;
+// CodeMirror's left padding of a line, and the room after the longest
+// line's last character.
+const LINE_PAD = 6;
+const RIGHT_PAD = 10;
 
 // The document's statements, split again only when the text changes. A
 // selection change just looks the statement up.
@@ -34,7 +38,19 @@ const block = layer({
     const baseTop = sr.top - view.scrollDOM.scrollTop;
     const top = view.documentTop + view.lineBlockAt(doc.lineAt(s.from).from).top - baseTop;
     const bottom = view.documentTop + view.lineBlockAt(doc.lineAt(s.to).from).bottom - baseTop;
-    return [new RectangleMarker("cm-currentStatement", cr.left - baseLeft + INSET, top, cr.width - 2 * INSET, bottom - top)];
+    // The block ends just past the longest line, not at the editor's edge.
+    // A line outside the viewport is not drawn, so it is measured by its
+    // length (the editor's face is monospace).
+    let right = cr.left + LINE_PAD;
+    const { from: vFrom, to: vTo } = view.viewport;
+    for (let n = doc.lineAt(s.from).number; n <= doc.lineAt(s.to).number; n++) {
+      const line = doc.line(n);
+      const at = line.to >= vFrom && line.to <= vTo ? view.coordsAtPos(line.to, -1) : null;
+      right = Math.max(right, at ? at.right : cr.left + LINE_PAD + line.length * view.defaultCharacterWidth);
+    }
+    const left = cr.left - baseLeft + INSET;
+    const width = Math.min(right + RIGHT_PAD - cr.left - INSET, cr.width - 2 * INSET);
+    return [new RectangleMarker("cm-currentStatement", left, top, width, bottom - top)];
   },
 });
 
