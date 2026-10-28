@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -10,6 +11,8 @@
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+    /* The SQL editor's face. */
+    --font-editor: 'JetBrains Mono Variable', var(--font-mono);
     /* The connection marker: one hue per engine. */
     --color-engine-sqlite: oklch(0.62 0.11 175);
     --color-engine-postgres: oklch(0.58 0.13 255);

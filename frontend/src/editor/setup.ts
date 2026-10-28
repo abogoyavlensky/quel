@@ -64,7 +64,7 @@ const sqlHighlight = HighlightStyle.define([
 const chrome = EditorView.theme({
   "&": { height: "100%", fontSize: "13px", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.55" },
+  ".cm-scroller": { fontFamily: "var(--font-editor)", lineHeight: "1.55" },
   // Room under the last line, so it can scroll clear of the Run button.
   ".cm-content": { paddingBottom: "40px" },
   ".cm-gutters": {
