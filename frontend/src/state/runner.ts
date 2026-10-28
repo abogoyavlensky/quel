@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import * as api from "@/lib/api";
 import { metaKeys, queryClient } from "@/lib/query";
 import type { SavedWorkspace } from "@/lib/types";
@@ -96,6 +97,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
     ...t,
     runningQueryId: firstId,
     stopping: false,
+    runStartedAt: Date.now(),
     results: t.results
       .filter((r) => r.pinned)
       .map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
@@ -175,6 +177,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
         ...t,
         runningQueryId: null,
         stopping: false,
+        runStartedAt: null,
         // The last result may have been closed while the script ran on.
         active: !failed && lastResult && t.results.some((r) => r.id === lastResult) ? lastResult : MESSAGES,
       }));
@@ -184,13 +187,21 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
 // Run from the selected workspace's active editor: the statement under the
 // cursor (or the selection's statements), or the whole script. A
-// disconnected workspace sends nothing and says so in the status bar; one
-// that is connecting drops the run, as a second run in flight is dropped.
+// disconnected workspace sends nothing: a toast says so right away, with a
+// Connect button, and the run is marked refused (the results keep saying so
+// until a connect); one that is connecting drops the run, as a second run
+// in flight is dropped.
 export async function runCurrent(mode: RunMode): Promise<void> {
   const w = selectedWorkspace(store.getState());
   if (!w || w.status === "connecting") return;
   if (w.status !== "connected") {
-    store.setState({ notice: "Not connected." });
+    updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
+    const name = store.getState().profiles.find((p) => p.id === w.profileId)?.name ?? "The profile";
+    // One id: a second press replaces the toast rather than stacking.
+    toast.error(`${name} isn't connected.`, {
+      id: "not-connected",
+      action: { label: "Connect", onClick: () => void connectProfile(w.profileId) },
+    });
     return;
   }
   const tabId = w.activeTab;
@@ -373,6 +384,7 @@ export async function closeTab(tabId: string): Promise<void> {
       ...tab,
       runningQueryId: null,
       stopping: false,
+      runStartedAt: null,
       results: tab.results.map((r) =>
         r.fetching ? { ...r, fetching: false, cursor: r.cursor === "open" ? "closed" : r.cursor } : r,
       ),
@@ -571,7 +583,8 @@ export async function connectProfile(id: string): Promise<void> {
       void api.closeDb(opened["conn-id"]).catch(() => {});
       return;
     }
-    updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"] }));
+    updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
+    toast.dismiss("not-connected");
   } catch (e) {
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }

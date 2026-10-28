@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
+import { Toaster } from "@/components/ui/sonner";
 import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
@@ -56,6 +57,28 @@ function useRowDetailsKey() {
   }, []);
 }
 
+// ⌘. / Ctrl+. stops the running statement. The native Query menu has it
+// too, so with the app window it may arrive twice; that is harmless:
+// cancel only marks the tab as stopping and asks the backend again, and a
+// failed ask is swallowed. Server mode has no native menu, so there the
+// key comes from here alone.
+function useStopKey() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (!mod || e.shiftKey || e.altKey || e.key !== ".") return;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = selectedTabId();
+      if (id) cancel(id);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+}
+
 // Pending tab saves go out now when the window hides or the page goes
 // away: the app is likely quitting.
 function useFlushOnHide() {
@@ -75,9 +98,15 @@ function useFlushOnHide() {
 export default function App() {
   useMenu();
   useRowDetailsKey();
+  useStopKey();
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
   }, []);
-  return <AppShell />;
+  return (
+    <>
+      <AppShell />
+      <Toaster />
+    </>
+  );
 }

@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import type { ResultTab } from "@/state/store";
 import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
 import { display, isNumericType } from "./format";
-import { initialWidths } from "./widths";
+import { initialWidths, numberWidth } from "./widths";
 
 // A result as a grid: rows and columns both virtualized, so a 100,000-row
 // result or a 300-column table renders only what is on screen. Absolutely
@@ -16,7 +16,6 @@ import { initialWidths } from "./widths";
 
 const ROW_H = 24;
 const HEAD_H = 40;
-const NUM_W = 56; // the row-number column
 const MIN_COL = 40;
 const LOAD_AHEAD = 50; // rows from the end at which the next page loads
 
@@ -98,8 +97,8 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
   };
 
   const colItems = cols.getVirtualItems();
-  const width = NUM_W + cols.getTotalSize();
-  const digits = String(result.rows.length).length;
+  const numW = numberWidth(result.rows.length, result.cursor === "open");
+  const width = numW + cols.getTotalSize();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -116,7 +115,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
         <div style={{ width, height: HEAD_H + rows.getTotalSize() }} className="relative">
           {/* Header: sticks to the top; its corner sticks to the left too. */}
           <div role="row" className="sticky top-0 z-20 border-b bg-background" style={{ width, height: HEAD_H }}>
-            <div className="sticky left-0 z-10 h-full border-r bg-background" style={{ width: NUM_W }} />
+            <div className="sticky left-0 z-10 h-full border-r bg-background" style={{ width: numW }} />
             {colItems.map((c) => {
               const col = result.columns[c.index];
               return (
@@ -128,7 +127,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                     "absolute top-0 flex h-full flex-col justify-center border-r px-2.5",
                     numeric[c.index] && "items-end text-right",
                   )}
-                  style={{ left: NUM_W + c.start, width: c.size }}
+                  style={{ left: numW + c.start, width: c.size }}
                 >
                   <span className="w-full truncate font-sans text-[12px] font-medium text-foreground">{col.name}</span>
                   <span className="w-full truncate text-[10px] text-muted-foreground">{col.type.toLowerCase()}</span>
@@ -170,7 +169,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                     "sticky left-0 z-10 flex h-full items-center justify-end border-r px-2 text-muted-foreground tabular-nums",
                     selected ? "bg-[color-mix(in_oklch,var(--primary)_10%,var(--background))]" : "bg-background",
                   )}
-                  style={{ width: NUM_W, minWidth: `${digits + 2}ch` }}
+                  style={{ width: numW }}
                 >
                   {r.index + 1}
                 </div>
@@ -188,7 +187,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                         kind === "null" && "text-muted-foreground/70 italic",
                         kind === "bool" && "text-muted-foreground",
                       )}
-                      style={{ left: NUM_W + c.start, width: c.size }}
+                      style={{ left: numW + c.start, width: c.size }}
                     >
                       {text}
                     </div>

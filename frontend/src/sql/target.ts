@@ -20,6 +20,14 @@ export function statementAt(statements: Statement[], pos: number): Statement | u
   return statements.find((s) => s.from > pos);
 }
 
+// The statement a run of the cursor's statement would send, for the
+// editor to mark: none while text is selected, because then the selection
+// is what runs (and it is already drawn).
+export function statementUnder(statements: Statement[], selection: Range): Statement | undefined {
+  if (selection.from !== selection.to) return undefined;
+  return statementAt(statements, selection.from);
+}
+
 // "statement" (Mod-Enter): a non-empty selection runs every statement in
 // it, otherwise the statement under the cursor. "script" (Shift-Mod-Enter):
 // every statement in the document. Offsets are always document offsets.
@@ -30,6 +38,6 @@ export function toRun(text: string, selection: Range, mode: RunMode): Statement[
     const to = Math.max(selection.from, selection.to);
     return split(text.slice(from, to)).map((s) => ({ ...s, from: s.from + from, to: s.to + from }));
   }
-  const s = statementAt(split(text), selection.from);
+  const s = statementUnder(split(text), selection);
   return s ? [s] : [];
 }

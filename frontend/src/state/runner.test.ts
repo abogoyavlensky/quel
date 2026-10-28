@@ -18,6 +18,9 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => api);
 
+const toasts = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toasts }));
+
 // The editor's text per tab (texts, set by a test or by seed), else input.
 const editor = vi.hoisted(() => ({
   input: { text: "", selection: { from: 0, to: 0 } },
@@ -79,6 +82,7 @@ const stmts = (sql: string) => split(sql);
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
+  toasts.error.mockReset();
   api.closeResult.mockResolvedValue(undefined);
   api.closeSession.mockResolvedValue(undefined);
   api.closeDb.mockResolvedValue(undefined);
@@ -290,14 +294,23 @@ describe("runCurrent", () => {
     expect(api.run).toHaveBeenCalledWith("c2", tabId("p2"), expect.any(String), "select 1");
   });
 
-  it("sends nothing on a disconnected profile and says so", async () => {
+  it("sends nothing on a disconnected profile and marks the run refused until a connect", async () => {
     await runner.disconnectProfile("p1");
+    expect(ws().runRefused).toBe(false);
+    api.connect.mockResolvedValueOnce({ "conn-id": "c3", engine: "sqlite", label: "P1" });
     editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
-    expect(store.getState().notice).toBe("Not connected.");
-    runner.clearNotice();
+    expect(ws().runRefused).toBe(true);
     expect(store.getState().notice).toBeNull();
+    expect(toasts.error).toHaveBeenCalledWith(
+      "The profile isn't connected.",
+      expect.objectContaining({ id: "not-connected" }),
+    );
+    await runner.connectProfile("p1");
+    expect(toasts.dismiss).toHaveBeenCalledWith("not-connected");
+    expect(ws().status).toBe("connected");
+    expect(ws().runRefused).toBe(false);
   });
 
   it("drops a run while the profile connects", async () => {
@@ -305,10 +318,13 @@ describe("runCurrent", () => {
     const opening = deferred<{ "conn-id": string; engine: string; label: string }>();
     api.connect.mockReturnValueOnce(opening.promise);
     const connecting = runner.connectProfile("p1");
+    await vi.waitFor(() => expect(ws().status).toBe("connecting"));
     editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
     expect(store.getState().notice).toBeNull();
+    expect(ws().runRefused).toBe(false);
+    expect(toasts.error).not.toHaveBeenCalled();
     opening.resolve({ "conn-id": "c3", engine: "sqlite", label: "P1" });
     await connecting;
   });

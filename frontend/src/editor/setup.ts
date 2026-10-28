@@ -1,5 +1,5 @@
-import { autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { acceptCompletion, autocompletion, closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { PostgreSQL, type SQLNamespace, SQLite, StandardSQL, sql } from "@codemirror/lang-sql";
 import { HighlightStyle, bracketMatching, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
@@ -7,7 +7,6 @@ import { Compartment, EditorSelection, EditorState, Prec } from "@codemirror/sta
 import {
   EditorView,
   drawSelection,
-  highlightActiveLine,
   highlightActiveLineGutter,
   keymap,
   lineNumbers,
@@ -17,6 +16,7 @@ import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
 import { clearNotice, runCurrent } from "@/state/runner";
 import { columnCompletionSource } from "./columns";
+import { statementHighlight } from "./statementHighlight";
 import type { Seed } from "./states";
 
 // A tab's editor state: the extensions every tab shares, and the text and
@@ -64,14 +64,22 @@ const sqlHighlight = HighlightStyle.define([
 const chrome = EditorView.theme({
   "&": { height: "100%", fontSize: "13px", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-mono)", lineHeight: "1.55" },
+  ".cm-scroller": { fontFamily: "var(--font-editor)", lineHeight: "1.55" },
+  // Room under the last line, so it can scroll clear of the Run button.
+  ".cm-content": { paddingBottom: "40px" },
   ".cm-gutters": {
     backgroundColor: "var(--background)",
     color: "var(--muted-foreground)",
     borderRight: "1px solid var(--border)",
   },
-  ".cm-activeLine, .cm-activeLineGutter": {
+  ".cm-activeLineGutter": {
     backgroundColor: "color-mix(in oklch, var(--muted) 45%, transparent)",
+  },
+  // The statement Mod-Enter will run, a quiet card behind the text.
+  ".cm-currentStatement": {
+    borderRadius: "6px",
+    backgroundColor: "color-mix(in oklch, var(--muted) 70%, transparent)",
+    boxShadow: "0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent), 0 1px 2px rgb(0 0 0 / 0.05)",
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
@@ -86,6 +94,27 @@ const chrome = EditorView.theme({
     backgroundColor: "var(--accent)",
     color: "var(--accent-foreground)",
   },
+  // An icon marks a database object: a schema, a table (or an alias, which
+  // stands for one) or a column. Keywords, SQL types and builtins get an
+  // empty slot, so the labels stay aligned.
+  ".cm-completionIcon": {
+    width: "1.1em",
+    textAlign: "center",
+    fontFamily: "var(--font-sans)",
+    fontSize: "9px",
+    fontWeight: "600",
+    color: "var(--muted-foreground)",
+    opacity: "1",
+  },
+  ".cm-completionIcon-keyword:after, .cm-completionIcon-type:after, .cm-completionIcon-variable:after": {
+    content: "''",
+  },
+  ".cm-completionIcon-schema:after": { content: "'S'", fontFamily: "var(--font-sans)" },
+  ".cm-completionIcon-table:after, .cm-completionIcon-constant:after": {
+    content: "'T'",
+    fontFamily: "var(--font-sans)",
+  },
+  ".cm-completionIcon-property:after": { content: "'C'", fontFamily: "var(--font-sans)" },
 });
 
 const runKeys = Prec.highest(
@@ -119,12 +148,22 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       bracketMatching(),
       closeBrackets(),
       autocompletion(),
-      highlightActiveLine(),
+      statementHighlight,
       highlightSelectionMatches(),
-      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...completionKeymap]),
+      // Tab accepts an open completion, otherwise it indents (Shift-Tab
+      // dedents). Escape then Tab leaves the editor.
+      keymap.of([
+        { key: "Tab", run: acceptCompletion },
+        indentWithTab,
+        ...closeBracketsKeymap,
+        ...defaultKeymap,
+        ...searchKeymap,
+        ...historyKeymap,
+        ...completionKeymap,
+      ]),
       language.of(languageFor(engine, null)),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
-      // An edit clears the status bar's "Not connected." notice.
+      // An edit clears the status bar's notice.
       EditorView.updateListener.of((u) => {
         if (u.docChanged) clearNotice();
         if (tabId && (u.docChanged || u.selectionSet)) onEdit(tabId);

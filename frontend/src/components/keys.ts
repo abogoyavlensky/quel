@@ -3,3 +3,4 @@ export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(
 export const RUN_KEY = isMac ? "⌘↵" : "Ctrl+Enter";
 export const ROW_KEY = isMac ? "⌘I" : "Ctrl+I";
 export const SCRIPT_KEY = isMac ? "⇧⌘↵" : "Ctrl+Shift+Enter";
+export const STOP_KEY = isMac ? "⌘." : "Ctrl+.";

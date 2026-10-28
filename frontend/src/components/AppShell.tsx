@@ -4,15 +4,17 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Button } from "@/components/ui/button";
 import { SqlEditor } from "@/editor/SqlEditor";
 import { namespaceOf } from "@/editor/namespace";
-import type { Completion } from "@/editor/setup";
+import { type Completion, dialectFor } from "@/editor/setup";
 import * as api from "@/lib/api";
 import { metaKeys } from "@/lib/query";
+import type { Engine } from "@/lib/types";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { EditorTabs } from "./EditorTabs";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
+import { RunButton } from "./RunButton";
 import { RowDetails } from "./RowDetails";
 import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
@@ -27,7 +29,7 @@ export function AppShell() {
   const engine = useApp((s) => s.profiles.find((p) => p.id === s.selected)?.engine ?? null);
   const selected = useApp((s) => s.selected);
   const tab = workspace && activeTabOf(workspace);
-  const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null);
+  const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null, engine);
   const rowDetails = useApp((s) => s.rowDetails);
 
   return (
@@ -61,7 +63,10 @@ export function AppShell() {
               <EditorTabs workspace={workspace} />
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
                 <ResizablePanel defaultSize="45" minSize={80}>
-                  <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
+                  <div className="relative h-full">
+                    <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
+                    <RunButton key={tab.id} tab={tab} />
+                  </div>
                 </ResizablePanel>
                 <ResizableHandle />
                 <ResizablePanel minSize={120}>
@@ -96,14 +101,17 @@ export function AppShell() {
 // The connected database's names for the editor's completion, cached with
 // the structure tree's metadata. The same object until the data changes,
 // so the editor reconfigures only then.
-function useCompletion(connId: string | null): Completion | null {
+function useCompletion(connId: string | null, engine: Engine | null): Completion | null {
   const { data } = useQuery({
     queryKey: metaKeys.completion(connId ?? ""),
     queryFn: () => api.completionSchema(connId!),
     enabled: connId !== null,
   });
   return useMemo(
-    () => (connId && data ? { schema: namespaceOf(data), defaultSchema: data["default-schema"] ?? undefined, raw: data } : null),
-    [connId, data],
+    () =>
+      connId && data
+        ? { schema: namespaceOf(data, dialectFor(engine)), defaultSchema: data["default-schema"] ?? undefined, raw: data }
+        : null,
+    [connId, data, engine],
   );
 }

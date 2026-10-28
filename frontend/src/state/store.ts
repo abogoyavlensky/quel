@@ -48,10 +48,14 @@ export interface EditorTab {
   pinned: boolean; // first in the bar, and cannot be closed
   runningQueryId: string | null; // the statement or page in flight
   stopping: boolean; // cancel asked: the script stops after this one
+  runStartedAt: number | null; // when the running statement or script began (Date.now())
   results: ResultTab[];
   active: string; // "messages" or a result id
   messages: Message[]; // newest last, capped at MAX_MESSAGES
 }
+
+// A statement or script is running, not just a page loading.
+export const isRunning = (t: EditorTab) => t.runningQueryId !== null && !t.results.some((r) => r.fetching);
 
 // A workspace's connection: connecting and disconnecting are in flight
 // while the backend opens or closes the database.
@@ -76,6 +80,9 @@ export interface Workspace {
   // null until the tree first opens the default schema. Names, not ids, so
   // they hold across a reconnect.
   treeExpanded: string[] | null;
+  // A run was refused while disconnected: the results say so until a
+  // connect. In memory only.
+  runRefused: boolean;
 }
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
@@ -103,6 +110,7 @@ export function newTabState(n: number): EditorTab {
     pinned: false,
     runningQueryId: null,
     stopping: false,
+    runStartedAt: null,
     results: [],
     active: MESSAGES,
     messages: [],
@@ -122,6 +130,7 @@ export function newWorkspace(profileId: string): Workspace {
     closed: [],
     loadError: null,
     treeExpanded: null,
+    runRefused: false,
   };
 }
 

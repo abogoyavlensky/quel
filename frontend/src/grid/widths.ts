@@ -21,3 +21,13 @@ export function initialWidths(columns: Column[], rows: Cell[][]): number[] {
     return Math.min(MAX_W, Math.max(MIN_W, Math.ceil(chars * CHAR_W + PAD)));
   });
 }
+
+// The row-number column: its digits at the grid's mono width, plus padding
+// and border. Room for at least 4 digits once a result is paged (or may
+// be), so it does not widen as pages load past 999; a small single-page
+// result fits its own count (at least 2 digits).
+export const FIRST_PAGE = 500; // the backend's first page
+export function numberWidth(rowCount: number, more: boolean): number {
+  const floor = more || rowCount >= FIRST_PAGE ? 4 : 2;
+  return Math.ceil(Math.max(floor, String(rowCount).length) * CHAR_W + 17);
+}

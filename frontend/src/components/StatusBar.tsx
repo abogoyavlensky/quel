@@ -1,17 +1,31 @@
-import { Button } from "@/components/ui/button";
-import { cancel } from "@/state/runner";
-import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
+import { useEffect, useState } from "react";
+import { formatElapsed } from "@/lib/elapsed";
+import { activeTabOf, isRunning, selectedWorkspace, useApp } from "@/state/store";
 import { ConnMark } from "./ConnMark";
 
-// The selected profile and its connection, the active tab's state, and
-// Cancel while something runs there. Connecting is the sidebar's job.
+// How long the run has lasted, redrawn a few times a second. Mounted only
+// while something runs, so the clock stops with the run.
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => {
+      clearInterval(id);
+    };
+  }, []);
+  const text = formatElapsed(now - since);
+  return text ? <span className="tabular-nums">{text}</span> : null;
+}
+
+// The selected profile and its connection, and the active tab's state.
+// Rows and time are in the grid's footer, Stop is in the editor, and
+// connecting is the sidebar's job. A run's time shows next to "Running…".
 export function StatusBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
   const notice = useApp((s) => s.notice);
   const tab = w && activeTabOf(w);
-  const result = tab?.results.find((r) => r.id === tab.active);
-  const running = !!tab?.runningQueryId;
+  const running = !!tab && isRunning(tab);
   const status = w?.status ?? "disconnected";
 
   let state = "";
@@ -33,20 +47,12 @@ export function StatusBar() {
           {profile ? profile.name : "No connection"}
         </span>
       </span>
-      <span role="status" className="flex-1 truncate">
-        {state}
-      </span>
-      {result && !running && (
-        <span className="flex gap-3 tabular-nums">
-          <span>{result.rows.length.toLocaleString()} rows</span>
-          <span>{result.elapsedMs.toLocaleString()} ms</span>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span role="status" className="truncate">
+          {state}
         </span>
-      )}
-      {running && tab && (
-        <Button size="xs" variant="outline" disabled={tab.stopping} onClick={() => cancel(tab.id)}>
-          Cancel
-        </Button>
-      )}
+        {(running || tab?.stopping) && tab?.runStartedAt != null && <Elapsed since={tab.runStartedAt} />}
+      </span>
     </footer>
   );
 }

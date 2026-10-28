@@ -66,13 +66,35 @@ test("a pinned result stays when the tab runs again", async ({ page }) => {
   await expect(page.getByText("Showing 500 rows: run again for more")).toBeVisible();
 });
 
-test("cancel stops a runaway query", async ({ page }) => {
+test("Stop cancels a runaway query", async ({ page }) => {
+  await open(page);
+  await write(page, `${runaway};`);
+  await page.getByRole("button", { name: "Run" }).click();
+  // The Run button turns to Stop after a moment of a run, and the status
+  // bar counts the time.
+  await expect(page.getByRole("contentinfo")).toContainText(/\d+s/);
+  await page.getByRole("button", { name: "Stop" }).click();
+  await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
+  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Ready");
+});
+
+test("the Stop key cancels", async ({ page }) => {
   await open(page);
   await write(page, `${runaway};`);
   await page.keyboard.press("ControlOrMeta+Enter");
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+  // Server mode has no native menu: this is the page's own key.
+  await page.keyboard.press("ControlOrMeta+.");
   await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
-  await expect(page.getByRole("status")).toHaveText("Ready");
+});
+
+test("the Run button runs and keeps the editor focused", async ({ page }) => {
+  await open(page);
+  await write(page, "select 1 as one;");
+  await page.getByRole("button", { name: "Run" }).click();
+  await expect(page.getByRole("columnheader", { name: /one/ })).toBeVisible();
+  await expect(page.getByLabel("SQL editor")).toBeFocused();
 });
 
 test("each editor tab is its own session", async ({ page }) => {
