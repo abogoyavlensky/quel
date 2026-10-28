@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppShell } from "@/components/AppShell";
+import { Toaster } from "@/components/ui/sonner";
 import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
@@ -102,5 +103,10 @@ export default function App() {
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
   }, []);
-  return <AppShell />;
+  return (
+    <>
+      <AppShell />
+      <Toaster />
+    </>
+  );
 }

@@ -228,7 +228,8 @@ the whole script. The splitter is a small tokenizer that respects
 `'...'`, `"..."`, `$tag$...$tag$` (Postgres and Redshift procedure
 bodies), and `--` / `/* */` comments. The backend always receives a list
 of single statements. The editor marks the statement `Cmd+Enter` will run
-with a soft block behind its lines (none while text is selected). The Run
+with a soft block behind its lines, as wide as the longest line (none while
+text is selected). The editor's face is JetBrains Mono (bundled, OFL). The Run
 button in the editor runs it too, and becomes Stop (`Cmd+.`) after 300ms
 of a run.
 
@@ -509,7 +510,8 @@ results, messages and connection are not.
   sessions, cursors and pool) and marks its open results closed; the tabs
   and their text stay.
 - **Running** (⌘Enter, ⌘⇧Enter, the Run button, the menu) on a workspace
-  that is not connected sends nothing and says so in the results: the
+  that is not connected sends nothing and says so, at once in a toast with
+  a Connect button, and in the results: the
   empty tab's message, or a banner above the results, with a Connect
   button that only connects. The banner stays until the profile connects.
   While connecting, a run is dropped.

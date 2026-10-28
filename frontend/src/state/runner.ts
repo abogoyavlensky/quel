@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import * as api from "@/lib/api";
 import { metaKeys, queryClient } from "@/lib/query";
 import type { SavedWorkspace } from "@/lib/types";
@@ -184,14 +185,21 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
 // Run from the selected workspace's active editor: the statement under the
 // cursor (or the selection's statements), or the whole script. A
-// disconnected workspace sends nothing and marks the run refused (the
-// results say so, with a Connect button); one that is connecting drops the
-// run, as a second run in flight is dropped.
+// disconnected workspace sends nothing: a toast says so right away, with a
+// Connect button, and the run is marked refused (the results keep saying so
+// until a connect); one that is connecting drops the run, as a second run
+// in flight is dropped.
 export async function runCurrent(mode: RunMode): Promise<void> {
   const w = selectedWorkspace(store.getState());
   if (!w || w.status === "connecting") return;
   if (w.status !== "connected") {
     updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
+    const name = store.getState().profiles.find((p) => p.id === w.profileId)?.name ?? "The profile";
+    // One id: a second press replaces the toast rather than stacking.
+    toast.error(`${name} isn't connected.`, {
+      id: "not-connected",
+      action: { label: "Connect", onClick: () => void connectProfile(w.profileId) },
+    });
     return;
   }
   const tabId = w.activeTab;
@@ -573,6 +581,7 @@ export async function connectProfile(id: string): Promise<void> {
       return;
     }
     updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
+    toast.dismiss("not-connected");
   } catch (e) {
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }

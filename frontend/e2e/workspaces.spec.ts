@@ -64,10 +64,14 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
   // and the next run works.
   await editor(page).click();
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.getByText("WS B isn't connected.")).toBeVisible();
+  const banner = page.locator("div[aria-live=polite]", { hasText: "WS B isn't connected." });
+  const toast = page.locator("[data-sonner-toast]", { hasText: "WS B isn't connected." });
+  await expect(banner).toBeVisible();
+  await expect(toast).toBeVisible();
   await page.getByRole("button", { name: "Connect to WS B" }).click();
   await expect(status(page)).toHaveText("Ready");
-  await expect(page.getByText("WS B isn't connected.")).toHaveCount(0);
+  await expect(banner).toHaveCount(0);
+  await expect(toast).toHaveCount(0);
   await write(page, "select max(id) as m from t2;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("tablist", { name: "Results" })).toContainText("select max(id) as m from t2");

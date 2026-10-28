@@ -18,6 +18,9 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => api);
 
+const toasts = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toasts }));
+
 // The editor's text per tab (texts, set by a test or by seed), else input.
 const editor = vi.hoisted(() => ({
   input: { text: "", selection: { from: 0, to: 0 } },
@@ -79,6 +82,7 @@ const stmts = (sql: string) => split(sql);
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
+  toasts.error.mockReset();
   api.closeResult.mockResolvedValue(undefined);
   api.closeSession.mockResolvedValue(undefined);
   api.closeDb.mockResolvedValue(undefined);
@@ -299,7 +303,12 @@ describe("runCurrent", () => {
     expect(api.run).not.toHaveBeenCalled();
     expect(ws().runRefused).toBe(true);
     expect(store.getState().notice).toBeNull();
+    expect(toasts.error).toHaveBeenCalledWith(
+      "The profile isn't connected.",
+      expect.objectContaining({ id: "not-connected" }),
+    );
     await runner.connectProfile("p1");
+    expect(toasts.dismiss).toHaveBeenCalledWith("not-connected");
     expect(ws().status).toBe("connected");
     expect(ws().runRefused).toBe(false);
   });
@@ -315,6 +324,7 @@ describe("runCurrent", () => {
     expect(api.run).not.toHaveBeenCalled();
     expect(store.getState().notice).toBeNull();
     expect(ws().runRefused).toBe(false);
+    expect(toasts.error).not.toHaveBeenCalled();
     opening.resolve({ "conn-id": "c3", engine: "sqlite", label: "P1" });
     await connecting;
   });
