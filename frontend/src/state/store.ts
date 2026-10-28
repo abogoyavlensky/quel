@@ -48,6 +48,7 @@ export interface EditorTab {
   pinned: boolean; // first in the bar, and cannot be closed
   runningQueryId: string | null; // the statement or page in flight
   stopping: boolean; // cancel asked: the script stops after this one
+  runStartedAt: number | null; // when the running statement or script began (Date.now())
   results: ResultTab[];
   active: string; // "messages" or a result id
   messages: Message[]; // newest last, capped at MAX_MESSAGES
@@ -109,6 +110,7 @@ export function newTabState(n: number): EditorTab {
     pinned: false,
     runningQueryId: null,
     stopping: false,
+    runStartedAt: null,
     results: [],
     active: MESSAGES,
     messages: [],

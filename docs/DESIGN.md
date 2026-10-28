@@ -420,7 +420,7 @@ Layout, in resizable panes (shadcn `Resizable`):
 │ structure    │  virtualized grid                          │ doc  jsonb ⧉ │
 │ tree         │                                           │ { … }        │
 └──────────────┴───────────────────────────────────────────┴──────────────┘
- status bar: profile · state (Ready / Running… / Not connected)
+ status bar: profile · state (Ready / Running… 12s / Not connected)
 ```
 
 The editor has a Run/Stop button at its bottom right, and the grid footer

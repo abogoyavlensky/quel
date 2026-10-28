@@ -70,7 +70,9 @@ test("Stop cancels a runaway query", async ({ page }) => {
   await open(page);
   await write(page, `${runaway};`);
   await page.getByRole("button", { name: "Run" }).click();
-  // The Run button turns to Stop after a moment of a run.
+  // The Run button turns to Stop after a moment of a run, and the status
+  // bar counts the time.
+  await expect(page.getByRole("contentinfo")).toContainText(/\d+s/);
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
   await expect(page.getByRole("button", { name: "Run" })).toBeVisible();

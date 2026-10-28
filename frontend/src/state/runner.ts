@@ -97,6 +97,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
     ...t,
     runningQueryId: firstId,
     stopping: false,
+    runStartedAt: Date.now(),
     results: t.results
       .filter((r) => r.pinned)
       .map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
@@ -176,6 +177,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
         ...t,
         runningQueryId: null,
         stopping: false,
+        runStartedAt: null,
         // The last result may have been closed while the script ran on.
         active: !failed && lastResult && t.results.some((r) => r.id === lastResult) ? lastResult : MESSAGES,
       }));
@@ -382,6 +384,7 @@ export async function closeTab(tabId: string): Promise<void> {
       ...tab,
       runningQueryId: null,
       stopping: false,
+      runStartedAt: null,
       results: tab.results.map((r) =>
         r.fetching ? { ...r, fetching: false, cursor: r.cursor === "open" ? "closed" : r.cursor } : r,
       ),
