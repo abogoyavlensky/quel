@@ -10,10 +10,12 @@ import { statementUnder } from "@/sql/target";
 
 // Keeps the block off the gutter's border and the right edge.
 const INSET = 4;
-// CodeMirror's left padding of a line, and the room after the longest
-// line's last character.
-const LINE_PAD = 6;
+// A line's left padding (the chrome theme's .cm-line in setup.ts), and the
+// room after the longest line's last character.
+const LINE_PAD = 12;
 const RIGHT_PAD = 10;
+// How far the block reaches above its first line and below its last.
+const V_PAD = 2;
 
 // The document's statements, split again only when the text changes. A
 // selection change just looks the statement up.
@@ -50,7 +52,7 @@ const block = layer({
     }
     const left = cr.left - baseLeft + INSET;
     const width = Math.min(right + RIGHT_PAD - cr.left - INSET, cr.width - 2 * INSET);
-    return [new RectangleMarker("cm-currentStatement", left, top, width, bottom - top)];
+    return [new RectangleMarker("cm-currentStatement", left, top - V_PAD, width, bottom - top + 2 * V_PAD)];
   },
 });
 

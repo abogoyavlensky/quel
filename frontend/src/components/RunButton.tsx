@@ -50,7 +50,7 @@ export function RunButton({ tab }: { tab: EditorTab }) {
       ) : (
         <Button
           size="sm"
-          variant="secondary"
+          variant="default"
           className="shadow-sm"
           aria-label="Run"
           title={`Run statement (${RUN_KEY}) · Run all (${SCRIPT_KEY})`}
