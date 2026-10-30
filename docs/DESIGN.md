@@ -438,19 +438,25 @@ bottom right, and the grid footer has the rows and the time.
   statement block, the Run button, the selected connection.
 - **One accent.** Indigo is `--primary`. It marks selection, focus, the
   caret, the active result chip, the selected row and connection, and
-  Run, the one filled button in the workspace.
+  Run, a soft indigo tint like the active chip. Toasts, dialogs and menus
+  share the same card shape and the soft accent for their actions.
 - **Tag colours.** A profile's tag shows as its dot everywhere, and as a
   tint only in the top strip, where it also colours the name. Text uses
   the tag's ink token (`--color-tag-*-ink`, about L 0.5), because the
   tags are tuned as dots and yellow cannot be read as text. Selection
   and focus never take a tag's colour.
-- **Sizes.** Small text is 13px (`--text-xs`). The editor is JetBrains
-  Mono at 14.5px with ligatures off, so `<>` and `>=` read as typed.
-  Grid rows are 30px with every other row banded; tree rows are 28px.
+- **Sizes.** Small text is 14px (`--text-xs`) and body text 15px
+  (`--text-sm`). The editor is JetBrains Mono at 15.5px with ligatures
+  off, so `<>` and `>=` read as typed. Grid rows are 32px with every
+  other row banded; tree rows 30px; connection rows 36px.
+- **Connections.** Each row always shows its button: a green play to
+  connect, a stop to disconnect. The pencil shows on hover, and a
+  right-click offers Connect or Disconnect, Edit… and Delete….
 - **The window.** On macOS the title bar is hidden (`:mac-title-bar
   :hidden-inset`): the top strip is the drag area
   (`--wails-draggable: drag`) and the traffic lights float over its left
-  end. Its content is centred, so it needs no room for them, and
+  end. That title bar is a toolbar about 52pt high, so the strip is 52px,
+  which centres them. Its content is centred, so it needs no room for them, and
   fullscreen needs nothing.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`

@@ -50,8 +50,8 @@ export function RunButton({ tab }: { tab: EditorTab }) {
       ) : (
         <Button
           size="sm"
-          variant="default"
-          className="shadow-sm"
+          variant="secondary"
+          className="bg-primary/10 text-primary shadow-none hover:bg-primary/15"
           aria-label="Run"
           title={`Run statement (${RUN_KEY}) · Run all (${SCRIPT_KEY})`}
           onMouseDown={keepFocus}

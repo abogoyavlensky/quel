@@ -87,7 +87,10 @@ export interface Workspace {
 
 // The profile dialog: closed, a new profile (a SQLite one for path, when
 // File > Open Database chose a file), or editing one.
-export type ProfileDialog = { mode: "new"; path?: string } | { mode: "edit"; id: string } | null;
+// confirmDelete opens the edit dialog with its delete confirmation up (the
+// sidebar's Delete… item).
+export type ProfileDialog =
+  { mode: "new"; path?: string } | { mode: "edit"; id: string; confirmDelete?: boolean } | null;
 
 export interface AppState {
   profiles: Profile[]; // by name, as the backend lists them

@@ -5,9 +5,9 @@ import { display } from "./format";
 // enough for the widest value in a sample, at the grid's monospace
 // character width, within bounds. The user resizes from there.
 
-// Geist Mono at 13px renders at about 8.0px; a little over, so the
+// Geist Mono at 14px renders at about 8.6px; a little over, so the
 // cell's 1px border never clips the widest value.
-export const CHAR_W = 8.1;
+export const CHAR_W = 8.7;
 export const PAD = 20; // the cell's horizontal padding
 export const MIN_W = 60;
 export const MAX_W = 400;

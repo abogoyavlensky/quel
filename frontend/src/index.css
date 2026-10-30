@@ -7,10 +7,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Small text at 13px: every label, menu, dialog and toast grows together. */
+/* Bigger defaults: small text at 14px and body text at 15px, so every
+   label, menu, dialog and toast grows together. */
 @theme {
-    --text-xs: 0.8125rem;
-    --text-xs--line-height: calc(1.125 / 0.8125);
+    --text-xs: 0.875rem;
+    --text-xs--line-height: calc(1.25 / 0.875);
+    --text-sm: 0.9375rem;
+    --text-sm--line-height: calc(1.375 / 0.9375);
 }
 
 /* Static, so each is also a CSS variable at runtime: the top strip tints

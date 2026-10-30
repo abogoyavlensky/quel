@@ -39,7 +39,7 @@ export function StatusBar() {
   else state = "Ready";
 
   return (
-    <footer className="flex h-8 shrink-0 items-center border-t bg-chrome px-3.5 text-xs text-muted-foreground">
+    <footer className="flex h-9 shrink-0 items-center border-t bg-chrome px-3.5 text-xs text-muted-foreground">
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <span role="status" className="truncate">
           {state}

@@ -33,7 +33,7 @@ function TabButton({
       onClick={onSelect}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
       className={cn(
-        "group flex h-[26px] shrink-0 cursor-default items-center gap-1.5 rounded-full pr-1.5 pl-2.5 text-xs select-none",
+        "group flex h-7 shrink-0 cursor-default items-center gap-1.5 rounded-full pr-1.5 pl-2.5 text-xs select-none",
         selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
@@ -95,7 +95,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
       <div
         role="tablist"
         aria-label="Results"
-        className="flex h-[42px] shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2.5"
+        className="flex h-[44px] shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2.5"
       >
         <TabButton selected={tab.active === MESSAGES} onSelect={() => selectResult(tab.id, MESSAGES)}>
           <MessageSquare className="size-3.5" />
@@ -108,7 +108,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
             onSelect={() => selectResult(tab.id, r.id)}
             title={r.sql}
           >
-            <span className="max-w-56 truncate font-mono text-[12.5px]">{label(r.sql)}</span>
+            <span className="max-w-56 truncate font-mono text-[13.5px]">{label(r.sql)}</span>
             <button
               type="button"
               aria-label="Keep result"
