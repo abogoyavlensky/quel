@@ -455,8 +455,9 @@ bottom right, and the grid footer has the rows and the time.
 - **The window.** On macOS the title bar is hidden (`:mac-title-bar
   :hidden`): the top strip is the drag area
   (`--wails-draggable: drag`) and the traffic lights float over its left
-  end. That is the standard title bar, so the strip is a compact 30px,
-  which centres them. Its content is centred, so it needs no room for them, and
+  end. The strip is 36px, the status bar's height, so the tint shows
+  around the connection pill; the standard title bar's lights sit a few
+  pixels above its centre. Its content is centred, so it needs no room for them, and
   fullscreen needs nothing.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`

@@ -8,8 +8,9 @@ import { ConnMark } from "./ConnMark";
 // "Quel" with none. A colour tag tints the strip and colours the name, the
 // one place a tag shows beyond its dot. It is the window's drag area: on
 // macOS the title bar is hidden (:mac-title-bar :hidden) and the traffic
-// lights float over its left end; that is the standard title bar, so the
-// strip stays as compact, about 30px, to centre them. The content is centred, so it
+// lights float over its left end. It is 36px like the status bar, so the
+// tint shows around the pill; the standard title bar's lights sit a few
+// pixels above its centre. The content is centred, so it
 // reserves no room for them, and fullscreen, where they go away, needs
 // nothing. Server mode and Linux have no traffic lights; it reads the same.
 export function TitleBar() {
@@ -21,7 +22,7 @@ export function TitleBar() {
     <header
       style={tag ? ({ "--tag": `var(--color-tag-${tag})` } as CSSProperties) : undefined}
       className={cn(
-        "flex h-[30px] shrink-0 items-center justify-center border-b bg-chrome px-24 text-xs [--wails-draggable:drag] select-none",
+        "flex h-9 shrink-0 items-center justify-center border-b bg-chrome px-24 text-xs [--wails-draggable:drag] select-none",
         tag &&
           "border-[color-mix(in_oklab,var(--tag)_25%,var(--border))] bg-[color-mix(in_oklab,var(--tag)_12%,var(--chrome))]",
       )}
