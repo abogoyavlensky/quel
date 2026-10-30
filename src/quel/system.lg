@@ -55,7 +55,12 @@
                     :on-shutdown (fn [] (stop!))}
    :quel.shell/window {:app (ig/ref :quel.shell/app)
                        :title "Quel" :width 1200 :height 800
-                       :min-width 720 :min-height 480}
+                       :min-width 720 :min-height 480
+                       ;; macOS: the page draws under the title bar. Its
+                       ;; top strip (frontend TitleBar.tsx) is the drag
+                       ;; area, and the traffic lights float over its left
+                       ;; end.
+                       :mac-title-bar :hidden-inset}
    :quel.menu/menu {:app (ig/ref :quel.shell/app)}
    :quel.dev/loop {:window (ig/ref :quel.shell/window)}})
 

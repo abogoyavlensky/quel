@@ -26,9 +26,10 @@
         ;; wails-v0.3.0 is the first that serves the frontend from a dev
         ;; server (FRONTEND_DEVSERVER_URL), for HMR under `lgx dev`.
         ;; wails-v0.4.0 moves to the stable Wails v3.0.0.
+        ;; wails-v0.5.0 adds :mac-title-bar (the hidden title bar).
         abogoyavlensky/letgo-wails
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "wails-v0.4.0"
+         :git/tag "wails-v0.5.0"
          :deps/root "wails"}
 
         ;; An nREPL inside the running app, started only under `lgx run`.
