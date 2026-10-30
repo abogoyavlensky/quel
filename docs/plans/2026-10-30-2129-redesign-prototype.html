@@ -1,0 +1,188 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Quel redesign v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.proto{font-family:var(--font-sans,system-ui,sans-serif);color:var(--foreground,#1f2328);max-width:1280px;margin:0 auto}
+.ctl{display:flex;flex-wrap:wrap;gap:6px 14px;margin-bottom:8px;font-size:12px;align-items:center}
+.grp{display:flex;gap:4px;align-items:center}.grp>span{opacity:.7;margin-right:2px}
+.ctl button{font:inherit;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--border,#d0d7de);background:transparent;color:inherit;cursor:pointer}
+.ctl button.on{background:var(--foreground,#1f2328);color:var(--background,#fff);border-color:transparent}
+.note{font-size:12.5px;opacity:.75;margin-bottom:10px;min-height:2.6em}
+.stage{position:relative;width:100%;aspect-ratio:1280/800}
+.win{position:absolute;left:0;top:0;width:1280px;height:800px;transform-origin:0 0;border-radius:12px;overflow:hidden;
+ font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;cursor:default;user-select:none;
+ --ink:oklch(.24 .012 265);--ink-2:oklch(.5 .014 265);--ink-3:oklch(.66 .01 265);--line:oklch(.915 .005 265);--line-soft:oklch(.95 .004 265);
+ --acc:oklch(.54 .19 272);--acc-soft:color-mix(in oklab,var(--acc) 11%,white);--acc-ink:color-mix(in oklab,var(--acc) 80%,black);
+ --tag:transparent;--tag-soft:color-mix(in oklab,var(--tag) 14%,var(--chrome));--tag-ink:color-mix(in oklab,var(--tag) 78%,black);--tag-line:color-mix(in oklab,var(--tag) 24%,var(--line));
+ --hover:color-mix(in oklab,var(--ink) 6%,transparent);--zebra:oklch(.986 .002 265);--chrome:oklch(.972 .003 265);
+ color:var(--ink);background:var(--chrome);box-shadow:0 0 0 1px rgba(0,0,0,.14),0 12px 32px rgba(0,0,0,.16);
+ display:grid;grid-template-columns:268px 1fr;grid-template-rows:40px 1fr 32px;grid-template-areas:"top top" "side main" "status status"}
+.win[data-style=h]{--chrome:oklch(.962 .004 265)}
+.win[data-id=status]{grid-template-rows:30px 1fr 32px}
+.mono{font-family:'Geist Mono',ui-monospace,monospace}
+.ic{width:15px;height:15px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ic.sm{width:13px;height:13px}.ic.fill{fill:currentColor}
+.ib{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--ink-2);flex:none}.ib:hover{background:var(--hover);color:var(--ink)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:currentColor}.dot.off{background:transparent;border:1.5px solid currentColor}
+.grow{flex:1}
+/* top line: a strip with the connection, or the native title bar */
+.top{grid-area:top;display:flex;align-items:center;justify-content:center;position:relative;font-size:13px;color:var(--ink-2)}
+.win[data-style=a] .top{border-bottom:1px solid var(--line)}
+.lights{position:absolute;left:14px;display:flex;gap:8px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.win[data-id=status] .top{background:oklch(.975 .002 265);border-bottom:1px solid var(--line);font-weight:500}
+.win[data-id=status] .lights{left:13px}
+.ident{display:inline-flex;align-items:center;gap:8px;height:26px;padding:0 12px 0 10px;border-radius:999px;font-size:13px}
+.ident .nm{font-weight:500;color:var(--ink)}.ident .en{color:var(--ink-3)}
+.win[data-tagged="1"]:not([data-id=status]) .top{background:var(--tag-soft);border-bottom:1px solid var(--tag-line)}
+.win[data-tagged="1"] .ident{background:#fff;box-shadow:0 0 0 1px color-mix(in oklab,var(--tag) 25%,transparent)}
+.win[data-tagged="1"] .ident .nm{color:var(--tag-ink)}
+/* sidebar */
+.side{grid-area:side;display:flex;flex-direction:column;padding:6px 8px 8px 10px;min-height:0}
+.win[data-style=a] .side{border-right:1px solid var(--line)}
+.sec{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 2px 0 8px;font-size:12px;font-weight:500;color:var(--ink-2)}
+.conn{display:flex;align-items:center;gap:10px;height:34px;padding:0 4px 0 10px;border-radius:8px;font-size:14px}
+.conn:hover{background:var(--hover)}
+.conn .eng{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.conn .ib{width:24px;height:24px;opacity:.55}
+.win[data-style=a] .conn.sel{background:var(--acc-soft);font-weight:500}
+.win[data-style=h] .conn.sel{background:#fff;font-weight:500;box-shadow:0 0 0 1px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.06)}
+.gap{height:14px}
+.win[data-style=a] .gap{height:1px;background:var(--line);margin:10px -8px 6px -10px}
+.tr{display:flex;align-items:center;gap:6px;height:28px;padding-right:6px;border-radius:6px;font-size:13.5px;white-space:nowrap}
+.tr:hover,.tr.focus{background:var(--hover)}
+.tr .ic{color:var(--ink-3)}.tr.open .chev{transform:rotate(90deg)}
+.tr .muted{color:var(--ink-2)}.tr .cnt{font-size:12px;color:var(--ink-3)}
+.tr .cn{font-size:12.5px}.tr .ty{margin-left:auto;font-size:12px;color:var(--ink-3)}
+.sp{width:14px;flex:none}
+/* workspace: flat white in A, an inset card in the hybrid */
+.main{grid-area:main;min-width:0;min-height:0;background:#fff}
+.win[data-style=h] .main{background:transparent;padding:8px 8px 8px 0}
+.win[data-style=h] .status{margin-top:-2px}
+.panel{height:100%;background:#fff;overflow:hidden;display:flex;flex-direction:column}
+.win[data-style=h] .panel{border-radius:10px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 1px 3px rgba(0,0,0,.05)}
+.etabs{height:46px;flex:none;display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid var(--line-soft)}
+.track{display:inline-flex;gap:2px;padding:3px;border-radius:10px;background:oklch(.953 .004 265)}
+.et{height:28px;display:flex;align-items:center;gap:6px;padding:0 6px 0 12px;border-radius:7px;font-size:13.5px;color:var(--ink-2);white-space:nowrap}
+.et:hover{color:var(--ink)}
+.et.on{background:#fff;color:var(--ink);font-weight:500;box-shadow:0 0 0 .5px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.1)}
+.x{width:18px;height:18px;border-radius:5px;display:grid;place-items:center;opacity:0}
+.et:hover .x,.et.on .x,.rt:hover .x,.rt.on .x{opacity:.55}.x:hover{background:var(--hover);opacity:1!important}
+.et .pin{width:18px;display:grid;place-items:center;opacity:.6}
+/* editor: JetBrains Mono, the statement block, Run in the corner */
+.editor{flex:0 0 262px;padding-top:8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14.5px;line-height:24px;border-bottom:1px solid var(--line);position:relative}
+.ln{display:flex;white-space:pre;position:relative}
+.ln b{font-weight:400;width:46px;flex:none;text-align:right;padding-right:16px;color:var(--ink-3);font-size:12.5px}
+.ln.cur b{color:var(--ink)}
+.ln .code{padding-left:12px}
+.stmt{position:absolute;left:50px;margin-top:-2px;border-radius:7px;background:oklch(.975 .004 265);box-shadow:0 0 0 1px oklch(.92 .005 265),0 1px 2px rgba(0,0,0,.04)}
+.caret{display:inline-block;width:2px;height:19px;background:var(--acc);vertical-align:-4px;margin-left:-1px}
+.k{color:oklch(.48 .16 290)}.s{color:oklch(.5 .12 145)}.n{color:oklch(.55 .14 55)}.c{color:var(--ink-3);font-style:italic}.p{color:var(--ink-2)}.f{color:oklch(.5 .1 200)}
+.run{position:absolute;right:14px;bottom:12px;height:30px;display:flex;align-items:center;gap:7px;padding:0 13px 0 11px;border-radius:8px;font-size:13px;font-weight:500;
+ color:#fff;background:var(--acc);box-shadow:0 1px 2px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.15)}
+/* results */
+.rtabs{height:42px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;border-bottom:1px solid var(--line-soft)}
+.rt{height:26px;display:flex;align-items:center;gap:6px;padding:0 6px 0 10px;border-radius:999px;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.rt.msg{padding-right:10px}.rt:hover:not(.on){background:var(--hover)}
+.rt.on{background:var(--acc-soft);color:var(--acc-ink)}
+.rt .lbl{font-size:12.5px;max-width:250px;overflow:hidden;text-overflow:ellipsis}
+.grid{flex:1;overflow:hidden;font-size:13px;min-height:0}
+.gr{display:flex;height:30px;width:max-content}.gr:nth-child(odd){background:var(--zebra)}
+.gc{flex:none;padding:0 12px;border-right:1px solid var(--line-soft);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:30px}
+.gh{height:44px;border-bottom:1px solid var(--line);background:#fff!important}
+.gh .gc{display:flex;flex-direction:column;justify-content:center;line-height:1.25}
+.gh .nm{font-family:'Geist',sans-serif;font-weight:500;font-size:13px;color:var(--ink)}.gh .tp{font-size:11px;color:var(--ink-3)}
+.gc.r{text-align:right}.gh .gc.r{align-items:flex-end}
+.gc.num{width:48px;padding:0 9px;text-align:right;color:var(--ink-3);font-size:12px}
+.gr.sel{background:var(--acc-soft)!important}.gr.sel .num{color:var(--acc-ink)}
+.null{color:var(--ink-3);font-style:italic;font-size:12px}
+.gfoot{height:32px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--line-soft);font-variant-numeric:tabular-nums}
+/* status bar */
+.status{grid-area:status;display:flex;align-items:center;gap:12px;padding:0 14px;font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.win[data-style=a] .status{border-top:1px solid var(--line)}
+.chip{display:inline-flex;align-items:center;gap:7px}.chip .mono{font-size:12.5px}
+.win[data-tagged="1"][data-id=status] .status{background:var(--tag-soft);border-top:1px solid var(--tag-line)}
+.win[data-tagged="1"][data-id=status] .chip{color:var(--tag-ink);font-weight:500}
+</style></head>
+<body>
+<div class="proto">
+ <div class="ctl">
+  <div class="grp" id="gstyle"><span>Style</span><button data-k="a">A · flat</button><button data-k="h">Hybrid · inset card</button></div>
+  <div class="grp" id="gid"><span>Connection name</span><button data-k="header">Header</button><button data-k="both">Header + status bar</button><button data-k="status">Status bar (native title bar, today)</button></div>
+ </div>
+ <p class="note"></p>
+ <div class="stage"><div class="win"></div></div>
+</div>
+<script>
+const P={plus:'<path d="M5 12h14M12 5v14"/>',x:'<path d="M18 6 6 18M6 6l12 12"/>',chev:'<path d="m9 18 6-6-6-6"/>',
+pin:'<path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+hist:'<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/>',panel:'<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+fopen:'<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+folder:'<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+table:'<path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>',
+dot:'<circle cx="12" cy="12" r="1.5" fill="currentColor"/>',refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M8 16H3v5"/>',
+plug:'<path d="M12 22v-5M9 8V2M15 8V2M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',play:'<path d="M6 4l14 8-14 8z" fill="currentColor"/>'};
+const ic=(n,c='')=>`<svg class="ic ${c}" viewBox="0 0 24 24">${P[n]}</svg>`;
+const ENG={sqlite:['oklch(.62 .11 175)','SQLite'],postgres:['oklch(.58 .13 255)','PostgreSQL'],redshift:['oklch(.6 .17 25)','Redshift']};
+const TAG={red:'oklch(.6 .2 27)',orange:'oklch(.7 .16 55)',green:'oklch(.65 .15 150)'};
+const conns=[{n:'local-dev',e:'postgres',on:1},{n:'prod-analytics',e:'redshift',t:'red',on:1},{n:'staging',e:'postgres',t:'orange',on:1},{n:'reports',e:'postgres',t:'green'},{n:'app.sqlite',e:'sqlite'}];
+const styleNotes={a:'A: flat. White workspace, light grey sidebar and bars, hairlines between them. No corners anywhere to meet a tinted bar.',
+h:'Hybrid: a light grey frame with the workspace as a card inset on three sides. The corners now sit in plain grey and never touch a tinted bar.'};
+const idNotes={header:'The name and the tag tint are in the header. The status bar keeps only the state (Ready, Running… 3s).',
+both:'Name in both: the header carries the tag tint and the status bar repeats the name in neutral grey.',
+status:'Native title bar, as today: the name and the tag tint stay in the status bar. Works without the letgo-packages change.'};
+const tree=[[0,'schema','public',1],[1,'group','Tables',1,'12'],[2,'table','order_items'],[2,'table','orders',1,0,1],
+[3,'col','id','int8'],[3,'col','user_id','int8'],[3,'col','status','text'],[3,'col','total','numeric(12,2)'],[3,'col','created_at','timestamptz'],[3,'col','meta','jsonb'],
+[2,'table','products'],[2,'table','users'],[1,'group','Views',0,'2'],[0,'schema','analytics']];
+const sql=['<span class="c">-- Recent orders with their customer</span>',
+'<span class="k">select</span> o.id, o.user_id, u.email, o.status,','       o.total, o.created_at, o.meta',
+'<span class="k">from</span> orders o','<span class="k">join</span> users u <span class="k">on</span> u.id <span class="p">=</span> o.user_id',
+'<span class="k">where</span> o.created_at <span class="p">&gt;=</span> <span class="f">now</span>() <span class="p">-</span> <span class="k">interval</span> <span class="s">\'30 days\'</span><span class="caret"></span>',
+'  <span class="k">and</span> o.status <span class="p">&lt;&gt;</span> <span class="s">\'cancelled\'</span>','<span class="k">order by</span> o.created_at <span class="k">desc</span>','<span class="k">limit</span> <span class="n">200</span>;'];
+const cols=[['id','int8',84,1],['user_id','int8',92,1],['email','text',240],['status','text',110],['total','numeric',110,1],['created_at','timestamptz',230],['meta','jsonb',300]];
+const emails=['lena.morris@example.com','k.tanaka@example.jp','ortiz.bruno@mail.com','anna.berg@example.se','dev@northwind.io','sam.okafor@example.com','m.rossi@example.it','jules.laurent@example.fr','priya.n@example.in','tom.h@example.co.uk','ivy.chen@example.com','olaf.s@example.no','r.alves@example.br'];
+const sts=['paid','shipped','paid','pending','refunded','paid','shipped','paid','pending','paid','shipped','paid','paid'];
+const rows=emails.map((e,i)=>{const d=new Date(Date.UTC(2026,9,28,9,41,12)-i*2237e3).toISOString().replace('T',' ').slice(0,19)+'+00';
+ return [48213-i*3,1000+((i*7919)%3000),e,sts[i],((i*37.31+19.9)%480+12).toFixed(2),d,i%3==1?null:`{"source": "${i%2?'app':'web'}", "coupon": ${i%4==0?'"FALL10"':'null'}}`]});
+const win=document.querySelector('.win');const S={style:'a',id:'header',sel:1};
+const markColor=x=>x.t?TAG[x.t]:ENG[x.e][0];
+function render(){
+ const c=conns[S.sel];
+ win.dataset.style=S.style;win.dataset.id=S.id;win.dataset.tagged=c.t?'1':'0';win.style.setProperty('--tag',c.t?TAG[c.t]:'transparent');
+ const ident=`<span class="ident"><span class="dot${c.on?'':' off'}" style="color:${markColor(c)}"></span><span class="nm">${c.n}</span><span class="en">${ENG[c.e][1]}</span></span>`;
+ const chip=`<span class="chip"><span class="dot${c.on?'':' off'}" style="color:${markColor(c)}"></span><span class="mono">${c.n}</span></span>`;
+ win.innerHTML=`<div class="top"><div class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></div>${S.id=='status'?'Quel':ident}</div>
+ <aside class="side"><div class="sec">Connections<span class="ib">${ic('plus','sm')}</span></div>
+ ${conns.map((x,i)=>`<div class="conn${i==S.sel?' sel':''}" data-i="${i}"><span class="dot${x.on?'':' off'}" style="color:${markColor(x)}"></span><span>${x.n}</span><span class="eng">${ENG[x.e][1]}</span>${x.on?`<span class="ib">${ic('plug','sm')}</span>`:'<span style="width:24px"></span>'}</div>`).join('')}
+ <div class="gap"></div><div class="sec">Structure<span class="ib">${ic('refresh','sm')}</span></div>
+ ${tree.map(([d,k,l,o,cnt,f])=>`<div class="tr${o?' open':''}${f?' focus':''}" style="padding-left:${6+d*14}px">${k=='col'?`<span class="sp"></span>${ic('dot')}<span class="cn mono">${l}</span><span class="ty mono">${o}</span>`:
+  `${ic('chev','sm chev')}${k=='schema'?ic(o?'fopen':'folder'):k=='table'?ic('table'):''}<span class="${k=='group'?'muted':''}">${l}</span>${cnt?`<span class="cnt">${cnt}</span>`:''}`}</div>`).join('')}
+ </aside>
+ <main class="main"><div class="panel"><div class="etabs"><div class="track">
+  <div class="et">users cleanup<span class="pin">${ic('pin','sm fill')}</span></div><div class="et on">orders report<span class="x">${ic('x','sm')}</span></div><div class="et">Query 3<span class="x">${ic('x','sm')}</span></div>
+ </div><span class="ib">${ic('plus')}</span><span class="grow"></span><span class="ib">${ic('hist')}</span><span class="ib">${ic('panel')}</span></div>
+ <section class="editor"><div class="stmt"></div>${sql.map((l,i)=>`<div class="ln${i==5?' cur':''}"><b>${i+1}</b><span class="code">${l}</span></div>`).join('')}
+  <span class="run">${ic('play','sm')}Run</span></section>
+ <div class="rtabs"><div class="rt msg">${ic('msg','sm')}Messages</div>
+  <div class="rt on"><span class="lbl mono">select o.id, o.user_id, u.email, o.status, o.total…</span><span class="x" style="opacity:.55">${ic('pin','sm')}</span><span class="x">${ic('x','sm')}</span></div>
+  <div class="rt"><span class="lbl mono">select count(*) from users</span><span style="opacity:.7;display:grid">${ic('pin','sm fill')}</span><span class="x">${ic('x','sm')}</span></div></div>
+ <div class="grid mono"><div class="gr gh"><div class="gc num"></div>${cols.map(([n,t,w,r])=>`<div class="gc${r?' r':''}" style="width:${w}px"><span class="nm">${n}</span><span class="tp">${t}</span></div>`).join('')}</div>
+  ${rows.map((r,i)=>`<div class="gr${i==2?' sel':''}"><div class="gc num">${i+1}</div>${r.map((v,j)=>`<div class="gc${cols[j][3]?' r':''}" style="width:${cols[j][2]}px">${v===null?'<span class="null">NULL</span>':v}</div>`).join('')}</div>`).join('')}</div>
+ <div class="gfoot"><span>200 rows</span><span>38 ms</span></div></div></main>
+ <footer class="status">${S.id=='header'?'':chip}<span class="grow">${c.on?'Ready':'Not connected'}</span></footer>`;
+ // The statement block: lines 2-9, ending just past the longest line.
+ const lines=[...win.querySelectorAll('.ln')].slice(1);const w=Math.max(...lines.map(l=>l.querySelector('.code').offsetWidth));
+ const st=win.querySelector('.stmt');st.style.top=(8+24)+'px';st.style.height=(24*lines.length+4)+'px';st.style.width=(w+6)+'px';
+ win.querySelectorAll('.conn').forEach(el=>el.onclick=()=>{S.sel=+el.dataset.i;render()});
+ win.querySelectorAll('.et,.rt').forEach(el=>el.onclick=()=>{el.parentNode.querySelectorAll('.on').forEach(o=>o.classList.remove('on'));el.classList.add('on')});
+ document.querySelectorAll('#gstyle button').forEach(b=>b.classList.toggle('on',b.dataset.k==S.style));
+ document.querySelectorAll('#gid button').forEach(b=>b.classList.toggle('on',b.dataset.k==S.id));
+ document.querySelector('.note').textContent=styleNotes[S.style]+' '+idNotes[S.id]+(c.t?'':' (No tag on this connection, so nothing is tinted.)');
+}
+document.querySelectorAll('#gstyle button').forEach(b=>b.onclick=()=>{S.style=b.dataset.k;render()});
+document.querySelectorAll('#gid button').forEach(b=>b.onclick=()=>{S.id=b.dataset.k;render()});
+const q=new URLSearchParams(location.search);for(const k of ['style','id'])if(q.get(k))S[k]=q.get(k);if(q.get('sel'))S.sel=+q.get('sel');
+const stage=document.querySelector('.stage');const fit=()=>win.style.transform=`scale(${Math.min(1,stage.clientWidth/1280)})`;
+new ResizeObserver(fit).observe(stage);fit();document.fonts.ready.then(render);render();
+</script>
+</body></html>
