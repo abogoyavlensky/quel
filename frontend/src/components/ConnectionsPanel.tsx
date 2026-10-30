@@ -68,16 +68,19 @@ export function ConnectionsPanel() {
                 <li key={p.id} className="group flex flex-col">
                   <ContextMenu>
                     <ContextMenuTrigger asChild>
-                      <div className="flex items-center gap-0.5">
+                      {/* The highlight covers the whole row, its buttons too. */}
+                      <div
+                        className={cn(
+                          "flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-muted",
+                          selected === p.id && "bg-primary/10 font-medium hover:bg-primary/15",
+                        )}
+                      >
                         <button
                           type="button"
                           aria-current={selected === p.id ? "true" : undefined}
                           title={statusLabel[status]}
                           onClick={() => void selectProfile(p.id)}
-                          className={cn(
-                            "flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left hover:bg-muted",
-                            selected === p.id && "bg-primary/10 font-medium hover:bg-primary/15",
-                          )}
+                          className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                         >
                           <ConnMark engine={p.engine} color={p.color} status={status} />
                           <span className="min-w-0 flex-1 truncate">{p.name}</span>
