@@ -412,7 +412,9 @@ mutation.
 Layout, in resizable panes (shadcn `Resizable`):
 
 ```
-┌──────────────┬───────────────────────────────────────────┬──────────────┐
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ● ● ●                     ( ● Prod  Redshift )                          │
+├──────────────┬───────────────────────────────────────────┬──────────────┤
 │ ● Prod   🔌  │ [Query 1 ×] [Query 2 ×] [+]          [◫]  │ Row 3 of 500 │
 │ ○ Local  🔌  │  CodeMirror editor                         │ [filter]     │
 │ (selected:   ├───────────────────────────────────────────┤ id           │
@@ -420,11 +422,41 @@ Layout, in resizable panes (shadcn `Resizable`):
 │ structure    │  virtualized grid                          │ doc  jsonb ⧉ │
 │ tree         │                                           │ { … }        │
 └──────────────┴───────────────────────────────────────────┴──────────────┘
- status bar: profile · state (Ready / Running… 12s / Not connected)
+ status bar: state (Ready / Running… 12s / Not connected)
 ```
 
-The editor has a Run/Stop button at its bottom right, and the grid footer
-has the rows and the time.
+The strip across the top names the selected connection; the status bar
+says only what is happening. The editor has a Run/Stop button at its
+bottom right, and the grid footer has the rows and the time.
+
+### Look
+
+- **Layout.** The workspace (tabs, editor, results) is white. The
+  sidebar, the top strip and the status bar share one light grey,
+  `--chrome`, with hairlines between them. There are no cards; rounding
+  is for small pieces: the editor tabs' track, the result chips, the
+  statement block, the Run button, the selected connection.
+- **One accent.** Indigo is `--primary`. It marks selection, focus, the
+  caret, the active result chip, the selected row and connection, and
+  Run, the one filled button in the workspace.
+- **Tag colours.** A profile's tag shows as its dot everywhere, and as a
+  tint only in the top strip, where it also colours the name. Text uses
+  the tag's ink token (`--color-tag-*-ink`, about L 0.5), because the
+  tags are tuned as dots and yellow cannot be read as text. Selection
+  and focus never take a tag's colour.
+- **Sizes.** Small text is 13px (`--text-xs`). The editor is JetBrains
+  Mono at 14.5px with ligatures off, so `<>` and `>=` read as typed.
+  Grid rows are 30px with every other row banded; tree rows are 28px.
+- **The window.** On macOS the title bar is hidden (`:mac-title-bar
+  :hidden-inset`): the top strip is the drag area
+  (`--wails-draggable: drag`) and the traffic lights float over its left
+  end. Its content is centred, so it needs no room for them, and
+  fullscreen needs nothing.
+- **Light only**, for now; themes come later as a setting
+  (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
+  mix of a tag into the cool grey swings the hue through blue.
+
+The values live in `frontend/src/index.css`.
 
 The right-hand column is the row details panel, there only while open
 (see [Row details](#row-details)).
