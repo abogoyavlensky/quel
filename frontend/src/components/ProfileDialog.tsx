@@ -63,13 +63,27 @@ export function ProfileDialog() {
   return (
     <Dialog open={!!dialog} onOpenChange={(open) => !open && closeProfileDialog()}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
-        {dialog && <ProfileEditor editing={editing} path={dialog.mode === "new" ? dialog.path : undefined} />}
+        {dialog && (
+          <ProfileEditor
+            editing={editing}
+            path={dialog.mode === "new" ? dialog.path : undefined}
+            askDelete={dialog.mode === "edit" && !!dialog.confirmDelete}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: string | undefined }) {
+function ProfileEditor({
+  editing,
+  path,
+  askDelete = false,
+}: {
+  editing: Profile | undefined;
+  path: string | undefined;
+  askDelete?: boolean;
+}) {
   const [form, setForm] = useState<ProfileForm>(() =>
     editing ? fromProfile(editing) : path ? fileForm(path) : emptyForm(),
   );
@@ -81,7 +95,10 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
     const status = editing ? s.workspaces[editing.id]?.status : undefined;
     return status === "connecting" || status === "disconnecting";
   });
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(askDelete);
+  // Set when Delete is confirmed: that also closes the confirmation, but
+  // the editor stays until the delete succeeds or can show its error.
+  const deleting = useRef(false);
   // The tabs with text that go with the profile (counted when its
   // workspace is loaded).
   const savedTabs = useApp((s) => {
@@ -170,7 +187,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
           <Label htmlFor="profile-name">Name</Label>
           <Input
             id="profile-name"
-            className="h-8"
+            className="h-9"
             value={form.name}
             onChange={(e) => set({ name: e.target.value })}
             autoComplete="off"
@@ -179,7 +196,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
 
           <Label htmlFor="profile-engine">Type</Label>
           <Select value={form.engine} onValueChange={(v) => set(withEngine(form, v as Engine))}>
-            <SelectTrigger id="profile-engine" className="h-8 w-full">
+            <SelectTrigger id="profile-engine" className="h-9 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -197,7 +214,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
               <div className="flex gap-2">
                 <Input
                   id="profile-host"
-                  className="h-8 min-w-0 flex-1 font-mono text-xs"
+                  className="h-9 min-w-0 flex-1"
                   value={form.host}
                   onChange={(e) => set({ host: e.target.value })}
                   placeholder="localhost"
@@ -209,7 +226,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
                 </Label>
                 <Input
                   id="profile-port"
-                  className="h-8 w-20 font-mono text-xs"
+                  className="h-9 w-20"
                   inputMode="numeric"
                   value={form.port}
                   onChange={(e) => set({ port: e.target.value })}
@@ -221,7 +238,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
               <Label htmlFor="profile-database">Database</Label>
               <Input
                 id="profile-database"
-                className="h-8 font-mono text-xs"
+                className="h-9"
                 value={form.database}
                 onChange={(e) => set({ database: e.target.value })}
                 spellCheck={false}
@@ -231,7 +248,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
               <Label htmlFor="profile-user">User</Label>
               <Input
                 id="profile-user"
-                className="h-8 font-mono text-xs"
+                className="h-9"
                 value={form.user}
                 onChange={(e) => set({ user: e.target.value })}
                 spellCheck={false}
@@ -242,7 +259,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
               <Input
                 id="profile-password"
                 type="password"
-                className="h-8 font-mono text-xs"
+                className="h-9"
                 value={form.password}
                 disabled={form.forgetPassword}
                 onChange={(e) => set({ password: e.target.value })}
@@ -264,7 +281,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
 
               <Label htmlFor="profile-ssl">SSL mode</Label>
               <Select value={form.sslMode} onValueChange={(v) => set({ sslMode: v as SslMode })}>
-                <SelectTrigger id="profile-ssl" className="h-8 w-full">
+                <SelectTrigger id="profile-ssl" className="h-9 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -282,7 +299,7 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
               <div className="flex gap-2">
                 <Input
                   id="profile-path"
-                  className="h-8 min-w-0 flex-1 font-mono text-xs"
+                  className="h-9 min-w-0 flex-1"
                   value={form.path}
                   onChange={(e) => set({ path: e.target.value })}
                   placeholder="/path/to/app.db"
@@ -367,7 +384,14 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
         </DialogFooter>
       </form>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      <AlertDialog
+        open={confirmDelete}
+        onOpenChange={(open) => {
+          setConfirmDelete(open);
+          // Asked from the sidebar's Delete…: Cancel closes it all.
+          if (!open && askDelete && !deleting.current) closeProfileDialog();
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {editing?.name}?</AlertDialogTitle>
@@ -378,7 +402,13 @@ function ProfileEditor({ editing, path }: { editing: Profile | undefined; path: 
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void onDelete()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                deleting.current = true;
+                void onDelete().finally(() => (deleting.current = false));
+              }}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -1,12 +1,18 @@
-import { PencilIcon, PlugIcon, PlusIcon, UnplugIcon } from "lucide-react";
+import { PencilIcon, PlugIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { openProfileDialog } from "@/state/profiles";
 import { connectProfile, disconnectProfile, selectProfile } from "@/state/runner";
 import { type ConnStatus, useApp } from "@/state/store";
+import { engineLabel } from "./colors";
 import { ConnMark } from "./ConnMark";
-
-const engineLabel = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" } as const;
 
 const statusLabel: Record<ConnStatus, string> = {
   connected: "Connected",
@@ -16,8 +22,10 @@ const statusLabel: Record<ConnStatus, string> = {
 };
 
 // The left panel: the saved connections. A click selects one and shows its
-// workspace; each connects and disconnects on its own button, and several
-// can be connected at once. New ones come from the + button, or from
+// workspace; each connects (a plug) and disconnects (a stop) on its
+// own button, always shown, and several can be connected at once. The
+// pencil shows on hover; right-click a row for Connect or Disconnect,
+// Edit and Delete. New ones come from the + button, or from
 // File > Open Database for a SQLite file.
 export function ConnectionsPanel() {
   const selected = useApp((s) => s.selected);
@@ -58,45 +66,73 @@ export function ConnectionsPanel() {
               const plugged = status === "connected" || status === "disconnecting";
               return (
                 <li key={p.id} className="group flex flex-col">
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      aria-current={selected === p.id ? "true" : undefined}
-                      title={statusLabel[status]}
-                      onClick={() => void selectProfile(p.id)}
-                      className={cn(
-                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted",
-                        selected === p.id && "bg-muted font-medium",
-                      )}
-                    >
-                      <ConnMark engine={p.engine} color={p.color} status={status} />
-                      <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
-                    </button>
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      aria-label={`${plugged ? "Disconnect" : "Connect"} ${p.name}`}
-                      title={plugged ? "Disconnect" : "Connect"}
-                      disabled={pending}
-                      className={cn(
-                        status === "disconnected" && "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-                      )}
-                      onClick={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
-                    >
-                      {plugged ? <UnplugIcon /> : <PlugIcon />}
-                    </Button>
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      aria-label={`Edit ${p.name}`}
-                      title={`Edit ${p.name}`}
-                      className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                      onClick={() => openProfileDialog({ mode: "edit", id: p.id })}
-                    >
-                      <PencilIcon />
-                    </Button>
-                  </div>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
+                      {/* The highlight covers the whole row, its buttons too. */}
+                      <div
+                        className={cn(
+                          "flex h-[38px] items-center gap-0.5 rounded-md pr-1 hover:bg-muted",
+                          selected === p.id && "bg-primary/10 font-medium hover:bg-primary/15",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          aria-current={selected === p.id ? "true" : undefined}
+                          title={statusLabel[status]}
+                          onClick={() => void selectProfile(p.id)}
+                          className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                        >
+                          <ConnMark engine={p.engine} color={p.color} status={status} />
+                          <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
+                        </button>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label={`${plugged ? "Disconnect" : "Connect"} ${p.name}`}
+                          title={plugged ? "Disconnect" : "Connect"}
+                          disabled={pending}
+                          className={cn(pending && "animate-pulse")}
+                          onClick={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
+                        >
+                          {plugged ? (
+                            <SquareIcon className="size-3.5 fill-current text-muted-foreground" />
+                          ) : (
+                            <PlugIcon className="text-muted-foreground" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon-xs"
+                          variant="ghost"
+                          aria-label={`Edit ${p.name}`}
+                          title={`Edit ${p.name}`}
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                          onClick={() => openProfileDialog({ mode: "edit", id: p.id })}
+                        >
+                          <PencilIcon />
+                        </Button>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        disabled={pending}
+                        onSelect={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
+                      >
+                        {plugged ? "Disconnect" : "Connect"}
+                      </ContextMenuItem>
+                      <ContextMenuItem onSelect={() => openProfileDialog({ mode: "edit", id: p.id })}>
+                        Edit…
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem
+                        variant="destructive"
+                        disabled={pending}
+                        onSelect={() => openProfileDialog({ mode: "edit", id: p.id, confirmDelete: true })}
+                      >
+                        Delete…
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                   {w?.error && (
                     <p role="alert" className="px-1.5 pb-1 text-xs break-words text-destructive">
                       {w.error}

@@ -18,8 +18,10 @@ import { RunButton } from "./RunButton";
 import { RowDetails } from "./RowDetails";
 import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
+import { TitleBar } from "./TitleBar";
 
-// The window: the connections on the left, the selected profile's
+// The window: the top strip naming the selected connection; under it the
+// connections on the left, the selected profile's
 // structure under them; on the right that profile's workspace: its editor
 // tabs, the active tab's editor above its results; on the far right,
 // while open, the row details panel; the status bar below all.
@@ -34,9 +36,10 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
+      <TitleBar />
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
         {/* Ids keep each panel's size while the row details come and go. */}
-        <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-muted/20">
+        <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-chrome">
           <ResizablePanelGroup orientation="vertical">
             <ResizablePanel defaultSize="40" minSize={80}>
               <ConnectionsPanel />

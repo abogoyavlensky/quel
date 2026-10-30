@@ -62,28 +62,34 @@ const sqlHighlight = HighlightStyle.define([
 // The editor's chrome from the app's tokens. As an EditorView theme, not
 // global CSS, so it outranks CodeMirror's base theme.
 const chrome = EditorView.theme({
-  "&": { height: "100%", fontSize: "13px", backgroundColor: "var(--background)", color: "var(--foreground)" },
+  "&": { height: "100%", fontSize: "16px", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-editor)", lineHeight: "1.55" },
+  // No ligatures: <> and >= read as typed, not as ◇ and ≥.
+  ".cm-scroller": { fontFamily: "var(--font-editor)", lineHeight: "1.6", fontVariantLigatures: "none" },
+  // Room inside the statement block (statementHighlight.ts LINE_PAD).
+  ".cm-line": { padding: "0 2px 0 12px" },
   // Room under the last line, so it can scroll clear of the Run button.
   ".cm-content": { paddingBottom: "40px" },
   ".cm-gutters": {
     backgroundColor: "var(--background)",
     color: "var(--muted-foreground)",
-    borderRight: "1px solid var(--border)",
+    // Set, not dropped: CodeMirror's base theme draws one otherwise.
+    borderRight: "none",
   },
+  ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
   ".cm-activeLineGutter": {
-    backgroundColor: "color-mix(in oklch, var(--muted) 45%, transparent)",
+    backgroundColor: "transparent",
+    color: "var(--foreground)",
   },
   // The statement Mod-Enter will run, a quiet card behind the text.
   ".cm-currentStatement": {
-    borderRadius: "6px",
-    backgroundColor: "color-mix(in oklch, var(--muted) 70%, transparent)",
-    boxShadow: "0 0 0 1px color-mix(in oklch, var(--border) 80%, transparent), 0 1px 2px rgb(0 0 0 / 0.05)",
+    borderRadius: "7px",
+    backgroundColor: "color-mix(in oklab, var(--muted) 55%, var(--background))",
+    boxShadow: "0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04)",
   },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "color-mix(in oklch, var(--ring) 35%, transparent)",
+    backgroundColor: "color-mix(in oklab, var(--ring) 35%, transparent)",
   },
   ".cm-tooltip": {
     backgroundColor: "var(--popover)",

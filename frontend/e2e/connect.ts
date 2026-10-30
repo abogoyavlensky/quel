@@ -26,7 +26,7 @@ export async function ensureProfile(page: Page, name: string, db: string) {
 export async function selectAndConnect(page: Page, name: string) {
   await profileRow(page, name).click();
   await saved(page).getByRole("button", { name: `Connect ${name}` }).click();
-  await expect(page.getByRole("contentinfo")).toContainText(name);
+  await expect(page.getByRole("banner")).toContainText(name);
   await expect(page.getByRole("status")).toHaveText("Ready");
 }
 
