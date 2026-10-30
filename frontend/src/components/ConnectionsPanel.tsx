@@ -4,9 +4,8 @@ import { cn } from "@/lib/utils";
 import { openProfileDialog } from "@/state/profiles";
 import { connectProfile, disconnectProfile, selectProfile } from "@/state/runner";
 import { type ConnStatus, useApp } from "@/state/store";
+import { engineLabel } from "./colors";
 import { ConnMark } from "./ConnMark";
-
-const engineLabel = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" } as const;
 
 const statusLabel: Record<ConnStatus, string> = {
   connected: "Connected",

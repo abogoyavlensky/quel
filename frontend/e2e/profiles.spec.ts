@@ -42,7 +42,9 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
 
   // Listed and selected, not connected yet; its Connect button connects it.
   await expect(saved(page).getByRole("button", { name: /^E2E file/ })).toHaveAttribute("aria-current", "true");
-  await expect(page.getByRole("contentinfo")).toContainText("E2E file");
+  // The top strip names it, with its engine.
+  await expect(page.getByRole("banner")).toContainText("E2E file");
+  await expect(page.getByRole("banner")).toContainText("SQLite");
   await expect(page.getByRole("status")).toHaveText("Not connected");
   await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
   await expect(page.getByRole("status")).toHaveText("Ready");
@@ -57,19 +59,19 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
   await expect(page.getByRole("status")).toHaveText("Ready");
 
-  // Renamed: the list and the status bar follow.
+  // Renamed: the list and the top strip follow.
   await saved(page).getByRole("button", { name: "Edit E2E file" }).click();
   await dialog(page).getByLabel("Name").fill("E2E renamed");
   await dialog(page).getByRole("button", { name: "Save" }).click();
   await expect(saved(page).getByRole("button", { name: /^E2E renamed/ })).toBeVisible();
-  await expect(page.getByRole("contentinfo")).toContainText("E2E renamed");
+  await expect(page.getByRole("banner")).toContainText("E2E renamed");
 
   // Deleted through the confirm: it disconnects and leaves the list.
   await saved(page).getByRole("button", { name: "Edit E2E renamed" }).click();
   await dialog(page).getByRole("button", { name: "Delete" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("button", { name: /^E2E renamed/ })).toHaveCount(0);
-  await expect(page.getByRole("contentinfo")).not.toContainText("E2E renamed");
+  await expect(page.getByRole("banner")).not.toContainText("E2E renamed");
 });
 
 test("a duplicate name is refused", async ({ page }) => {

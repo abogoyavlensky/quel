@@ -33,3 +33,15 @@ export const tagText: Record<Exclude<Color, "none">, string> = {
   blue: "text-tag-blue",
   purple: "text-tag-purple",
 };
+
+// A tag's colour as text, readable on its own tint (the top strip's name).
+export const tagInk: Record<Exclude<Color, "none">, string> = {
+  red: "text-tag-red-ink",
+  orange: "text-tag-orange-ink",
+  yellow: "text-tag-yellow-ink",
+  green: "text-tag-green-ink",
+  blue: "text-tag-blue-ink",
+  purple: "text-tag-purple-ink",
+};
+
+export const engineLabel: Record<Engine, string> = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" };
