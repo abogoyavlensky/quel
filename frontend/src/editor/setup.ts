@@ -76,6 +76,7 @@ const chrome = EditorView.theme({
     // Set, not dropped: CodeMirror's base theme draws one otherwise.
     borderRight: "none",
   },
+  ".cm-lineNumbers .cm-gutterElement": { padding: "0 10px 0 12px" },
   ".cm-activeLineGutter": {
     backgroundColor: "transparent",
     color: "var(--foreground)",
@@ -88,7 +89,7 @@ const chrome = EditorView.theme({
   },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
-    backgroundColor: "color-mix(in oklch, var(--ring) 35%, transparent)",
+    backgroundColor: "color-mix(in oklab, var(--ring) 35%, transparent)",
   },
   ".cm-tooltip": {
     backgroundColor: "var(--popover)",

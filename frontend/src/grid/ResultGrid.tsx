@@ -173,7 +173,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                   className={cn(
                     "sticky left-0 z-10 flex h-full items-center justify-end border-r px-2 text-muted-foreground tabular-nums",
                     selected
-                      ? "bg-[color-mix(in_oklch,var(--primary)_10%,var(--background))]"
+                      ? "bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]"
                       : alt
                         ? "bg-row-alt"
                         : "bg-background",

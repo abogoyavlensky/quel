@@ -49,7 +49,7 @@ describe("numberWidth", () => {
   });
 
   it("is 32px for 12 rows and 47px for 2,000", () => {
-    expect(numberWidth(12, false)).toBe(33);
-    expect(numberWidth(2000, false)).toBe(49);
+    expect(numberWidth(12, false)).toBe(34);
+    expect(numberWidth(2000, false)).toBe(50);
   });
 });

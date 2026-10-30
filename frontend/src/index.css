@@ -13,16 +13,9 @@
     --text-xs--line-height: calc(1.125 / 0.8125);
 }
 
-@theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', sans-serif;
-    --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
-    /* The SQL editor's face. */
-    --font-editor: 'JetBrains Mono Variable', var(--font-mono);
-    /* The connection marker: one hue per engine. */
-    --color-engine-sqlite: oklch(0.62 0.11 175);
-    --color-engine-postgres: oklch(0.58 0.13 255);
-    --color-engine-redshift: oklch(0.6 0.17 25);
+/* Static, so each is also a CSS variable at runtime: the top strip tints
+   itself with var(--color-tag-<tag>) (TitleBar.tsx). */
+@theme static {
     /* A profile's colour tag (red for production, say), in its place. */
     --color-tag-red: oklch(0.6 0.2 27);
     --color-tag-orange: oklch(0.7 0.16 55);
@@ -38,6 +31,18 @@
     --color-tag-green-ink: oklch(0.48 0.13 150);
     --color-tag-blue-ink: oklch(0.48 0.15 250);
     --color-tag-purple-ink: oklch(0.47 0.17 305);
+}
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+    /* The SQL editor's face. */
+    --font-editor: 'JetBrains Mono Variable', var(--font-mono);
+    /* The connection marker: one hue per engine. */
+    --color-engine-sqlite: oklch(0.62 0.11 175);
+    --color-engine-postgres: oklch(0.58 0.13 255);
+    --color-engine-redshift: oklch(0.6 0.17 25);
     --color-chrome: var(--chrome);
     --color-row-alt: var(--row-alt);
     --color-sidebar-ring: var(--sidebar-ring);
