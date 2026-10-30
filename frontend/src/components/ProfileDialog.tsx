@@ -96,6 +96,9 @@ function ProfileEditor({
     return status === "connecting" || status === "disconnecting";
   });
   const [confirmDelete, setConfirmDelete] = useState(askDelete);
+  // Set when Delete is confirmed: that also closes the confirmation, but
+  // the editor stays until the delete succeeds or can show its error.
+  const deleting = useRef(false);
   // The tabs with text that go with the profile (counted when its
   // workspace is loaded).
   const savedTabs = useApp((s) => {
@@ -386,7 +389,7 @@ function ProfileEditor({
         onOpenChange={(open) => {
           setConfirmDelete(open);
           // Asked from the sidebar's Delete…: Cancel closes it all.
-          if (!open && askDelete) closeProfileDialog();
+          if (!open && askDelete && !deleting.current) closeProfileDialog();
         }}
       >
         <AlertDialogContent>
@@ -399,7 +402,13 @@ function ProfileEditor({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={() => void onDelete()}>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                deleting.current = true;
+                void onDelete().finally(() => (deleting.current = false));
+              }}
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
