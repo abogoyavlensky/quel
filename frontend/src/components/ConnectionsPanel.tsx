@@ -64,8 +64,8 @@ export function ConnectionsPanel() {
                       title={statusLabel[status]}
                       onClick={() => void selectProfile(p.id)}
                       className={cn(
-                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted",
-                        selected === p.id && "bg-muted font-medium",
+                        "flex h-[34px] min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left hover:bg-muted",
+                        selected === p.id && "bg-primary/10 font-medium hover:bg-primary/15",
                       )}
                     >
                       <ConnMark engine={p.engine} color={p.color} status={status} />
