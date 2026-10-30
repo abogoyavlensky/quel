@@ -1,4 +1,4 @@
-import { Pin, PinOff, X } from "lucide-react";
+import { MessageSquare, Pin, PinOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResultGrid } from "@/grid/ResultGrid";
 import { cn } from "@/lib/utils";
@@ -33,8 +33,8 @@ function TabButton({
       onClick={onSelect}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
       className={cn(
-        "group flex h-7 shrink-0 cursor-default items-center gap-1 rounded-md px-2 text-xs select-none",
-        selected ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground",
+        "group flex h-[26px] shrink-0 cursor-default items-center gap-1.5 rounded-full pr-1.5 pl-2.5 text-xs select-none",
+        selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
       )}
     >
       {children}
@@ -92,13 +92,23 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {!empty && offline && w.runRefused && <NotConnected banner />}
-      <div role="tablist" aria-label="Results" className="flex h-9 shrink-0 items-center gap-1 overflow-x-auto border-b px-2">
+      <div
+        role="tablist"
+        aria-label="Results"
+        className="flex h-[42px] shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2.5"
+      >
         <TabButton selected={tab.active === MESSAGES} onSelect={() => selectResult(tab.id, MESSAGES)}>
-          Messages
+          <MessageSquare className="size-3.5" />
+          <span className="pr-1">Messages</span>
         </TabButton>
         {tab.results.map((r) => (
-          <TabButton key={r.id} selected={r.id === tab.active} onSelect={() => selectResult(tab.id, r.id)} title={r.sql}>
-            <span className="max-w-56 truncate font-mono">{label(r.sql)}</span>
+          <TabButton
+            key={r.id}
+            selected={r.id === tab.active}
+            onSelect={() => selectResult(tab.id, r.id)}
+            title={r.sql}
+          >
+            <span className="max-w-56 truncate font-mono text-[12.5px]">{label(r.sql)}</span>
             <button
               type="button"
               aria-label="Keep result"
@@ -109,7 +119,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
                 pin(tab.id, r.id);
               }}
               className={cn(
-                "rounded p-0.5 hover:bg-background",
+                "rounded-full p-0.5 hover:bg-background/70",
                 r.pinned ? "text-foreground" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
               )}
             >
@@ -122,7 +132,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
                 e.stopPropagation();
                 closeResult(tab.id, r.id);
               }}
-              className="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-background focus-visible:opacity-100"
+              className="rounded-full p-0.5 opacity-0 group-hover:opacity-100 group-aria-selected:opacity-60 hover:bg-background/70 focus-visible:opacity-100"
             >
               <X className="size-3" />
             </button>

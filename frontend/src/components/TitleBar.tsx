@@ -33,7 +33,10 @@ export function TitleBar() {
           )}
         >
           <ConnMark engine={profile.engine} color={profile.color} status={w?.status ?? "disconnected"} />
-          <span className={cn("max-w-80 truncate font-medium", tag ? tagInk[tag] : "text-foreground")} title={profile.name}>
+          <span
+            className={cn("max-w-80 truncate font-medium", tag ? tagInk[tag] : "text-foreground")}
+            title={profile.name}
+          >
             {profile.name}
           </span>
           <span className="shrink-0 text-muted-foreground">{engineLabel[profile.engine]}</span>
