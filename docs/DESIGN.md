@@ -445,17 +445,17 @@ bottom right, and the grid footer has the rows and the time.
   the tag's ink token (`--color-tag-*-ink`, about L 0.5), because the
   tags are tuned as dots and yellow cannot be read as text. Selection
   and focus never take a tag's colour.
-- **Sizes.** Small text is 14px (`--text-xs`) and body text 15px
-  (`--text-sm`). The editor is JetBrains Mono at 15.5px with ligatures
-  off, so `<>` and `>=` read as typed. Grid rows are 32px with every
-  other row banded; tree rows 30px; connection rows 36px.
-- **Connections.** Each row always shows its button: a green play to
-  connect, a stop to disconnect. The pencil shows on hover, and a
+- **Sizes.** Small text is 14.5px (`--text-xs`) and body text 15.5px
+  (`--text-sm`). The editor is JetBrains Mono at 16px with ligatures
+  off, so `<>` and `>=` read as typed. Grid rows are 34px with every
+  other row banded; tree rows 32px; connection rows 38px.
+- **Connections.** Each row always shows its button: a plug to connect,
+  a grey stop to disconnect (play is Run's icon, so it is not reused). The pencil shows on hover, and a
   right-click offers Connect or Disconnect, Edit… and Delete….
 - **The window.** On macOS the title bar is hidden (`:mac-title-bar
-  :hidden-inset`): the top strip is the drag area
+  :hidden`): the top strip is the drag area
   (`--wails-draggable: drag`) and the traffic lights float over its left
-  end. That title bar is a toolbar about 52pt high, so the strip is 52px,
+  end. That is the standard title bar, so the strip is a compact 30px,
   which centres them. Its content is centred, so it needs no room for them, and
   fullscreen needs nothing.
 - **Light only**, for now; themes come later as a setting

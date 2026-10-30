@@ -59,8 +59,9 @@
                        ;; macOS: the page draws under the title bar. Its
                        ;; top strip (frontend TitleBar.tsx) is the drag
                        ;; area, and the traffic lights float over its left
-                       ;; end.
-                       :mac-title-bar :hidden-inset}
+                       ;; end. :hidden is the standard title bar, so the strip
+                       ;; stays compact.
+                       :mac-title-bar :hidden}
    :quel.menu/menu {:app (ig/ref :quel.shell/app)}
    :quel.dev/loop {:window (ig/ref :quel.shell/window)}})
 

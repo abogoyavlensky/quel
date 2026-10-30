@@ -1,4 +1,4 @@
-import { PencilIcon, PlayIcon, PlusIcon, SquareIcon } from "lucide-react";
+import { PencilIcon, PlugIcon, PlusIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -22,7 +22,7 @@ const statusLabel: Record<ConnStatus, string> = {
 };
 
 // The left panel: the saved connections. A click selects one and shows its
-// workspace; each connects (a green play) and disconnects (a stop) on its
+// workspace; each connects (a plug) and disconnects (a stop) on its
 // own button, always shown, and several can be connected at once. The
 // pencil shows on hover; right-click a row for Connect or Disconnect,
 // Edit and Delete. New ones come from the + button, or from
@@ -71,7 +71,7 @@ export function ConnectionsPanel() {
                       {/* The highlight covers the whole row, its buttons too. */}
                       <div
                         className={cn(
-                          "flex h-9 items-center gap-0.5 rounded-md pr-1 hover:bg-muted",
+                          "flex h-[38px] items-center gap-0.5 rounded-md pr-1 hover:bg-muted",
                           selected === p.id && "bg-primary/10 font-medium hover:bg-primary/15",
                         )}
                       >
@@ -96,9 +96,9 @@ export function ConnectionsPanel() {
                           onClick={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
                         >
                           {plugged ? (
-                            <SquareIcon className="fill-current text-muted-foreground" />
+                            <SquareIcon className="size-3.5 fill-current text-muted-foreground" />
                           ) : (
-                            <PlayIcon className="fill-current text-tag-green" />
+                            <PlugIcon className="text-muted-foreground" />
                           )}
                         </Button>
                         <Button

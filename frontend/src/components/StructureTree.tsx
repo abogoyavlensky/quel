@@ -26,7 +26,7 @@ import {
 // button). The rows are a flat, virtualized list (state/tree.ts) with one
 // focused row, walked by the keyboard as an ARIA tree.
 
-const ROW_H = 30;
+const ROW_H = 32;
 const INDENT = 14;
 
 function errorText(e: unknown): string {
@@ -45,7 +45,7 @@ export function StructureTree() {
   const fetching = useIsFetching({ queryKey: metaKeys.all(connId ?? "") }) > 0 && connId !== null;
 
   return (
-    <section aria-labelledby="structure-title" className="flex h-full min-h-0 flex-col text-[14.5px]">
+    <section aria-labelledby="structure-title" className="flex h-full min-h-0 flex-col text-[15px]">
       <div className="flex items-center justify-between px-3 pt-3 pb-1">
         <h2 id="structure-title" className="text-xs font-medium text-muted-foreground">
           Structure
@@ -277,9 +277,9 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
 
 function RowBody({ row }: { row: TreeRow }) {
   const chevron = (open: boolean) => (
-    <ChevronRightIcon className={cn("size-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
+    <ChevronRightIcon className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
   );
-  const icon = "size-3.5 shrink-0 text-muted-foreground";
+  const icon = "size-4 shrink-0 text-muted-foreground";
   switch (row.kind) {
     case "schema":
       return (

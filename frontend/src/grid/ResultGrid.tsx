@@ -14,8 +14,8 @@ import { initialWidths, numberWidth } from "./widths";
 // ↑/↓ move the selection while the grid has focus, and a double-click
 // also opens the panel.
 
-const ROW_H = 32;
-const HEAD_H = 46;
+const ROW_H = 34;
+const HEAD_H = 48;
 const MIN_COL = 40;
 const LOAD_AHEAD = 50; // rows from the end at which the next page loads
 
@@ -129,8 +129,8 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                   )}
                   style={{ left: numW + c.start, width: c.size }}
                 >
-                  <span className="w-full truncate font-sans text-[14px] font-medium text-foreground">{col.name}</span>
-                  <span className="w-full truncate text-[12px] text-muted-foreground">{col.type.toLowerCase()}</span>
+                  <span className="w-full truncate font-sans text-[14.5px] font-medium text-foreground">{col.name}</span>
+                  <span className="w-full truncate text-[12.5px] text-muted-foreground">{col.type.toLowerCase()}</span>
                   <div
                     aria-hidden
                     onPointerDown={(e) => startResize(c.index, e)}
@@ -191,7 +191,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
                       role="gridcell"
                       title={typeof cell === "string" && cell.length > 40 ? cell.slice(0, 2000) : undefined}
                       className={cn(
-                        "absolute top-0 h-full truncate border-r border-border/50 px-2.5 leading-[32px]",
+                        "absolute top-0 h-full truncate border-r border-border/50 px-2.5 leading-[34px]",
                         (kind === "number" || numeric[c.index]) && "text-right tabular-nums",
                         kind === "null" && "text-muted-foreground/70 italic",
                         kind === "bool" && "text-muted-foreground",

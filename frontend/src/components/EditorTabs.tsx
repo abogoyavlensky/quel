@@ -37,7 +37,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
     <div
       role="tablist"
       aria-label="Editor tabs"
-      className="flex h-[50px] shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2"
+      className="flex h-[52px] shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2"
     >
       {/* The tabs sit in a track; the active one is a raised pill. */}
       <div className="flex min-w-0 gap-0.5 rounded-[10px] bg-muted p-[3px]">
@@ -55,7 +55,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
                 }
                 onAuxClick={(e) => e.button === 1 && void closeTab(t.id)}
                 className={cn(
-                  "group flex h-[30px] min-w-0 cursor-default items-center gap-1.5 rounded-[7px] pr-1.5 pl-3 text-[14.5px] select-none",
+                  "group flex h-8 min-w-0 cursor-default items-center gap-1.5 rounded-[7px] pr-1.5 pl-3 text-[15px] select-none",
                   t.id === active
                     ? "bg-background font-medium text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -80,7 +80,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
                     }}
                     className="rounded p-0.5 hover:bg-foreground/10"
                   >
-                    <Pin className="size-3 fill-current" />
+                    <Pin className="size-3.5 fill-current" />
                   </button>
                 ) : (
                   <button
@@ -92,7 +92,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
                     }}
                     className="rounded p-0.5 opacity-0 group-hover:opacity-100 hover:bg-foreground/10 focus-visible:opacity-100 group-aria-selected:opacity-60"
                   >
-                    <X className="size-3" />
+                    <X className="size-3.5" />
                   </button>
                 )}
               </div>

@@ -62,7 +62,7 @@ const sqlHighlight = HighlightStyle.define([
 // The editor's chrome from the app's tokens. As an EditorView theme, not
 // global CSS, so it outranks CodeMirror's base theme.
 const chrome = EditorView.theme({
-  "&": { height: "100%", fontSize: "15.5px", backgroundColor: "var(--background)", color: "var(--foreground)" },
+  "&": { height: "100%", fontSize: "16px", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
   // No ligatures: <> and >= read as typed, not as ◇ and ≥.
   ".cm-scroller": { fontFamily: "var(--font-editor)", lineHeight: "1.6", fontVariantLigatures: "none" },
