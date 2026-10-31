@@ -8,11 +8,12 @@
             [quel.meta.postgres]
             [quel.meta.sqlite]
             [quel.profiles :as profiles]
+            [quel.updates :as updates]
             [quel.workspace :as workspace]
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
-;; env, {:conns :execs :store :secrets :app}, first, then the plain values
+;; env, {:conns :execs :store :secrets :app :updates}, first, then the plain values
 ;; JavaScript sends (objects arrive as maps with string keys). A throw
 ;; rejects the frontend's promise with the message.
 
@@ -107,6 +108,21 @@
 (defn select-profile [{:keys [store]} profile-id]
   (workspace/select-profile! store profile-id))
 
+;; New versions (quel.updates).
+
+(defn check-update [{:keys [updates]}]
+  (updates/check updates))
+
+(defn skip-update [{:keys [store]} version]
+  (updates/skip! store version)
+  {:ok true})
+
+(defn download-update [{:keys [updates]}]
+  (updates/download! updates))
+
+(defn restart-to-update [{:keys [updates]}]
+  (updates/restart! updates))
+
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
@@ -134,7 +150,11 @@
    "close-tab" #'close-tab
    "reopen-tab" #'reopen-tab
    "selected-profile" #'selected-profile
-   "select-profile" #'select-profile})
+   "select-profile" #'select-profile
+   "check-update" #'check-update
+   "skip-update" #'skip-update
+   "download-update" #'download-update
+   "restart-to-update" #'restart-to-update})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

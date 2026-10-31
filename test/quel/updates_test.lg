@@ -1,0 +1,42 @@
+(ns quel.updates-test
+  (:require [integrant.core :as ig]
+            [quel.store-test :refer [with-store]]
+            [quel.updates :as updates]
+            [quel.version :as version]
+            [clojure.test :refer [deftest is]]))
+
+(defn- env [m] (fn [k] (get m k "")))
+
+(deftest the-config-from-the-environment
+  (let [c (updates/config-from-env (env {}))]
+    (is (true? (:enabled? c)))
+    (is (nil? (:base-url c)) "an unset QUEL_UPDATES_URL reads as \"\"")
+    (is (= "abogoyavlensky/quel" (:repository c)))
+    (is (= version/version (:version c))))
+  (is (false? (:enabled? (updates/config-from-env (env {"QUEL_UPDATES" "off"})))))
+  (is (nil? (:base-url (updates/config-from-env (env {"QUEL_UPDATES_URL" "  "})))))
+  (is (= "http://127.0.0.1:9" (:base-url (updates/config-from-env (env {"QUEL_UPDATES_URL" "http://127.0.0.1:9"}))))))
+
+(deftest off-means-no-check
+  (with-store
+    (fn [db _]
+      (let [u (ig/init-key ::updates/updater {:enabled? false :store db :app nil :version "1.0.0"})]
+        (is (= {:current "1.0.0" :enabled false} (updates/check u)))))))
+
+(deftest a-skip-is-kept-and-replaced
+  (with-store
+    (fn [db _]
+      (is (nil? (updates/skipped db)))
+      (updates/skip! db "1.1.0")
+      (is (= "1.1.0" (updates/skipped db)))
+      (updates/skip! db "1.2.0")
+      (is (= "1.2.0" (updates/skipped db))))))
+
+(deftest the-reply-marks-a-skipped-release
+  (let [rel {:version "1.2.0" :url "u"}]
+    (is (= {:current "1.0.0" :enabled true :can-install true :reason nil :release rel :skipped true}
+           (updates/reply "1.0.0" rel "1.2.0" {:ok true})))
+    (is (false? (:skipped (updates/reply "1.0.0" (assoc rel :version "1.3.0") "1.2.0" {:ok true})))
+        "a newer release than the skipped one is offered")
+    (is (= {:current "1.0.0" :enabled true :can-install false :reason "no" :release nil :skipped false}
+           (updates/reply "1.0.0" nil "1.2.0" {:ok false :reason "no"})))))

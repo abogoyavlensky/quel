@@ -136,11 +136,13 @@ waiting on the network inside Go, not in bytecode.
 | `quel.export` | Writing DDL and results to files. |
 | `quel.api` | The handlers the frontend calls, registered by var so the nREPL can redefine them. |
 | `quel.menu` | The application menu as data; items emit events the frontend acts on. |
+| `quel.updates` | New versions from GitHub Releases through the wails package's updater; the skipped version. See [Updates](#updates). |
+| `quel.version` | The version this build is; a test keeps it equal to `VERSION`. |
 | `quel.dev` | nREPL and the window reload on frontend rebuilds, under `lgx run` only. |
 
 Integrant components: `:quel.store/db`, `:quel.conn/registry`,
 `:quel.exec/registry`, `:quel.api/handlers`, `:quel.shell/app`,
-`:quel.shell/window`, `:quel.menu/menu`, `:quel.dev/loop`. Halting the system
+`:quel.shell/window`, `:quel.menu/menu`, `:quel.updates/updater`, `:quel.dev/loop`. Halting the system
 cancels running queries, closes open cursors, closes every pool, then the
 app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
 order: closing a session that is still running a query waits for it.
@@ -623,9 +625,11 @@ with string keys); errors reject the frontend's promise with the message.
 | Export | `export-ddl`, `export-result` (both open a save dialog) |
 | History | `list-history`, `clear-history` |
 | Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
+| Updates | `check-update` (the current version, whether this copy can install, a newer release or nil, whether it is the skipped one), `skip-update`, `download-update` (blocks until staged and verified), `restart-to-update` |
 
 Backend-to-frontend events: menu actions (`menu:new-tab`, `menu:run`,
-...), `connection-lost`, `query-finished` for runs the user navigated
+`menu:check-updates`, ...), `wails:updater:download-progress` while an
+update downloads, `connection-lost`, `query-finished` for runs the user navigated
 away from.
 
 ## Development and builds
@@ -684,8 +688,39 @@ notarizes, staples, and only then writes the zip and `checksums.txt`. A
 `v*` tag runs it on a `macos-15` runner with the certificate in a
 temporary keychain, publishes the GitHub Release and regenerates
 `Casks/quel.rb`. The cask has no `zap`, so an uninstall keeps profiles,
-tabs and passwords. No Intel or universal build, DMG, in-app updater or
-App Store: users upgrade through Homebrew.
+tabs and passwords, and it has `auto_updates true`: Quel updates itself
+(below), so a plain `brew upgrade` leaves it alone and `brew upgrade
+--cask quel` still upgrades it. The release fails if the zip holds
+anything but `Quel.app` at its top level, which the updater requires. No
+Intel or universal build, DMG or App Store.
+
+### Updates
+
+Quel checks GitHub Releases for a newer version 10 s after the window
+opens and every 6 hours, and on Help → Check for Updates…. A newer one
+shows as a button at the right end of the status bar; its dialog skips
+the version, leaves it for later, or downloads it and restarts into it.
+The tabs are saved first; a failed save stops the restart unless the
+user restarts anyway.
+
+The work is Wails' own updater (`pkg/updater`), through the wails
+package (`wails-v0.6.0`): it downloads the release's
+`quel_VERSION_darwin_arm64.zip`, checks it against `checksums.txt`, swaps
+`Quel.app` with a backup and relaunches through a helper (the same binary,
+which the package's Go `init()` handles before any let-go code runs). The
+package adds what Wails lacks: the staged bundle must satisfy the running
+app's designated requirement, so only an update signed with Quel's
+Developer ID goes in, and a release without a checksum line is refused.
+Only a Developer ID-signed `.app` in a folder the user can write installs
+in place; anywhere else (dev, server mode, an ad-hoc build) the dialog
+gives the `brew upgrade --cask quel` command and the release page.
+
+`quel.updates` keeps the skipped version in the `settings` table (Wails'
+skip lasts only until quit): the automatic check hides it, a manual one
+shows it, and a newer release is offered as usual. `QUEL_UPDATES=off`
+turns the checks off (server-mode runs set it), and `QUEL_UPDATES_URL`
+replaces `https://api.github.com` (e2e points it at a stub). The binary's
+version is `quel.version/version`, kept equal to `VERSION` by a test.
 
 ### Testing
 
@@ -727,6 +762,7 @@ package feature, not app glue.
 | `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
 | `letgo-packages/sql` | `ScanRow` keeps binary values as bytes (today `[]byte` becomes a string) | the bytea / BLOB preview |
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
+| `letgo-packages/wails` | Done in `wails-v0.6.0`: in-app updates over Wails' updater, with a signer check, a required checksum and helper mode in the shim's `init()` | in-app updates |
 | `letgo-packages/keyring` | Done in `keyring-v0.1.0`: `put!`, `get`, `delete!` over `zalando/go-keyring` (macOS Keychain, Secret Service), and `use-memory!` for tests | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` | Done in lgx 0.5.2: `:target :native` embeds `:resource-paths`, lowers only project namespaces, and takes `:go/build-tags` under `:targets :bin` | the native build |

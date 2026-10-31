@@ -1,0 +1,5 @@
+(ns quel.version)
+
+;; The version this build is. It must equal VERSION, which the release
+;; scripts read; quel.version-test fails when the two differ, so bump both.
+(def version "0.1.0")

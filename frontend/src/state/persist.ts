@@ -16,6 +16,8 @@ export const SAVE_DELAY_MS = 800;
 
 const queues = new Map<string, Promise<void>>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
+// Profiles whose last save failed, with the error; a later success clears it.
+const saveErrors = new Map<string, string>();
 
 function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -83,9 +85,11 @@ function enqueueSave(profileId: string): Promise<void> {
     if (!w || w.loadError) return;
     try {
       await api.saveWorkspace(profileId, snapshot(w));
+      saveErrors.delete(profileId);
       if (store.getState().notice?.startsWith(SAVE_FAILED)) store.setState({ notice: null });
     } catch (e) {
       // Shown in the status bar; the next change tries again.
+      saveErrors.set(profileId, errorText(e));
       store.setState({ notice: SAVE_FAILED + errorText(e) });
     }
   });
@@ -119,10 +123,24 @@ export function flushAll(): void {
   for (const profileId of [...timers.keys()]) flushSave(profileId);
 }
 
+// Every pending save now, and wait for each profile's queue to drain: the
+// app is about to restart. Resolves to the first save error still standing
+// (a profile whose last save failed), or null when every tab is saved.
+export async function flushAllAndWait(): Promise<string | null> {
+  // An edit while a save runs schedules another, and a close can queue
+  // more: flush and wait again until no timer and no queue is left.
+  while (timers.size > 0 || queues.size > 0) {
+    flushAll();
+    await Promise.all([...queues.values()]);
+  }
+  return saveErrors.values().next().value ?? null;
+}
+
 // Forget the profile's pending save (it was deleted).
 export function cancelSave(profileId: string): void {
   clearTimeout(timers.get(profileId));
   timers.delete(profileId);
+  saveErrors.delete(profileId);
 }
 
 // The selected profile, saved for the next launch. Bridge calls run

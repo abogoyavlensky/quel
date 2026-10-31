@@ -19,7 +19,9 @@ fail() { echo "${FAIL_PREFIX:-server-mode}: FAIL: $1" >&2; [[ -n "${log:-}" ]] &
 # wait until it serves / and has written .nrepl-port. Sets $base (its URL),
 # $log, $app_pid and $data_dir. The app keeps its database in $data_dir, a
 # fresh temp dir, and profile passwords in memory (QUEL_SECRETS=memory): a
-# run never touches the real profiles or Keychain. The app runs in its own process group (`set -m`;
+# run never touches the real profiles or Keychain. Update checks are off
+# (QUEL_UPDATES=off) unless the caller sets QUEL_UPDATES and, for a stub
+# GitHub, QUEL_UPDATES_URL (e2e does). The app runs in its own process group (`set -m`;
 # setsid is not on macOS), and an EXIT trap stops lgx and the lg it starts
 # together; callers with their own cleanup call stop_app from it.
 start_app() {
@@ -35,6 +37,7 @@ start_app() {
     set -m
     CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT="$port" LGX_RUN=1 \
         QUEL_SECRETS=memory QUEL_DATA_DIR="$data_dir" \
+        QUEL_UPDATES="${QUEL_UPDATES:-off}" QUEL_UPDATES_URL="${QUEL_UPDATES_URL:-}" \
         "$LGX" run >"$log" 2>&1 &
     app_pid=$!
     set +m

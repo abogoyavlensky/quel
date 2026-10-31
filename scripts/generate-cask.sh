@@ -44,6 +44,9 @@ cask "quel" do
   desc "Desktop database client"
   homepage "https://github.com/abogoyavlensky/quel"
 
+  # Quel updates itself; brew upgrade leaves it alone unless named.
+  auto_updates true
+
   livecheck do
     skip "Updated by Quel's release workflow"
   end

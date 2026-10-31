@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end tests of the UI: Playwright drives the app in Wails' server
 # mode, against SQLite files made here: table t with 2,000 rows, and a
-# second file with table t2 (10 rows) for the workspaces spec.
+# second file with table t2 (10 rows) for the workspaces spec. Update
+# checks go to a stub GitHub (frontend/e2e/fixtures/github-stub.py).
 #
 #   lgx e2e        # or: bash scripts/e2e.sh [playwright args...]
 #
@@ -34,11 +35,26 @@ c.executemany("insert into t2 values (?, ?)", [(i, f"item {i}") for i in range(1
 c.commit()
 PY
 
+# A stub GitHub for the update checks, named for this machine the way Go
+# names platforms (the updater picks the asset by them).
+case "$(uname -s)" in Darwin) gh_os=darwin ;; *) gh_os=linux ;; esac
+case "$(uname -m)" in arm64 | aarch64) gh_arch=arm64 ;; *) gh_arch=amd64 ;; esac
+# The app only needs the URL to start; the stub starts once the cleanup
+# trap is in place (start_app installs its own), so a failed start leaves
+# no stub behind. The first check runs 10 s after the page loads.
+gh_port="$(free_port)"
+gh_pid=""
+export QUEL_UPDATES=on QUEL_UPDATES_URL="http://127.0.0.1:$gh_port"
+
 start_app
 cleanup() {
     stop_app
+    if [[ -n "$gh_pid" ]]; then kill "$gh_pid" 2>/dev/null || true; fi
     rm -rf "$tmp"
 }
 trap cleanup EXIT
+python3 -I "$HERE/frontend/e2e/fixtures/github-stub.py" "$gh_port" "$gh_os" "$gh_arch" &
+gh_pid=$!
 
-QUEL_E2E_URL="$base" QUEL_E2E_DB="$db" QUEL_E2E_DB2="$db2" npm --prefix frontend run e2e -- "$@"
+QUEL_E2E_URL="$base" QUEL_E2E_DB="$db" QUEL_E2E_DB2="$db2" QUEL_E2E_GITHUB="$QUEL_UPDATES_URL" \
+    npm --prefix frontend run e2e -- "$@"

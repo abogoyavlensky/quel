@@ -5,6 +5,7 @@ import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
+import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { isMac } from "@/components/keys";
 import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId, toggleRowDetails } from "@/state/runner";
 
@@ -32,6 +33,7 @@ function useMenu() {
         if (path) openProfileDialog({ mode: "new", path });
       }),
       onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
+      onEvent("menu:check-updates", () => void checkForUpdates({ manual: true })),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -102,6 +104,10 @@ export default function App() {
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
+  }, []);
+  // New versions: 10 s after start, then every 6 hours.
+  useEffect(() => {
+    return startUpdateChecks();
   }, []);
   return (
     <>

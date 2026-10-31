@@ -31,6 +31,8 @@ stub codesign 'echo "codesign $*" >>"$STUB_LOG"'
 stub spctl 'echo "spctl $*" >>"$STUB_LOG"; echo "accepted" >&2; echo "source=Notarized Developer ID" >&2'
 stub ditto 'echo "ditto $*" >>"$STUB_LOG"
 if [[ "$1" == -c ]]; then src="${@: -2:1}"; out="${@: -1}"; (cd "$(dirname "$src")" && zip -qr "$out" "$(basename "$src")")
+    # STUB_STRAY: a __MACOSX entry beside the app, as --sequesterRsrc makes for extended attributes.
+    if [[ -n "${STUB_STRAY:-}" ]]; then t="$(mktemp -d)"; mkdir -p "$t/__MACOSX"; echo x >"$t/__MACOSX/._f"; (cd "$t" && zip -qr "$out" __MACOSX); rm -rf "$t"; fi
 else cp -R "$1" "$2"; fi'
 stub xcrun 'echo "xcrun $*" >>"$STUB_LOG"
 case "$1 $2" in
@@ -131,6 +133,12 @@ check "accepted: signed with hardened runtime and a timestamp" 'grep -q -- "--op
 check "accepted: submitted once, waiting for the result" '[[ $(grep -c "notarytool submit" "$STUB_LOG") -eq 1 ]] && grep -q "notarytool submit.*--wait" "$STUB_LOG"'
 check "accepted: stapled before archiving" 'awk "/stapler staple/ {s=NR} /ditto -c.*$archive/ {a=NR} END {exit !(s && a && s < a)}" "$STUB_LOG"'
 check "accepted: the unsigned dist/Quel.app is not signed" '! grep -q "^codesign.*$proj/dist/Quel.app" "$STUB_LOG"'
+check "accepted: the zip holds only Quel.app" '[[ "$(unzip -Z1 "$proj/dist/$archive" | cut -d/ -f1 | sort -u)" == Quel.app ]]'
+
+new_project
+sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" STUB_STRAY=1
+check "a stray top-level entry in the zip: fails" '[[ $rc -ne 0 && "$out" == *"must hold only Quel.app at its top level"* ]]'
+check "a stray top-level entry in the zip: nothing written" no_artifact
 
 new_project
 sign APPLE_SIGNING_IDENTITY="$id" APPLE_NOTARY_PROFILE=p STUB_IDENTITY="$id" STUB_STAPLE=flaky STAPLER_RETRY_DELAY=0
@@ -252,6 +260,7 @@ check "valid: the version is the input" 'grep -qx "  version \"1.2.3\"" <<<"$out
 check "valid: the checksum of this version's archive" 'grep -qx "  sha256 \"$sha_a\"" <<<"$out"'
 check "valid: the url is the release asset" \
     '[[ "$(cask_url)" == "https://github.com/abogoyavlensky/quel/releases/download/v1.2.3/quel_1.2.3_darwin_arm64.zip" ]]'
+check "valid: Quel updates itself" 'grep -q "^  auto_updates true$" <<<"$out"'
 check "valid: Apple Silicon and macOS 15+ only" 'grep -q "depends_on arch: :arm64" <<<"$out" && grep -q "depends_on macos: \">= :sequoia\"" <<<"$out"'
 check "valid: installs Quel.app" 'grep -qx "  app \"Quel.app\"" <<<"$out"'
 

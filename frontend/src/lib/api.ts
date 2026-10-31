@@ -12,6 +12,7 @@ import type {
   SavedTab,
   SavedWorkspace,
   SchemaInfo,
+  UpdateCheck,
   WorkspaceInput,
 } from "@/lib/types";
 
@@ -94,3 +95,14 @@ export const selectedProfile = async () => {
 };
 
 export const selectProfile = (profileId: string | null) => call<void>("select-profile", profileId);
+
+// New versions (quel.updates). download-update resolves once the update is
+// downloaded, verified and staged; restart-to-update quits the app.
+
+export const checkUpdate = () => call<UpdateCheck>("check-update");
+
+export const skipUpdate = (version: string) => call<void>("skip-update", version);
+
+export const downloadUpdate = () => call<void>("download-update");
+
+export const restartToUpdate = () => call<void>("restart-to-update");

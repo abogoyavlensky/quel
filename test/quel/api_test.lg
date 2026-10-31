@@ -20,7 +20,10 @@
     (try
       ;; :app stays nil: choose-file, the one handler that needs it, opens
       ;; a dialog and is not called here.
-      (f {:conns conns :execs execs :store store :secrets secrets :app nil} path)
+      ;; Update checks are off: nothing here reaches GitHub.
+      (f {:conns conns :execs execs :store store :secrets secrets :app nil
+          :updates {:enabled? false :store store :version "1.0.0"}}
+         path)
       (finally
         (ig/halt-key! :quel.exec/registry execs)
         (ig/halt-key! :quel.conn/registry conns)
@@ -35,7 +38,8 @@
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "list-objects" "list-columns" "completion-schema"
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
-           "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"}
+           "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"
+           "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 
@@ -159,3 +163,9 @@
         (is (= p (api/selected-profile env)))
         (is (= "This connection no longer exists."
                (message-of #(api/save-workspace env "nope" {"tabs" []}))))))))
+
+(deftest update-checks-off-and-a-skip
+  (with-env
+    (fn [env _]
+      (is (= {:current "1.0.0" :enabled false} (api/check-update env)))
+      (is (= {:ok true} (api/skip-update env "2.0.0"))))))

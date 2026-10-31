@@ -49,10 +49,16 @@ like any other app downloaded from the internet.
 
 ### Update
 
+Quel tells you when a new version is out: an **Update** button appears at
+the right end of the status bar (or use Help → Check for Updates…). It
+downloads the new version, checks that it is signed by the same developer,
+and restarts into it. You can also skip a version, or update with Homebrew:
+
 ```sh
 brew upgrade --cask quel
 ```
 
+If you have Quel 0.1.0, which can't update itself, run that command once.
 Updates keep your connections, saved tabs and passwords.
 
 ### Uninstall

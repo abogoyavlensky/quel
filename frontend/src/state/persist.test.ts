@@ -138,4 +138,47 @@ describe("persist", () => {
     expect(api.saveWorkspace).toHaveBeenCalledTimes(2);
     expect(store.getState().notice).toBeNull();
   });
+
+  it("flushAllAndWait waits for a save already running", async () => {
+    const d = deferred<void>();
+    api.saveWorkspace.mockReturnValueOnce(d.promise);
+    persist.scheduleSave("p1");
+    await vi.advanceTimersByTimeAsync(800);
+    let settled = false;
+    const done = persist.flushAllAndWait().then((r) => {
+      settled = true;
+      return r;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+    d.resolve();
+    expect(await done).toBeNull();
+  });
+
+  it("flushAllAndWait sends a pending save and reports its failure", async () => {
+    api.saveWorkspace.mockRejectedValueOnce(new Error("disk full"));
+    persist.scheduleSave("p1");
+    expect(await persist.flushAllAndWait()).toBe("disk full");
+    expect(api.saveWorkspace).toHaveBeenCalledTimes(1);
+    // A later save that works clears it.
+    persist.scheduleSave("p1");
+    expect(await persist.flushAllAndWait()).toBeNull();
+  });
+
+  it("flushAllAndWait with nothing pending is null", async () => {
+    expect(await persist.flushAllAndWait()).toBeNull();
+    expect(api.saveWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("flushAllAndWait also sends a save scheduled while it waits", async () => {
+    const d = deferred<void>();
+    api.saveWorkspace.mockReturnValueOnce(d.promise);
+    persist.scheduleSave("p1");
+    const done = persist.flushAllAndWait();
+    await vi.advanceTimersByTimeAsync(0);
+    persist.scheduleSave("p1"); // an edit while the first save runs
+    d.resolve();
+    expect(await done).toBeNull();
+    expect(api.saveWorkspace).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,6 +1,6 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
-import type { Cell, ClosedTab, Column, Profile } from "@/lib/types";
+import type { Cell, ClosedTab, Column, Profile, UpdateState } from "@/lib/types";
 
 // The app's state: the saved profiles and a workspace per profile (its
 // connection, its editor tabs, and each tab's results and messages).
@@ -100,6 +100,8 @@ export interface AppState {
   workspaces: Record<string, Workspace>; // by profile id
   notice: string | null; // a one-line hint for the status bar
   rowDetails: boolean; // the row details panel is open; in memory only
+  update: UpdateState; // a newer version, if found (state/updates.ts)
+  updateDialogOpen: boolean;
 }
 
 export const MESSAGES = "messages";
@@ -146,6 +148,8 @@ export function initialState(): AppState {
     workspaces: {},
     notice: null,
     rowDetails: false,
+    update: { phase: "idle" },
+    updateDialogOpen: false,
   };
 }
 

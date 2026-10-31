@@ -52,6 +52,9 @@ tasks need Docker.
   `scripts/server-mode.sh` sets `QUEL_SECRETS=memory` and a temporary
   `QUEL_DATA_DIR`; backend tests use `{:backend :memory}` and a temp
   `:dir`. Linux boxes usually have no Secret Service at all.
+- Never let a test or a server-mode run check GitHub for updates:
+  `scripts/server-mode.sh` sets `QUEL_UPDATES=off` unless the caller sets
+  it, and e2e points the checks at a local stub through `QUEL_UPDATES_URL`.
 - A pushed `v*` tag publishes a release (signed app, GitHub Release, tap
   update). Push one tag by name, never `git push --tags`, and only when
   asked to release.
