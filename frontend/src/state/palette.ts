@@ -30,8 +30,11 @@ export function closePalette(): void {
 }
 
 // After a dismissal: focus returns to where it was, or to the editor when
-// that is gone.
+// that is gone. Not while the other palette is open: a palette that closes
+// because the user switched to the other one is not a dismissal, and the
+// element is kept for that one.
 export function restoreFocus(): void {
+  if (store.getState().palette !== null) return;
   const el = before;
   before = null;
   if (el?.isConnected) el.focus();

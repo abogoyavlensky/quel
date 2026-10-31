@@ -139,6 +139,19 @@ describe("restoreFocus", () => {
     expect(focusEditor).not.toHaveBeenCalled();
   });
 
+  it("leaves focus alone while the other palette is open, and keeps the element for it", () => {
+    const el = element();
+    vi.stubGlobal("document", { activeElement: el });
+    openPalette("commands");
+    openPalette("connections");
+    restoreFocus();
+    expect(el.focus).not.toHaveBeenCalled();
+    expect(focusEditor).not.toHaveBeenCalled();
+    closePalette();
+    restoreFocus();
+    expect(el.focus).toHaveBeenCalledOnce();
+  });
+
   it("focuses the editor when that element has left the document", () => {
     const el = element(false);
     vi.stubGlobal("document", { activeElement: el });

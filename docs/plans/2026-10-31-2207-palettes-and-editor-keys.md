@@ -283,16 +283,18 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 - Create: `frontend/src/components/CommandPalette.tsx`
 - Modify: `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: Implement** a `CommandDialog`, open when `palette === "commands"`, with the visually hidden title "Command Palette" and the placeholder "Type a command…".
+- [x] **Step 1: Implement** a `CommandDialog`, open when `palette === "commands"`, with the visually hidden title "Command Palette" and the placeholder "Type a command…".
   - `useApp(commands)` would make a new array on every store change, so read `useApp((s) => s)`, or the few fields the list needs, and call `commands(state)` in render.
   - One `CommandGroup` per group in order, `CommandItem value={c.id} keywords={[c.title]}`, and `CommandShortcut` for `keys`. The same selected style as Task 4.
   - On select:
     - "Go to Connection…" runs at once. It only switches the palette, so no close and no focus handling.
     - Everything else: mark that an entry ran, `closePalette()`, then `setTimeout(() => void c.run())`.
   - `onCloseAutoFocus` works as in Task 4.
-- [ ] **Step 2: Render it** in `AppShell`.
-- [ ] **Step 3: Type-check** with `npm --prefix frontend run build`. Expected: success.
-- [ ] **Step 4: Commit** `Command Palette`.
+- [x] **Step 2: Render it** in `AppShell`.
+- [x] **Step 3: Type-check** with `npm --prefix frontend run build`. Expected: success.
+- [x] **Step 4: Commit** `Command Palette`.
+
+> Deviation: when one palette closes because the other opened (the Go to Connection entry, or ⌘P over the Command Palette), Radix still fires the closing dialog's `onCloseAutoFocus`, and `restoreFocus()` would have moved focus out from under the new dialog. `restoreFocus()` now returns at once while a palette is open (the kept element stays for the final close), with a unit test; the entries need no special flag for it.
 
 ### Task 6: Keys and the View menu
 
