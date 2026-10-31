@@ -45,11 +45,14 @@
 (def run-script! (emitter "Run Script" "menu:run-script"))
 (def cancel! (emitter "Cancel" "menu:cancel"))
 (def check-updates! (emitter "Check for Updates" "menu:check-updates"))
+(def command-palette! (emitter "Command Palette" "menu:command-palette"))
+(def go-to-connection! (emitter "Go to Connection" "menu:go-to-connection"))
 
 ;; Cmd+W closes the editor tab: on macOS Wails' window menu has no Close
 ;; item, so the key is free. If the native menu and the editor's own keymap
 ;; both see Cmd+Enter, the frontend drops the second run (one in flight
-;; per tab). Check for Updates sits in Help: the shim builds the app menu
+;; per tab). Opening a palette tolerates the same double delivery: it sets
+;; the state, it does not toggle it. Check for Updates sits in Help: the shim builds the app menu
 ;; from its role, which takes no items of ours.
 (defn spec [env]
   [{:role :app-menu}
@@ -68,6 +71,11 @@
             {:separator true}
             {:role :quit}]}
    {:role :edit-menu}
+   {:label "View"
+    :items [{:label "Command Palette…" :accelerator "CmdOrCtrl+Shift+P"
+             :on-click (partial #'command-palette! env)}
+            {:label "Go to Connection…" :accelerator "CmdOrCtrl+P"
+             :on-click (partial #'go-to-connection! env)}]}
    {:label "Query"
     :items [{:label "Run" :accelerator "CmdOrCtrl+Enter"
              :on-click (partial #'run! env)}

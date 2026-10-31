@@ -303,20 +303,22 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 **Files:**
 - Modify: `frontend/src/App.tsx`, `src/quel/menu.lg`, `test/quel/menu_test.lg`
 
-- [ ] **Step 1: `useGlobalKeys`** in `App.tsx`. It is a capture-phase `window` keydown listener with braces in the effect cleanup, like `useRowDetailsKey`.
+- [x] **Step 1: `useGlobalKeys`** in `App.tsx`. It is a capture-phase `window` keydown listener with braces in the effect cleanup, like `useRowDetailsKey`.
   - It calls `shortcutOf(e, isMac)`. On a match, `preventDefault` and `stopPropagation`, then dispatch: `openPalette`, `focusEditorKey()` or `focusTabKey(n)`.
   - Its comment should explain why it isn't a set of native menu items: server mode, and nine digits.
-- [ ] **Step 2: Menu events.** In `useMenu`, `menu:command-palette` → `openPalette("commands")` and `menu:go-to-connection` → `openPalette("connections")`.
-- [ ] **Step 3: The View menu.**
+- [x] **Step 2: Menu events.** In `useMenu`, `menu:command-palette` → `openPalette("commands")` and `menu:go-to-connection` → `openPalette("connections")`.
+- [x] **Step 3: The View menu.**
   - In `menu.lg`, add the `command-palette!` and `go-to-connection!` emitters.
   - In `spec`, add `{:label "View" :items [...]}` between `{:role :edit-menu}` and Query: "Command Palette…" `CmdOrCtrl+Shift+P` and "Go to Connection…" `CmdOrCtrl+P`, registered by var (`(partial #'command-palette! env)`).
   - Extend the comment above `spec` with one line on why opening tolerates the double delivery.
-- [ ] **Step 4: Menu tests.**
+- [x] **Step 4: Menu tests.**
   - Raise the on-click count from 9 to 11.
   - Add "View", "Command Palette…" and "Go to Connection…" to the labels test.
   - Add a test for both accelerators, like `reopen-closed-tab-has-its-key`.
-- [ ] **Step 5: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` (plain `lgx test` where GTK headers exist) and `npm --prefix frontend test`. Expected: all pass.
-- [ ] **Step 6: Commit** `Keys for the palettes, the editor and tabs; a View menu`.
+- [x] **Step 5: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` (plain `lgx test` where GTK headers exist) and `npm --prefix frontend test`. Expected: all pass.
+- [x] **Step 6: Commit** `Keys for the palettes, the editor and tabs; a View menu`.
+
+> Deviation: `lgx` on PATH here is 0.5.1 (mise's global pin) and rejects this repo's `lgx.edn`; the repo pins 0.5.2 in `mise.toml`. I installed it with `mise install lgx@0.5.2` and run the tasks as `mise exec -- lgx ...`.
 
 ### Task 7: End to end
 
