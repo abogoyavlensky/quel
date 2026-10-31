@@ -7,7 +7,8 @@
             [quel.menu]
             [quel.secrets]
             [quel.shell]
-            [quel.store]))
+            [quel.store]
+            [quel.updates]))
 
 ;; One config map describes the app; integrant starts the components in
 ;; dependency order and halts them in reverse when the app ends.
@@ -47,7 +48,8 @@
                        :execs (ig/ref :quel.exec/registry)
                        :store (ig/ref :quel.store/db)
                        :secrets (ig/ref :quel.secrets/store)
-                       :app (ig/ref :quel.shell/app)}
+                       :app (ig/ref :quel.shell/app)
+                       :updates (ig/ref :quel.updates/updater)}
    :quel.shell/app {:name "Quel"
                     :description "A database client"
                     :assets "public"
@@ -63,6 +65,10 @@
                        ;; stays compact.
                        :mac-title-bar :hidden}
    :quel.menu/menu {:app (ig/ref :quel.shell/app)}
+   ;; New versions from GitHub; QUEL_UPDATES=off turns the checks off.
+   :quel.updates/updater (merge (quel.updates/config-from-env)
+                                {:app (ig/ref :quel.shell/app)
+                                 :store (ig/ref :quel.store/db)})
    :quel.dev/loop {:window (ig/ref :quel.shell/window)}})
 
 (defn start!

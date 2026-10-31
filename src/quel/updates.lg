@@ -1,0 +1,84 @@
+(ns quel.updates
+  (:require [integrant.core :as ig]
+            [quel.version :as version]
+            [sql.core :as sql]
+            [string :as str]
+            [wails.core :as w]))
+
+;; New versions from GitHub Releases, through the wails package's updater
+;; (Wails' own, plus a check that an update is signed like the running
+;; copy). The frontend decides when to check and shows the button and
+;; dialog; this answers it.
+;;
+;;   QUEL_UPDATES=off   no checks, nothing goes over the network (server-mode
+;;                      runs set it, so smoke and tests never reach GitHub)
+;;   QUEL_UPDATES_URL   a stand-in for https://api.github.com (e2e's stub)
+;;
+;; A skipped version is kept in the settings table, not in Wails (whose
+;; skip lasts only until the app quits), and decided here: the automatic
+;; check hides it, a manual one shows it anyway, and a newer release
+;; is offered as usual.
+
+(def repository "abogoyavlensky/quel")
+
+(defn config-from-env
+  "The updater's config from QUEL_UPDATES and QUEL_UPDATES_URL; getenv is
+   os/getenv unless a test passes its own."
+  ([] (config-from-env os/getenv))
+  ([getenv]
+   (let [url (getenv "QUEL_UPDATES_URL")]
+     {:enabled? (not= "off" (str/trim (str (getenv "QUEL_UPDATES"))))
+      :base-url (when-not (str/blank? url) url)
+      :repository repository
+      :version version/version})))
+
+;; env: {:app :store} plus config-from-env's keys. Returns env.
+(defmethod ig/init-key ::updater [_ {:keys [app enabled? base-url repository version] :as env}]
+  (when enabled?
+    (w/updater-init! app (cond-> {:current-version version
+                                  :repository repository
+                                  :checksum-asset "checksums.txt"}
+                           base-url (assoc :base-url base-url))))
+  env)
+
+(defn skipped
+  "The version the user chose to skip, or nil."
+  [db]
+  (:value (sql/execute-one! db ["select value from settings where key = 'update-skipped'"])))
+
+(defn skip!
+  "Remember version as skipped; it replaces an earlier skip."
+  [db version]
+  (sql/execute! db [(str "insert into settings (key, value) values ('update-skipped', ?)"
+                         " on conflict (key) do update set value = excluded.value")
+                    (str version)])
+  nil)
+
+(defn reply
+  "check-update's answer from its parts: release is nil when up to date."
+  [current release skipped-version {:keys [ok reason]}]
+  {:current current
+   :enabled true
+   :can-install (boolean ok)
+   :reason reason
+   :release release
+   :skipped (boolean (and release (= skipped-version (:version release))))})
+
+(defn check
+  "Ask for a newer release. Throws when the check fails."
+  [{:keys [app store enabled? version]}]
+  (if-not enabled?
+    {:current version :enabled false}
+    (reply version (w/check-update app) (skipped store) (w/can-install-update))))
+
+(defn download!
+  "Download, verify and stage the release the last check found. Blocks."
+  [{:keys [app]}]
+  (w/download-update! app)
+  {:ok true})
+
+(defn restart!
+  "Quit into the staged update. Quel's own shutdown runs as on any quit."
+  [{:keys [app]}]
+  (w/restart-to-update! app)
+  {:ok true})
