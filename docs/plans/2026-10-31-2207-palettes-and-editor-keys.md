@@ -215,20 +215,20 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 **Files:**
 - Create: `frontend/src/state/shortcuts.ts`, `frontend/src/state/shortcuts.test.ts`
 
-- [ ] **Step 1: Implement `shortcutOf`** with the signature above.
+- [x] **Step 1: Implement `shortcutOf`** with the signature above.
   - The modifier must match the platform (`mac`: `metaKey && !ctrlKey`; else `ctrlKey && !metaKey`), and Alt must be up.
   - P (`key.toLowerCase() === "p"`) gives `connections` without Shift and `commands` with it.
   - E without Shift gives `editor`.
   - `code` `Digit1`…`Digit9` without Shift gives `tab` with that n.
   - Anything else is `null`.
-- [ ] **Step 2: Tests.** Both platforms. Cover:
+- [x] **Step 2: Tests.** Both platforms. Cover:
   - Ctrl+P on macOS is `null`, and so is Meta+P on Linux.
   - Alt+⌘P is `null`, and so is ⇧⌘1.
   - ⇧⌘P with `key: "P"` gives `commands`.
   - ⌘1 with `key: "1"` gives tab 1, and so does `key: "&"` with `code: "Digit1"`.
   - ⌘0 is `null`, and so is ⌘E with Shift.
-- [ ] **Step 3: Run** `npm --prefix frontend test`. Expected: all pass.
-- [ ] **Step 4: Commit** `Match the palette, editor and tab keys`.
+- [x] **Step 3: Run** `npm --prefix frontend test`. Expected: all pass.
+- [x] **Step 4: Commit** `Match the palette, editor and tab keys`.
 
 ### Task 3: The command list
 
