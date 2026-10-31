@@ -296,6 +296,8 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 
 > Deviation: when one palette closes because the other opened (the Go to Connection entry, or ⌘P over the Command Palette), Radix still fires the closing dialog's `onCloseAutoFocus`, and `restoreFocus()` would have moved focus out from under the new dialog. `restoreFocus()` now returns at once while a palette is open (the kept element stays for the final close), with a unit test; the entries need no special flag for it.
 
+> Deviation (codex review, fixup): the plan restored nothing after an entry ran, which left focus on the page body after Run, Cancel, Connect, Disconnect, Close and Reopen Tab and Row Details, none of which move it. `Command` gets an optional `keepsFocus` flag (an addition to the shared shape; nothing else reads it); `CommandPalette` remembers the picked entry and calls `restoreFocus()` on close when it keeps focus.
+
 ### Task 6: Keys and the View menu
 
 **Files:**

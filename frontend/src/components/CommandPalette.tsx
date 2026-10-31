@@ -21,9 +21,9 @@ export function CommandPalette() {
   // The list depends on much of the state; useApp(commands) would be a new
   // array on every change.
   const state = useApp((s) => s);
-  // An entry was picked: the next close is not a dismissal, and the action
-  // decides where focus goes.
-  const ran = useRef(false);
+  // The entry that was picked: the next close is not a dismissal, and the
+  // action decides where focus goes, unless it keeps focus.
+  const ran = useRef<Cmd | null>(null);
 
   const list = open ? commands(state) : [];
   const groups = [...new Set(list.map((c) => c.group))];
@@ -34,7 +34,7 @@ export function CommandPalette() {
       void c.run();
       return;
     }
-    ran.current = true;
+    ran.current = c;
     closePalette();
     // After the close, so the palette no longer counts as an open dialog
     // (the profile dialog would refuse to open under it).
@@ -49,8 +49,8 @@ export function CommandPalette() {
       }}
       onCloseAutoFocus={(e) => {
         e.preventDefault();
-        if (!ran.current) restoreFocus();
-        ran.current = false;
+        if (!ran.current || ran.current.keepsFocus) restoreFocus();
+        ran.current = null;
       }}
       title="Command Palette"
       description="Search for a command to run"

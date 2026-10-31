@@ -35,6 +35,9 @@ export interface Command {
   group: "Tabs" | "Query" | "Connection" | "View" | "Help";
   title: string;
   keys?: string; // a label from components/keys.ts
+  // The action leaves focus alone, so the palette gives it back to where it
+  // was. The others move it themselves (the editor, a dialog).
+  keepsFocus?: boolean;
   run: () => void | Promise<void>;
 }
 
@@ -67,6 +70,7 @@ export function commands(s: AppState): Command[] {
     loaded &&
       !tab!.pinned && {
         id: "close-tab",
+        keepsFocus: true,
         group: "Tabs",
         title: "Close Tab",
         keys: CLOSE_TAB_KEY,
@@ -77,6 +81,7 @@ export function commands(s: AppState): Command[] {
     loaded &&
       w.closed.length > 0 && {
         id: "reopen-tab",
+        keepsFocus: true,
         group: "Tabs",
         title: "Reopen Closed Tab",
         keys: REOPEN_KEY,
@@ -97,6 +102,7 @@ export function commands(s: AppState): Command[] {
     loaded &&
       !running && {
         id: "run",
+        keepsFocus: true,
         group: "Query",
         title: "Run",
         keys: RUN_KEY,
@@ -107,6 +113,7 @@ export function commands(s: AppState): Command[] {
     loaded &&
       !running && {
         id: "run-script",
+        keepsFocus: true,
         group: "Query",
         title: "Run Script",
         keys: SCRIPT_KEY,
@@ -116,6 +123,7 @@ export function commands(s: AppState): Command[] {
   add(
     running && {
       id: "cancel",
+      keepsFocus: true,
       group: "Query",
       title: "Cancel",
       keys: STOP_KEY,
@@ -127,6 +135,7 @@ export function commands(s: AppState): Command[] {
     selected !== null &&
       w?.status === "disconnected" && {
         id: "connect",
+        keepsFocus: true,
         group: "Connection",
         title: "Connect",
         run: () => connectProfile(selected),
@@ -136,6 +145,7 @@ export function commands(s: AppState): Command[] {
     selected !== null &&
       w?.status === "connected" && {
         id: "disconnect",
+        keepsFocus: true,
         group: "Connection",
         title: "Disconnect",
         run: () => disconnectProfile(selected),
@@ -178,6 +188,7 @@ export function commands(s: AppState): Command[] {
 
   add({
     id: "row-details",
+    keepsFocus: true,
     group: "View",
     title: s.rowDetails ? "Hide Row Details" : "Show Row Details",
     keys: ROW_KEY,
