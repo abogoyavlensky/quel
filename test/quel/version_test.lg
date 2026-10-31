@@ -1,0 +1,8 @@
+(ns quel.version-test
+  (:require [quel.version :as version]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+;; lgx test runs from the repo root, where VERSION lives.
+(deftest the-version-matches-the-version-file
+  (is (= (str/trim (slurp "VERSION")) version/version)))
