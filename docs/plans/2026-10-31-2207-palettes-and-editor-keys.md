@@ -325,15 +325,17 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 **Files:**
 - Create: `frontend/e2e/palette.spec.ts`
 
-- [ ] **Step 1: Write the spec**, using `ensureProfile`, `profileRow` and the locators from `tabs.spec.ts` and `connect.ts`. Use a profile of its own (`Palette ${Date.now()}`) and a second profile so the switch is visible. Cover:
+- [x] **Step 1: Write the spec**, using `ensureProfile`, `profileRow` and the locators from `tabs.spec.ts` and `connect.ts`. Use a profile of its own (`Palette ${Date.now()}`) and a second profile so the switch is visible. Cover:
   - `ControlOrMeta+p` shows the "Go to Connection" dialog. Typing the name and pressing Enter puts it in the banner, closes the dialog, and the "SQL editor" is focused.
   - `ControlOrMeta+Shift+p`, type "New Tab", Enter: the tab bar has two tabs.
   - `ControlOrMeta+Shift+p`, "Connect", Enter: the status reads "Ready".
   - `ControlOrMeta+1`: the first tab is `aria-selected` and the editor is focused. `ControlOrMeta+2` does the same for the second.
   - Click a node in the structure tree, then `ControlOrMeta+e`: the editor is focused.
   - Focus the editor, open either palette, press Escape: no dialog is left and the editor is focused again. Do the same from a structure tree node: that node gets focus back.
-- [ ] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` (or plain `lgx e2e`). Expected: all specs pass. If Chromium takes Ctrl+1–9 for itself before the page sees them, write it down in the spec and in `docs/DESIGN.md` "Testing", and test `focusTabKey` through ⌘2 only where it works; don't drop the unit tests.
-- [ ] **Step 3: Commit** `e2e: palettes, editor focus and tab keys`.
+- [x] **Step 2: Run** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` (or plain `lgx e2e`). Expected: all specs pass. If Chromium takes Ctrl+1–9 for itself before the page sees them, write it down in the spec and in `docs/DESIGN.md` "Testing", and test `focusTabKey` through ⌘2 only where it works; don't drop the unit tests.
+- [x] **Step 3: Commit** `e2e: palettes, editor focus and tab keys`.
+
+> Note: headless Chromium passed Ctrl+1/2/5/9 to the page, so no workaround was needed. Everything runs in one test in one `page`, so the profiles, the connect and the tabs carry from step to step. All 20 specs passed.
 
 ### Task 8: Docs and the macOS check
 
