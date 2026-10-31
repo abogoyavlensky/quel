@@ -88,6 +88,11 @@ describe("toJson", () => {
     expect(JSON.parse(out)).toHaveLength(1);
   });
 
+  it("puts a document too big to re-indent in as written, not as a string", () => {
+    const deep = "[".repeat(50_000) + "]".repeat(50_000);
+    expect(toJson([col("doc", "JSON")], [[deep]])).toContain(`"doc": ${deep}`);
+  });
+
   it("puts an invalid JSON-typed cell in as a string", () => {
     expect(JSON.parse(toJson([col("doc", "JSON")], [["{not json"]]))).toEqual([{ doc: "{not json" }]);
   });

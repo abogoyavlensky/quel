@@ -21,9 +21,10 @@ export function toCsv(columns: Column[], rows: Cell[][], separator: CsvSeparator
 }
 
 // A JSON-typed cell as its own text, re-indented to sit at depth 2 (under
-// a key of an object in the array), or null when it goes in as a string.
-// The text is copied, never parsed and stringified: that would round big
-// numbers.
+// a key of an object in the array), or null when the cell is not valid
+// JSON and goes in as a string. The text is copied, never parsed and
+// stringified: that would round big numbers. A document too big to
+// re-indent goes in as written, so a value's type never depends on its size.
 function rawJson(cell: Cell, type: string): string | null {
   if (typeof cell !== "string" || !isJsonType(type)) return null;
   try {
@@ -32,7 +33,7 @@ function rawJson(cell: Cell, type: string): string | null {
     return null;
   }
   const text = reindent(cell);
-  return text === null ? null : text.replaceAll("\n", "\n    ");
+  return text === null ? cell : text.replaceAll("\n", "\n    ");
 }
 
 export function toJson(columns: Column[], rows: Cell[][]): string {
