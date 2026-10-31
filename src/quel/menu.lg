@@ -44,11 +44,13 @@
 (def run! (emitter "Run" "menu:run"))
 (def run-script! (emitter "Run Script" "menu:run-script"))
 (def cancel! (emitter "Cancel" "menu:cancel"))
+(def check-updates! (emitter "Check for Updates" "menu:check-updates"))
 
 ;; Cmd+W closes the editor tab: on macOS Wails' window menu has no Close
 ;; item, so the key is free. If the native menu and the editor's own keymap
 ;; both see Cmd+Enter, the frontend drops the second run (one in flight
-;; per tab).
+;; per tab). Check for Updates sits in Help: the shim builds the app menu
+;; from its role, which takes no items of ours.
 (defn spec [env]
   [{:role :app-menu}
    {:label "File"
@@ -74,7 +76,10 @@
             {:separator true}
             {:label "Cancel" :accelerator "CmdOrCtrl+."
              :on-click (partial #'cancel! env)}]}
-   {:role :window-menu}])
+   {:role :window-menu}
+   {:label "Help"
+    :items [{:label "Check for Updates…"
+             :on-click (partial #'check-updates! env)}]}])
 
 (defn install!
   "Install (or rebuild) the application menu. Returns env."
