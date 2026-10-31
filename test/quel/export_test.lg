@@ -1,0 +1,26 @@
+(ns quel.export-test
+  (:require [quel.export :as export]
+            [quel.store-test :refer [temp-dir]]
+            [string :as str]
+            [clojure.test :refer [deftest is]]))
+
+(defn- message-of [f]
+  (try (f) nil (catch e (ex-message e))))
+
+(deftest each-format-has-a-file-filter
+  (is (= [["CSV" "*.csv"]] (export/filters "csv")))
+  (is (= [["JSON" "*.json"]] (export/filters "json")))
+  (is (= [["Markdown" "*.md"]] (export/filters "markdown"))))
+
+(deftest an-unknown-format-throws
+  (is (str/includes? (message-of #(export/filters "xml")) "xml")))
+
+(deftest write-saves-the-text-as-it-is
+  (let [dir (temp-dir)
+        path (str dir "/result.csv")
+        text "id,name\r\n1,Zoë — 日本\r\n"]
+    (try
+      (export/write! path text)
+      (is (= text (slurp path)))
+      (finally
+        (os/sh "rm" "-rf" dir)))))
