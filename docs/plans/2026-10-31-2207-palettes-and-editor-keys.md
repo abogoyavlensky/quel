@@ -359,3 +359,28 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 
   Without a Mac, list this as not done in the hand-off.
 - [x] **Step 3: Commit** `Design: palettes and editor keys`.
+
+> Not done: Step 2, the manual macOS pass, needs an Apple Silicon Mac. Still to check there: ⌘P, ⇧⌘P, ⌘E, ⌘1 and ⌘9 reach the page from the editor, the tree and the grid; the View menu items open the palettes; no print dialog or other webview default shows.
+
+---
+
+## Completion summary
+
+**Status: completed on Linux; the macOS pass (Task 8, step 2) is not done.**
+
+Implemented: ⇧⌘P Command Palette, ⌘P Go to Connection, ⌘E and ⌘1–9, on one capture-phase window listener plus a native View menu. New: `command.tsx` (with `input-group.tsx`, `textarea.tsx`), `state/{palette,shortcuts,commands}.ts` with tests, `GoToConnection.tsx`, `CommandPalette.tsx`, `e2e/palette.spec.ts`, a "Palettes and keys" section in `docs/DESIGN.md`. Verified: 292 frontend tests, 154 backend tests, `lgx smoke`, and all 20 Playwright specs, including the new one. Codex reviewed every task; its one finding (focus lost after commands that don't move it) was fixed in a fixup commit, and the rest were clean.
+
+Deviations, in one place:
+1. `shadcn add command` would overwrite our `button`, `input` and `dialog`; the three new files were written by hand from the registry source. `CommandDialog` takes an `onCloseAutoFocus` pass-through and has its sr-only title inside `DialogContent`.
+2. `palette.ts` casts `document.activeElement` instead of `instanceof HTMLElement` (Node tests have no DOM).
+3. `palette.test.ts` mocks `@/state/runner` too.
+4. Run and Run Script show when `runningQueryId` is null; Connect and Disconnect read the workspace's `status`.
+5. `keywordsFilter`: the search scores keywords only, not the id values.
+6. The check icon in connection rows is hidden so the engine label lines up.
+7. `restoreFocus()` does nothing while a palette is open, so switching palettes doesn't steal focus.
+8. `Command.keepsFocus` (codex finding): entries that don't move focus get it back after they run.
+9. The lgx on PATH is 0.5.1 and rejects `lgx.edn`; I installed the pinned 0.5.2 with mise and ran `mise exec -- lgx ...`.
+10. No session task list (TaskCreate was not available); this document was the only tracker.
+
+What the plan could have specified better: the focus design ("after an entry runs, nothing is restored") and the `CommandDialog` shape were both worked out without checking them against Radix's close behaviour and the generated component, which cost one fixup commit and a hand-written component. It also assumed `shadcn add` runs non-interactively.
+
