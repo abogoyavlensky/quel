@@ -47,6 +47,8 @@ test("palettes, the editor key and the tab keys", async ({ page }) => {
   // ⇧⌘P → Connect connects the selected connection.
   await choose(page, "ControlOrMeta+Shift+p", "Command Palette", "Connect");
   await expect(page.getByRole("status")).toHaveText("Ready");
+  // Connect does not move focus, so the palette gives it back.
+  await expect(editor(page)).toBeFocused();
 
   // ⌘1 and ⌘2 pick a tab and focus its editor, from outside the editor too.
   await page.getByRole("button", { name: "New tab" }).focus();
@@ -88,4 +90,14 @@ test("palettes, the editor key and the tab keys", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(node).toBeFocused();
+
+  // An entry that opens the profile dialog is not refused by the palette
+  // that is closing; Escape closes the dialog.
+  await page.keyboard.press("ControlOrMeta+Shift+p");
+  await page.keyboard.type("New Connection");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByLabel("Name")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
