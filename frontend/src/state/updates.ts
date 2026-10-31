@@ -125,3 +125,21 @@ export function startUpdateChecks(): () => void {
     clearInterval(every);
   };
 }
+
+// The status bar button's label for each phase; idle has none.
+export function updateLabel(u: UpdateState): string | null {
+  switch (u.phase) {
+    case "available":
+      return "Update";
+    case "downloading":
+      return u.total > 0 ? `Updating ${Math.min(99, Math.floor((u.written / u.total) * 100))}%` : "Updating…";
+    case "ready":
+      return "Restart to Update";
+    case "restarting":
+      return "Restarting…";
+    case "error":
+      return "Update failed";
+    default:
+      return null;
+  }
+}

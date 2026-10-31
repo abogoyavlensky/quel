@@ -19,6 +19,7 @@ import { RowDetails } from "./RowDetails";
 import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
 import { TitleBar } from "./TitleBar";
+import { UpdateDialog } from "./UpdateDialog";
 
 // The window: the top strip naming the selected connection; under it the
 // connections on the left, the selected profile's
@@ -97,6 +98,7 @@ export function AppShell() {
       </ResizablePanelGroup>
       <StatusBar />
       <ProfileDialog />
+      <UpdateDialog />
     </div>
   );
 }
