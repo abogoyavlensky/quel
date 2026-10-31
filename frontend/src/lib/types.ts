@@ -136,3 +136,36 @@ export interface WorkspaceInput {
   "active-tab": string;
   "next-tab-number": number;
 }
+
+// A newer release, as `check-update` describes it.
+export interface UpdateRelease {
+  version: string;
+  name: string;
+  url: string;
+  "published-at": string;
+  size: number;
+}
+
+// `check-update`'s reply. With checks off (QUEL_UPDATES=off) only
+// `current` and `enabled` come back.
+export interface UpdateCheck {
+  current: string;
+  enabled: boolean;
+  "can-install"?: boolean;
+  reason?: string | null;
+  release?: UpdateRelease | null;
+  skipped?: boolean;
+}
+
+// A check that found a release.
+export type UpdateInfo = UpdateCheck & { release: UpdateRelease };
+
+// Where an update stands: found, downloading, staged and waiting for the
+// restart, restarting, or failed. Idle shows nothing.
+export type UpdateState =
+  | { phase: "idle" }
+  | { phase: "available"; info: UpdateInfo }
+  | { phase: "downloading"; info: UpdateInfo; written: number; total: number }
+  | { phase: "ready"; info: UpdateInfo; saveError?: string }
+  | { phase: "restarting"; info: UpdateInfo }
+  | { phase: "error"; info: UpdateInfo; message: string };
