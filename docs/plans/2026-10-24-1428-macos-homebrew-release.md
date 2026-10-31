@@ -8,7 +8,7 @@
 
 ---
 
-**Status: Tasks 1-6 done; Task 7 Steps 1-4 done; the first release (Step 5) waits for authorization.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1. Do not launch further signing experiments without explicit approval. This plan is not complete.
+**Status: completed 2026-10-27. Quel 0.1.0 is released: https://github.com/abogoyavlensky/quel/releases/tag/v0.1.0.** The user approved implementation on branch `macos-homebrew-release` and performed the local signing experiments step by step. The `lg -b` executable fails signing (`main executable failed strict validation`) on CI and on the user's Mac. Quel now builds natively through lgx 0.5.2 (`f877b28`), and a minimal `Quel.app` around that build signs with Developer ID under hardened runtime, passes strict verification, is rejected by `spctl` only as unnotarized, and runs the real UI; see Task 1.
 
 ## Design
 
@@ -259,7 +259,14 @@ Implementation is ready to hand back when code, checks, setup instructions, and 
 
 - [x] **Step 3:** Run `/code-review` on the final implementation. Run existing Linux CI checks and the new native/distribution checks on the appropriate hosts. Record unavailable checks rather than treating them as passes. Link any created PR to the current T3 thread.
 - [x] **Step 4:** Commit with `git commit -m "Document macOS installation and release setup"`. Present the implementation, verification evidence, exact credentials still missing, and the concrete first-release action. Do not push a release tag without live-release authorization.
-- [ ] **Step 5:** Once explicitly authorized, push the version tag, inspect the resulting workflow, then install the actual cask with `brew install --cask abogoyavlensky/tap/quel`. Run the first-release native acceptance checks in the Design section. Record release URL, checksum, and tap commit; update status to completed only after the agreed release scope is achieved.
+- [x] **Step 5:** Once explicitly authorized, push the version tag, inspect the resulting workflow, then install the actual cask with `brew install --cask abogoyavlensky/tap/quel`. Run the first-release native acceptance checks in the Design section. Record release URL, checksum, and tap commit; update status to completed only after the agreed release scope is achieved.
+
+> Step 5 result 2026-10-27: the user tagged `v0.1.0` on `a356981` and pushed it.
+>
+> - Release run 40557932675 passed. https://github.com/abogoyavlensky/quel/releases/tag/v0.1.0 was published at 18:18:11Z, with only `quel_0.1.0_darwin_arm64.zip` and `checksums.txt`. The zip's sha256 is `d49eba1339e0babe5de02de06db8bf1d4e08711134c51af074c29552399c8994`.
+> - The tap job pushed `359dc45` ("quel 0.1.0") to `abogoyavlensky/homebrew-tap`. Its `Casks/quel.rb` names 0.1.0 and the same sha256.
+> - The user installed it with `brew install --cask abogoyavlensky/tap/quel` and reports that all of the first-release checks passed: Finder launch, icon, a SQLite query, tabs restored after a restart, and a Keychain-backed profile under the hardened runtime. DESIGN records the Keychain check as settled.
+> - The user also connected to a real Redshift cluster and ran queries. DESIGN settles connecting and querying. Cancellation, the catalog permissions for non-superusers, hidden internal schemas, and `completion-schema` timing remain under Unverified, because they were not reported individually.
 
 ## Plan review
 

@@ -17,8 +17,7 @@ development.
 
 ## Features
 
-- **Databases:** SQLite, PostgreSQL and Amazon Redshift. Redshift uses the
-  PostgreSQL protocol and has not been tested against a real cluster yet.
+- **Databases:** SQLite, PostgreSQL and Amazon Redshift.
 - **Saved connections:** profiles for each database, with passwords stored
   in the macOS Keychain. Several can be connected at once.
 - **SQL editor:** syntax highlighting, completion of keywords, tables and
