@@ -10,10 +10,10 @@
   <img src="docs/images/screenshot.png" alt="Quel with two saved connections, a Postgres schema's tables in the sidebar, a query's results in the grid, and one row's values, including formatted JSON, in the side panel">
 </p>
 
-Quel is a native macOS app in the spirit of TablePlus: connect to a
+Quel is a native macOS app in the spirit of TablePlus and DataGrip: connect to a
 database, write queries in a proper editor, and page through results of
 any size without the app freezing. It is open source and in early
-development.
+stage.
 
 ## Features
 
