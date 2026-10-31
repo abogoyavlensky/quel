@@ -1,6 +1,9 @@
 import { toast } from "sonner";
+import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
 import * as api from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import { metaKeys, queryClient } from "@/lib/query";
+import { saveText } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import type { Statement } from "@/sql/split";
@@ -18,6 +21,7 @@ import {
   type EditorTab,
   MAX_CLOSED,
   MESSAGES,
+  type ResultTab,
   type Workspace,
   activeTabOf,
   addMessage,
@@ -260,6 +264,41 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
   }
 }
 
+// Load every page of an open result, up to maxRows in all. True once the
+// cursor is done or capped; false when the rows cannot all be had: the
+// result or tab is gone, another statement is running in the tab, or the
+// cursor closed (canceled, an error, a disconnect).
+export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<boolean> {
+  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  for (;;) {
+    const result = find();
+    if (!result || result.cursor === "closed") return false;
+    if (result.cursor !== "open") return true;
+    if (result.fetching) {
+      // A page of this result is already coming (the grid asked for it).
+      await untilNotFetching(find);
+      continue;
+    }
+    if (findTab(tabId)?.runningQueryId) return false;
+    await fetchMore(tabId, resultId, maxRows);
+    const after = find();
+    // fetchMore returns at once when it cannot go on (a disconnected
+    // workspace): no change means no progress.
+    if (after?.cursor === "open" && !after.fetching && after.rows.length === result.rows.length) return false;
+  }
+}
+
+// Resolves once the result is gone or no longer fetching.
+function untilNotFetching(find: () => ResultTab | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    const unsubscribe = store.subscribe(() => {
+      if (find()?.fetching) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
 // Cancel what the tab has in flight; a script stops after it.
 export function cancel(tabId: string): void {
   const tab = findTab(tabId);
@@ -458,6 +497,60 @@ export function toggleRowDetails(): void {
 
 export function openRowDetails(): void {
   store.setState({ rowDetails: true });
+}
+
+export function setExport(choice: Partial<{ format: ExportFormat; separator: CsvSeparator }>): void {
+  store.setState((s) => ({ export: { ...s.export, ...choice } }));
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// The suggested file name: result-YYYY-MM-DD-HHMM.<ext>, in local time.
+export function exportFilename(format: ExportFormat, now = new Date()): string {
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return `result-${date}-${pad(now.getHours())}${pad(now.getMinutes())}.${EXTENSIONS[format]}`;
+}
+
+const FORMAT_NAMES: Record<ExportFormat, string> = { csv: "CSV", json: "JSON", markdown: "Markdown" };
+
+// Copy or save a result in the format the store holds. An open result is
+// loaded to the end first; if that cannot be done nothing goes out.
+export async function exportResult(
+  tabId: string,
+  resultId: string,
+  action: "copy" | "save",
+  maxRows = MAX_ROWS,
+): Promise<void> {
+  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  const stopped = () => toast.error("Export stopped: not all rows could be loaded.");
+  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
+  const result = find();
+  if (!result) return void stopped();
+
+  const { format, separator } = store.getState().export;
+  const text = formatResult(format, result.columns, result.rows, separator);
+  const n = result.rows.length;
+  const rows = n === 1 ? "1 row" : `${n.toLocaleString("en-US")} rows`;
+  const which =
+    result.cursor === "capped"
+      ? `the first ${rows}`
+      : result.cursor === "closed"
+        ? `the ${n.toLocaleString("en-US")} loaded ${n === 1 ? "row" : "rows"}`
+        : rows;
+  if (action === "copy") {
+    if (await copyText(text)) toast.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
+    else toast.error("Couldn't copy to the clipboard.");
+    return;
+  }
+  try {
+    const saved = await saveText(exportFilename(format), format, text);
+    if (saved === null) return;
+    toast.success(
+      saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,
+    );
+  } catch (e) {
+    toast.error(`Couldn't save the export: ${errorText(e)}`);
+  }
 }
 
 export function pin(tabId: string, resultId: string): void {

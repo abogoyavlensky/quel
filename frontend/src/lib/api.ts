@@ -1,3 +1,4 @@
+import type { ExportFormat } from "@/grid/export";
 import { call } from "@/lib/bridge";
 import type {
   ClosedTab,
@@ -32,6 +33,10 @@ export const fetchPage = (queryId: string) => call<FetchResult>("fetch-page", qu
 export const cancel = (queryId: string) => call<{ canceled: boolean }>("cancel", queryId);
 
 export const closeResult = (queryId: string) => call<void>("close-result", queryId);
+
+// The path the export was saved to, or null when the user canceled the dialog.
+export const exportResult = (format: ExportFormat, filename: string, text: string) =>
+  call<string | null>("export-result", format, filename, text);
 
 export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
 
