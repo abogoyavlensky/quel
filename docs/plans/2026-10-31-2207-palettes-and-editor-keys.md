@@ -182,16 +182,16 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 - Modify: `frontend/package.json`, `frontend/package-lock.json`, `frontend/src/state/store.ts`
 - Create: `frontend/src/state/palette.ts`, `frontend/src/state/palette.test.ts`
 
-- [ ] **Step 1: Add the shadcn component.** From `frontend/`, run `npx shadcn@latest add command`. It uses the project's `radix-nova` style and should add `cmdk` and `components/ui/command.tsx` without changing `dialog.tsx`. If it offers to overwrite `dialog.tsx` or another existing component, decline. Check `git diff --stat`: the only changes should be the new file and the package files.
-- [ ] **Step 2: Store.** Add `palette: "commands" | "connections" | null` to `AppState`, with a comment, and `palette: null` to `initialState()`.
-- [ ] **Step 3: `palette.ts`.**
+- [x] **Step 1: Add the shadcn component.** From `frontend/`, run `npx shadcn@latest add command`. It uses the project's `radix-nova` style and should add `cmdk` and `components/ui/command.tsx` without changing `dialog.tsx`. If it offers to overwrite `dialog.tsx` or another existing component, decline. Check `git diff --stat`: the only changes should be the new file and the package files.
+- [x] **Step 2: Store.** Add `palette: "commands" | "connections" | null` to `AppState`, with a comment, and `palette: null` to `initialState()`.
+- [x] **Step 3: `palette.ts`.**
   - `modalOpen(s)` is true when `s.profileDialog !== null || s.updateDialogOpen || s.palette !== null`.
   - `openPalette(kind)` returns early when the profile or update dialog is open. Otherwise, when `palette` is `null`, it keeps `document.activeElement` (an `HTMLElement`) as the element to return to, then sets `palette`.
   - `closePalette()` sets `null`.
   - `restoreFocus()` focuses the kept element if it is still `isConnected`, else calls `focusEditor()`, then forgets it.
   - `focusEditorKey()`: if `!modalOpen` and a loaded workspace is selected, call `focusEditor()`.
   - `focusTabKey(n)`: if `!modalOpen` and a loaded workspace is selected, pick `tabs[n - 1]`, or the last tab for n = 9; if there is one, `selectTab(id)` and then `setTimeout(focusEditor)`.
-- [ ] **Step 4: Tests.** In `palette.test.ts`, mock `@/editor/states` (`focusEditor` as a spy), seed the store with `newWorkspace`, and cover:
+- [x] **Step 4: Tests.** In `palette.test.ts`, mock `@/editor/states` (`focusEditor` as a spy), seed the store with `newWorkspace`, and cover:
   - open is refused under each dialog
   - opening the other kind switches
   - the keys do nothing while `modalOpen`
@@ -202,8 +202,13 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
   - `restoreFocus` returns to the element focused before the first open, also after a switch to the other palette. It calls `focusEditor` when that element has left the document.
 
   Use fake timers for the `setTimeout`. Vitest runs in Node here, with no DOM (`vite.config.ts` sets no environment). So `palette.ts` reads `document` only inside its functions, never at import time, and the test uses `vi.stubGlobal("document", { activeElement })`, where `activeElement` has a `focus` spy and an `isConnected` flag.
-- [ ] **Step 5: Run** `npm --prefix frontend test`. Expected: all pass.
-- [ ] **Step 6: Commit** `Palette state and the shadcn Command component`.
+- [x] **Step 5: Run** `npm --prefix frontend test`. Expected: all pass.
+- [x] **Step 6: Commit** `Palette state and the shadcn Command component`.
+
+> Deviation: `shadcn add command` (CLI 4.23.0) would overwrite `button.tsx`, `input.tsx` and `dialog.tsx` (our customised versions) and add `textarea.tsx` and `input-group.tsx`; with no TTY it aborted on the prompt after adding `cmdk` to `package.json`. I wrote `command.tsx`, `input-group.tsx` and `textarea.tsx` by hand from the registry source (`--view`), importing `cn` from `@/lib/utils` like the existing components, and left the existing three alone. `CommandDialog` spreads its props onto the `Dialog` root, so it could not pass `onCloseAutoFocus` to `DialogContent`; I added that one prop to it and moved the sr-only title inside `DialogContent`.
+> Deviation: `palette.ts` reads `document.activeElement` with a cast, not `instanceof HTMLElement` (Node has no `HTMLElement`).
+> Deviation: `palette.test.ts` mocks `@/state/runner` (`selectTab` spy) as well as `@/editor/states`, to keep the runner's api imports out of the test.
+> Note: no session task list (TaskCreate is not available here); this document is the only tracker.
 
 ### Task 2: Key matching
 

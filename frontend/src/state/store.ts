@@ -102,6 +102,9 @@ export interface AppState {
   rowDetails: boolean; // the row details panel is open; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
+  // The open palette: the command list or Go to Connection. At most one
+  // (state/palette.ts); in memory only.
+  palette: "commands" | "connections" | null;
 }
 
 export const MESSAGES = "messages";
@@ -150,6 +153,7 @@ export function initialState(): AppState {
     rowDetails: false,
     update: { phase: "idle" },
     updateDialogOpen: false,
+    palette: null,
   };
 }
 
