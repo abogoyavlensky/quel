@@ -263,16 +263,19 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 - Create: `frontend/src/components/GoToConnection.tsx`
 - Modify: `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: Implement** a `CommandDialog`, open when `palette === "connections"`; `onOpenChange(false)` calls `closePalette`.
+- [x] **Step 1: Implement** a `CommandDialog`, open when `palette === "connections"`; `onOpenChange(false)` calls `closePalette`.
   - The dialog title is "Go to Connection", visually hidden but there for screen readers and tests.
   - One `CommandItem` per profile, with `value` = the profile id and `keywords` = [name, engine label].
   - Each row is drawn like the sidebar row in `ConnectionsPanel.tsx`: `ConnMark` with the workspace status, the truncated name, "Current" for the selected profile, and the engine label (the `engineLabel` map in `colors.ts`). 38px tall, with the selected style `data-[selected=true]:bg-primary/10` as in `docs/DESIGN.md` "Look".
   - On select: mark "an entry ran", `closePalette()`, then on the next tick `await selectProfile(id)` and `setTimeout(focusEditor)`.
   - `onCloseAutoFocus` always calls `preventDefault`. If no entry ran (a dismissal), it calls `restoreFocus()`. It then clears the "an entry ran" mark.
   - Empty states as in the Design.
-- [ ] **Step 2: Render it** in `AppShell` next to `ProfileDialog` and `UpdateDialog`.
-- [ ] **Step 3: Type-check** with `npm --prefix frontend run build`. Expected: success.
-- [ ] **Step 4: Commit** `Go to Connection`.
+- [x] **Step 2: Render it** in `AppShell` next to `ProfileDialog` and `UpdateDialog`.
+- [x] **Step 3: Type-check** with `npm --prefix frontend run build`. Expected: success.
+- [x] **Step 4: Commit** `Go to Connection`.
+
+> Deviation: cmdk would fuzzy-match the search against each item's `value` (a profile id, or a command id) as well as its keywords, so a stray character could match a UUID. `command.tsx` exports `keywordsFilter`, which scores the keywords only; both palettes pass it as `<Command filter>`.
+> Deviation: `CommandItem`'s trailing check icon is hidden in the connection rows (`[&>svg:last-child]:hidden`), so the engine label lines up with the sidebar's.
 
 ### Task 5: The Command Palette
 

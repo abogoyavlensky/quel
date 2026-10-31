@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Command as CommandPrimitive } from "cmdk"
+import { Command as CommandPrimitive, defaultFilter } from "cmdk"
 import { cn } from "@/lib/utils"
 
 import {
@@ -14,6 +14,12 @@ import {
   InputGroupAddon,
 } from "@/components/ui/input-group"
 import { SearchIcon, CheckIcon } from "lucide-react"
+
+// Matches the search against an item's keywords only, not its value: the
+// palettes use ids for values, and those are not text to search.
+function keywordsFilter(_value: string, search: string, keywords?: string[]): number {
+  return defaultFilter((keywords ?? []).join(" "), search);
+}
 
 function Command({
   className,
@@ -196,4 +202,5 @@ export {
   CommandItem,
   CommandShortcut,
   CommandSeparator,
+  keywordsFilter,
 }
