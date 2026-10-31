@@ -342,7 +342,7 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Write a "### Palettes and keys" section** under Frontend, after "Row details". Cover:
+- [x] **Step 1: Write a "### Palettes and keys" section** under Frontend, after "Row details". Cover:
   - the key table
   - the two dialogs and why there is no registry
   - that Go to Connection only selects
@@ -358,4 +358,4 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
   - no print dialog or other webview default shows
 
   Without a Mac, list this as not done in the hand-off.
-- [ ] **Step 3: Commit** `Design: palettes and editor keys`.
+- [x] **Step 3: Commit** `Design: palettes and editor keys`.

@@ -532,6 +532,61 @@ JSON) and is disabled for NULL. "Copy row as JSON" maps column names to
 cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
 `navigator.clipboard` and falls back to the Wails runtime's clipboard.
 
+### Palettes and keys
+
+| Key (macOS / other) | What it does |
+|---|---|
+| ⇧⌘P / Ctrl+Shift+P | Opens the **Command Palette** |
+| ⌘P / Ctrl+P | Opens **Go to Connection** |
+| ⌘E / Ctrl+E | Focuses the current tab's editor, wherever focus is |
+| ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
+| ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
+
+Tabs count left to right as the tab bar shows them (pinned first). A digit
+past the last tab does nothing.
+
+**Two dialogs, no registry.** The palettes are two separate shadcn
+`CommandDialog`s (`CommandPalette.tsx`, `GoToConnection.tsx`), not one
+palette with modes, and the Command Palette's entries are a hand-written
+list (`state/commands.ts`), not a registry the native menu is built from.
+The list repeats some menu actions on purpose: it calls the same runner
+functions, so it can only drift on titles and key labels. The `⌘K` object
+jump stays a separate, later feature.
+
+**Go to Connection only selects.** Enter does what a click in the sidebar
+does (`selectProfile`) and puts the cursor in that workspace's editor. It
+never connects; Connect is a command in the Command Palette.
+
+**Hide, don't grey.** An entry shows only when it can run: Cancel only
+while the tab runs, Connect only on a disconnected profile, Close Tab not
+on a pinned tab. Search matches the keywords (the title; a connection's
+name and engine), not the ids that stand in as cmdk values
+(`keywordsFilter`).
+
+**Keys.** One capture-phase `window` listener (`useGlobalKeys`) matches
+all of them with the pure `shortcutOf` (`state/shortcuts.ts`); digits go
+by `e.code`, because Shift or the layout changes `e.key`. It catches ⌘P
+before the webview prints. None of the keys collide with CodeMirror's
+keymaps. Only the palettes also have native View menu items; nine "Tab N"
+items would be clutter, and server mode has no native menu. If the menu
+and the page both see a key, the palette opens twice, which is harmless:
+opening sets the state, it does not toggle it.
+
+**Dialog guards.** At most one palette is open (`store.palette`); opening
+the other switches to it. A palette does not open over the profile or
+update dialog, and ⌘E and ⌘1–9 do nothing while any dialog or palette is
+open: in those, the keys belong to the dialog. Picking an entry closes the
+palette first and runs the action on the next tick, so actions that open
+the profile dialog are not refused.
+
+**Focus.** Radix gives focus back only to a dialog's trigger, and these
+have none, so `palette.ts` keeps the element that had focus before the
+first palette opened and puts it back on a dismissal (Escape, a click
+outside), or the editor if it is gone. After an entry runs, the action
+decides: those that move focus (a new tab, a connection, a dialog) do, and
+the rest (`keepsFocus`: Run, Cancel, Connect, Close Tab...) get the old
+element back. Switching between the palettes restores nothing.
+
 ### Workspaces
 
 Each profile has a **workspace**: its connection status and conn-id, its
@@ -734,12 +789,15 @@ version is `quel.version/version`, kept equal to `VERSION` by a test.
   the Redshift-specific questions under [Unverified](#unverified) wait for
   a real cluster.
 - **Frontend**: Vitest for logic: the splitter, statement targeting, cell
-  display and widths, and the runner against a mocked bridge.
+  display and widths, the runner against a mocked bridge, and the key
+  matching, command list and palette state of
+  [Palettes and keys](#palettes-and-keys).
 - **End to end**: `lgx smoke` drives the app in Wails' server mode over
   HTTP; `lgx smoke-pg` adds Postgres (open, cancel, the session
   surviving, paging). `lgx e2e` drives the UI with Playwright in server
-  mode: paging as the grid scrolls, scripts, pinning, cancel, and one
-  session per tab. CI runs all three.
+  mode: paging as the grid scrolls, scripts, pinning, cancel, one
+  session per tab, and the palettes and their keys (headless Chromium
+  hands Ctrl+1–9 to the page). CI runs all three.
 - **The macOS app**: server mode never compiles the desktop build, so it
   is checked on its own. `lgx package-macos && lgx verify-macos` on an
   Apple Silicon Mac builds the real app, checks the bundle, architecture,
