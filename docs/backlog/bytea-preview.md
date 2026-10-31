@@ -1,6 +1,15 @@
 # Binary values show as "(binary)" instead of a preview
 
-**Status: open**
+**Status: done**
+
+Landed on branch `result-export` (`docs/plans/2026-10-31-2156-result-export.md`):
+`quel.cells/encode` hex-encodes `BYTEA` and `BLOB` values in full, with no
+upstream change. The "destroys the bytes" diagnosis below was wrong: let-go
+boxes a `[]byte` as a Go string with the same bytes, so `(bytes s)` gets them
+back; only rune-wise operations and the bridge's JSON encoder mangle it.
+The size cap is 64 KiB (`(binary, N bytes)`), not a 32-byte preview. A
+SQLite blob in a column with no declared type is still missed:
+`docs/backlog/sqlite-typeless-blobs.md`.
 
 ## Problem
 
