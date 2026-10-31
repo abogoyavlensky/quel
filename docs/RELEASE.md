@@ -55,7 +55,10 @@ means replacing the matching secrets; nothing else changes.
 
 ## Cutting a release
 
-1. Bump `VERSION` (stable `MAJOR.MINOR.PATCH` only) in a PR and merge it.
+1. Bump `VERSION` (stable `MAJOR.MINOR.PATCH` only) and `src/quel/version.lg`
+   to the same version in a PR, and merge it. The version the app reports,
+   and checks for updates against, is the one in `version.lg`; a backend
+   test fails while the two differ.
 2. Tag the merge commit on `master` and push only that tag:
 
    ```sh
@@ -165,11 +168,25 @@ lgx verify-macos --distribution
 `lgx test-release` runs the release scripts against stand-ins for Apple's
 tools, `gh` and the tap, on any machine.
 
+## How users get a release
+
+A published release reaches running copies of Quel at their next launch
+or within 6 hours: an Update button in the status bar offers it, and the
+app downloads it, checks its checksum and that it is signed with the same
+Developer ID, swaps `Quel.app` and restarts. The cask says `auto_updates
+true`, so a plain `brew upgrade` skips Quel; `brew upgrade --cask quel`
+still upgrades it. Quel 0.1.0 has no updater: the release notes of the
+first version after it should tell those users to run `brew upgrade
+--cask quel` once.
+
+The updater needs the zip to hold `Quel.app` alone at its top level, and
+`sign-macos.sh` fails the build otherwise.
+
 ## What users keep across versions
 
 Profiles and saved tabs live in `~/Library/Application Support/Quel`, and
-passwords in the Keychain under the service `Quel`. An upgrade replaces only
-`Quel.app`, and the bundle ID stays `io.github.abogoyavlensky.quel`, so
+passwords in the Keychain under the service `Quel`. An upgrade, through
+Homebrew or Quel's own updater, replaces only `Quel.app`, and the bundle ID stays `io.github.abogoyavlensky.quel`, so
 macOS treats every version as the same app. The cask has no `zap` stanza:
 `brew uninstall --cask quel` removes the app and leaves the data. Deleting
 that folder and the Keychain items is up to the user.

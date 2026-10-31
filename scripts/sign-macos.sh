@@ -92,6 +92,11 @@ assessment="$(spctl --assess --type execute -vv "$app" 2>&1)" ||
 
 echo "==> Archive"
 ditto -c -k --sequesterRsrc --keepParent "$app" "$work/$archive"
+# The in-app updater takes a zip with one top-level entry; --sequesterRsrc
+# would add __MACOSX/ beside Quel.app if the bundle had extended attributes.
+top="$(unzip -Z1 "$work/$archive" | cut -d/ -f1 | sort -u)"
+[[ "$top" == "$APP_NAME.app" ]] ||
+    die "the release zip must hold only $APP_NAME.app at its top level, found: $(echo $top)"
 (cd "$work" && shasum -a 256 "$archive" >checksums.txt)
 mv "$work/$archive" "$DIST/$archive"
 mv "$work/checksums.txt" "$CHECKSUMS"
