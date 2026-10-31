@@ -236,13 +236,13 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
 - Modify: `frontend/src/components/keys.ts`
 - Create: `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`
 
-- [ ] **Step 1: Key labels.** Next to the existing ones, add `NEW_TAB_KEY` (⌘T / Ctrl+T), `CLOSE_TAB_KEY` (⌘W), `REOPEN_KEY` (⇧⌘T), `OPEN_DB_KEY` (⌘O), `PALETTE_KEY` (⇧⌘P), `GOTO_KEY` (⌘P) and `FOCUS_KEY` (⌘E), each with its Ctrl+… form.
-- [ ] **Step 2: Implement `commands(s)`** as in the Design table, in table order.
+- [x] **Step 1: Key labels.** Next to the existing ones, add `NEW_TAB_KEY` (⌘T / Ctrl+T), `CLOSE_TAB_KEY` (⌘W), `REOPEN_KEY` (⇧⌘T), `OPEN_DB_KEY` (⌘O), `PALETTE_KEY` (⇧⌘P), `GOTO_KEY` (⌘P) and `FOCUS_KEY` (⌘E), each with its Ctrl+… form.
+- [x] **Step 2: Implement `commands(s)`** as in the Design table, in table order.
   - The run functions call the runner, profiles, updates and api functions listed in the Design.
   - Entries that move focus (New Tab, Focus Editor) end with `setTimeout(focusEditor)`.
   - "Go to Connection…" calls `openPalette("connections")`. This is the one entry that runs while a palette is open; see Task 5.
   - Disconnect shows only for `connected`; while `connecting` or `disconnecting`, neither Connect nor Disconnect shows.
-- [ ] **Step 3: Tests.** Assert the ids that show for:
+- [x] **Step 3: Tests.** Assert the ids that show for:
   - no profiles, where only New Connection, Open Database, Row Details and Updates show
   - a selected profile with a disconnected loaded workspace
   - the same profile connected
@@ -252,8 +252,10 @@ export function commands(s: AppState): Command[]; // only the runnable ones, in 
   - a workspace with a `loadError`, where no tab or query entries show
 
   Also check that the Row Details title follows `rowDetails`, and that Connect's `run` calls `connectProfile` with the selected id (mock `./runner`).
-- [ ] **Step 4: Run** `npm --prefix frontend test`. Expected: all pass.
-- [ ] **Step 5: Commit** `The command palette's entries`.
+- [x] **Step 4: Run** `npm --prefix frontend test`. Expected: all pass.
+- [x] **Step 5: Commit** `The command palette's entries`.
+
+> Deviation: Run and Run Script show when the active tab's `runningQueryId` is null (the plan's wording), not by `isRunning`, so Cancel and Run are exact opposites. The Connect and Disconnect entries read the selected workspace's `status`, so they need that workspace to exist but not to be free of `loadError`.
 
 ### Task 4: Go to Connection
 
