@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Column } from "@/lib/types";
-import { MAX_JSON_CHARS, isJsonType, jsonText, reindent, rowAsJson } from "./json";
+import { MAX_JSON_CHARS, isJsonType, jsonKeys, jsonText, reindent, rowAsJson } from "./json";
 
 describe("reindent", () => {
   it("indents objects and arrays by two spaces, keeping empty ones compact", () => {
@@ -102,5 +102,21 @@ describe("rowAsJson", () => {
   it("suffixes repeated names, skipping ones already taken", () => {
     expect(JSON.parse(rowAsJson([col("id"), col("id")], [1, 2]))).toEqual({ id: 1, id_2: 2 });
     expect(JSON.parse(rowAsJson([col("id"), col("id_2"), col("id")], [1, 2, 3]))).toEqual({ id: 1, id_2: 2, id_3: 3 });
+  });
+});
+
+describe("jsonKeys", () => {
+  const col = (name: string): Column => ({ name, type: "TEXT" });
+
+  it("keeps unique names as they are", () => {
+    expect(jsonKeys([col("id"), col("name")])).toEqual(["id", "name"]);
+  });
+
+  it("suffixes repeats without stealing a later real name", () => {
+    expect(jsonKeys([col("id"), col("id"), col("id_2")])).toEqual(["id", "id_3", "id_2"]);
+  });
+
+  it("keeps __proto__", () => {
+    expect(jsonKeys([col("__proto__"), col("__proto__")])).toEqual(["__proto__", "__proto___2"]);
   });
 });

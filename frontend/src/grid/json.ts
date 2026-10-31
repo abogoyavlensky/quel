@@ -99,17 +99,14 @@ export function jsonText(cell: Cell, type: string, engine: Engine | null): strin
   return reindent(cell);
 }
 
-// The row as a JSON object, column name to cell, for "Copy row as JSON".
-// Cells go in as they are: big integers and decimals are already strings,
-// JSON values stay strings. A repeated name gets a suffix (id, id_2).
-export function rowAsJson(columns: Column[], row: Cell[]): string {
+// The keys for a row as a JSON object, one per column: the column's name,
+// and a suffix on a repeat (id, id_2).
+export function jsonKeys(columns: Column[]): string[] {
   // Every real name is taken up front, so a suffix never steals a later
   // column's name.
   const taken = new Set(columns.map((c) => c.name));
   const seen = new Set<string>();
-  // No prototype: a column named __proto__ must stay a column.
-  const obj: Record<string, Cell> = Object.create(null);
-  columns.forEach((c, i) => {
+  return columns.map((c) => {
     let key = c.name;
     if (seen.has(key)) {
       let k = 2;
@@ -118,6 +115,18 @@ export function rowAsJson(columns: Column[], row: Cell[]): string {
       taken.add(key);
     }
     seen.add(c.name);
+    return key;
+  });
+}
+
+// The row as a JSON object, column name to cell, for "Copy row as JSON".
+// Cells go in as they are: big integers and decimals are already strings,
+// JSON values stay strings.
+export function rowAsJson(columns: Column[], row: Cell[]): string {
+  const keys = jsonKeys(columns);
+  // No prototype: a column named __proto__ must stay a column.
+  const obj: Record<string, Cell> = Object.create(null);
+  keys.forEach((key, i) => {
     obj[key] = row[i];
   });
   return JSON.stringify(obj, null, 2);
