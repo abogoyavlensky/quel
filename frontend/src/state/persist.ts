@@ -127,11 +127,11 @@ export function flushAll(): void {
 // app is about to restart. Resolves to the first save error still standing
 // (a profile whose last save failed), or null when every tab is saved.
 export async function flushAllAndWait(): Promise<string | null> {
-  flushAll();
-  // A queue can grow while we wait (a close right before the restart);
-  // wait until no profile has one.
-  for (let tails = [...queues.values()]; tails.length > 0; tails = [...queues.values()]) {
-    await Promise.all(tails);
+  // An edit while a save runs schedules another, and a close can queue
+  // more: flush and wait again until no timer and no queue is left.
+  while (timers.size > 0 || queues.size > 0) {
+    flushAll();
+    await Promise.all([...queues.values()]);
   }
   return saveErrors.values().next().value ?? null;
 }

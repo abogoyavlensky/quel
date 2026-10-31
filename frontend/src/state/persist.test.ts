@@ -169,4 +169,16 @@ describe("persist", () => {
     expect(await persist.flushAllAndWait()).toBeNull();
     expect(api.saveWorkspace).not.toHaveBeenCalled();
   });
+
+  it("flushAllAndWait also sends a save scheduled while it waits", async () => {
+    const d = deferred<void>();
+    api.saveWorkspace.mockReturnValueOnce(d.promise);
+    persist.scheduleSave("p1");
+    const done = persist.flushAllAndWait();
+    await vi.advanceTimersByTimeAsync(0);
+    persist.scheduleSave("p1"); // an edit while the first save runs
+    d.resolve();
+    expect(await done).toBeNull();
+    expect(api.saveWorkspace).toHaveBeenCalledTimes(2);
+  });
 });
