@@ -23,11 +23,6 @@
  :targets {:bin {:target :native :out "bin/quel" :go/build-tags ["production"]}}
 
  :deps {;; The desktop shell: a Wails v3 window whose handlers are let-go fns.
-        ;; wails-v0.3.0 is the first that serves the frontend from a dev
-        ;; server (FRONTEND_DEVSERVER_URL), for HMR under `lgx dev`.
-        ;; wails-v0.4.0 moves to the stable Wails v3.0.0.
-        ;; wails-v0.5.0 adds :mac-title-bar (the hidden title bar).
-        ;; wails-v0.6.0 adds the updater.
         abogoyavlensky/letgo-wails
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
          :git/tag "wails-v0.6.0"
