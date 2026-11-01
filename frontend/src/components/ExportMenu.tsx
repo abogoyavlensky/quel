@@ -28,7 +28,8 @@ const SEPARATORS: { value: CsvSeparator; label: string }[] = [
 export function ExportMenu({ tabId, result }: { tabId: string; result: ResultTab }) {
   const { format, separator } = useApp((s) => s.export);
   const [open, setOpen] = useState(false);
-  // The export is loading the rest of an open result.
+  // The export is loading the rest of an open result (the grid footer shows
+  // the progress): both buttons are disabled until it is done.
   const [busy, setBusy] = useState(false);
 
   async function run(action: "copy" | "save") {
@@ -90,10 +91,10 @@ export function ExportMenu({ tabId, result }: { tabId: string; result: ResultTab
         )}
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => void run("copy")}>
-            {busy ? "Loading rows…" : "Copy"}
+            Copy
           </Button>
           <Button size="sm" className="flex-1" disabled={busy} onClick={() => void run("save")}>
-            {busy ? "Loading rows…" : "Save…"}
+            Save…
           </Button>
         </div>
       </PopoverContent>
