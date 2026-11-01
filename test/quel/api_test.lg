@@ -37,7 +37,7 @@
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "list-objects" "list-columns" "completion-schema"
-           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
+           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file" "export-result"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))

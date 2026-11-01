@@ -15,7 +15,7 @@ const api = vi.hoisted(() => ({
   selectProfile: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);
-vi.mock("sonner", () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }));
+vi.mock("@/lib/notify", () => ({ notify: { error: vi.fn(), dismiss: vi.fn() } }));
 const dropped = vi.hoisted(() => [] as string[]);
 vi.mock("@/editor/states", () => ({
   currentInput: () => ({ text: "", selection: { from: 0, to: 0 } }),

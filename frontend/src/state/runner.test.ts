@@ -18,8 +18,13 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => api);
 
-const toasts = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
-vi.mock("sonner", () => ({ toast: toasts }));
+const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), dismiss: vi.fn() }));
+vi.mock("@/lib/notify", () => ({ notify: toasts }));
+
+const clipboard = vi.hoisted(() => ({ copyText: vi.fn() }));
+vi.mock("@/lib/clipboard", () => clipboard);
+const save = vi.hoisted(() => ({ saveText: vi.fn() }));
+vi.mock("@/lib/save", () => save);
 
 // The editor's text per tab (texts, set by a test or by seed), else input.
 const editor = vi.hoisted(() => ({
@@ -83,6 +88,9 @@ const stmts = (sql: string) => split(sql);
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
   toasts.error.mockReset();
+  toasts.success.mockReset();
+  clipboard.copyText.mockReset();
+  save.saveText.mockReset();
   api.closeResult.mockResolvedValue(undefined);
   api.closeSession.mockResolvedValue(undefined);
   api.closeDb.mockResolvedValue(undefined);
@@ -408,6 +416,200 @@ describe("fetchMore", () => {
     await runner.fetchMore(tabId(), id);
     expect(tab().results[0].cursor).toBe("closed");
     expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
+  });
+});
+
+describe("loadAll", () => {
+  async function openResult() {
+    api.run.mockResolvedValue(rowsResult(500, true));
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    return tab().results[0].id;
+  }
+
+  it("fetches until done and has every page's rows", async () => {
+    const id = await openResult();
+    api.fetchPage.mockResolvedValueOnce(page(500, true)).mockResolvedValueOnce(page(200, false));
+    expect(await runner.loadAll(tabId(), id)).toBe(true);
+    expect(tab().results[0].rows).toHaveLength(1200);
+    expect(tab().results[0].cursor).toBe("done");
+    expect(api.fetchPage).toHaveBeenCalledTimes(2);
+  });
+
+  it("is true with no fetch for a done result", async () => {
+    api.run.mockResolvedValue(rowsResult(3, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    expect(await runner.loadAll(tabId(), tab().results[0].id)).toBe(true);
+    expect(api.fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("is false when a page fails", async () => {
+    const id = await openResult();
+    api.fetchPage.mockResolvedValueOnce(page(500, true)).mockRejectedValueOnce(new Error("boom"));
+    expect(await runner.loadAll(tabId(), id)).toBe(false);
+    expect(tab().results[0].cursor).toBe("closed");
+  });
+
+  it("is false, without spinning, when another statement is running in the tab", async () => {
+    const id = await openResult();
+    updateTab(tabId(), (t) => ({ ...t, runningQueryId: "other" }));
+    expect(await runner.loadAll(tabId(), id)).toBe(false);
+    expect(api.fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("is false when the workspace is not connected, without spinning", async () => {
+    const id = await openResult();
+    store.setState((s) => ({
+      workspaces: { ...s.workspaces, p1: { ...s.workspaces.p1, status: "disconnected", connId: null } },
+    }));
+    expect(await runner.loadAll(tabId(), id)).toBe(false);
+    expect(api.fetchPage).not.toHaveBeenCalled();
+  });
+
+  it("is false for a result or tab that is gone", async () => {
+    const id = await openResult();
+    expect(await runner.loadAll(tabId(), "nope")).toBe(false);
+    expect(await runner.loadAll("nope", id)).toBe(false);
+  });
+
+  it("waits out a page already in flight and goes on to done", async () => {
+    const id = await openResult();
+    const p = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(p.promise).mockResolvedValueOnce(page(200, false));
+    const inFlight = runner.fetchMore(tabId(), id);
+    const loading = runner.loadAll(tabId(), id);
+    expect(api.fetchPage).toHaveBeenCalledTimes(1);
+    p.resolve(page(500, true));
+    await inFlight;
+    expect(await loading).toBe(true);
+    expect(tab().results[0].rows).toHaveLength(1200);
+    expect(tab().results[0].cursor).toBe("done");
+  });
+
+  it("is true when the cursor ends capped", async () => {
+    const id = await openResult();
+    api.fetchPage.mockResolvedValue(page(500, true));
+    expect(await runner.loadAll(tabId(), id, 800)).toBe(true);
+    expect(tab().results[0]).toMatchObject({ cursor: "capped" });
+    expect(tab().results[0].rows).toHaveLength(800);
+  });
+
+  it("is false when the result is closed while loading", async () => {
+    const id = await openResult();
+    const p = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    const loading = runner.loadAll(tabId(), id);
+    await runner.disconnectProfile("p1");
+    p.resolve(page(500, true));
+    expect(await loading).toBe(false);
+    expect(tab().results[0].cursor).toBe("closed");
+  });
+});
+
+describe("exportResult", () => {
+  async function openResult(n = 3, hasMore = false) {
+    api.run.mockResolvedValue(rowsResult(n, hasMore));
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    return tab().results[0].id;
+  }
+
+  it("copies the loaded rows in the chosen format", async () => {
+    const id = await openResult();
+    clipboard.copyText.mockResolvedValue(true);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(clipboard.copyText).toHaveBeenCalledWith("id\r\n1\r\n2\r\n3\r\n");
+    expect(toasts.success).toHaveBeenCalledWith("Copied 3 rows as CSV");
+  });
+
+  it("uses the format and separator from the store", async () => {
+    const id = await openResult();
+    runner.setExport({ format: "markdown" });
+    clipboard.copyText.mockResolvedValue(true);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(clipboard.copyText).toHaveBeenCalledWith("| id |\n| ---: |\n| 1 |\n| 2 |\n| 3 |\n");
+    expect(toasts.success).toHaveBeenCalledWith("Copied 3 rows as Markdown");
+  });
+
+  it("loads the rest of an open result first", async () => {
+    const id = await openResult(500, true);
+    api.fetchPage.mockResolvedValueOnce(page(2, false));
+    clipboard.copyText.mockResolvedValue(true);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(clipboard.copyText.mock.calls[0][0].split("\r\n")).toHaveLength(1 + 502 + 1);
+    expect(toasts.success).toHaveBeenCalledWith("Copied 502 rows as CSV");
+  });
+
+  it("exports nothing when the rest could not be loaded", async () => {
+    const id = await openResult(500, true);
+    api.fetchPage.mockRejectedValueOnce(new Error("boom"));
+    await runner.exportResult(tabId(), id, "copy");
+    expect(clipboard.copyText).not.toHaveBeenCalled();
+    expect(toasts.error).toHaveBeenCalledWith("Export stopped: not all rows could be loaded.");
+  });
+
+  it("says so when a capped result goes out", async () => {
+    const id = await openResult(500, true);
+    api.fetchPage.mockResolvedValue(page(500, true));
+    clipboard.copyText.mockResolvedValue(true);
+    await runner.exportResult(tabId(), id, "copy", 800);
+    expect(toasts.success).toHaveBeenCalledWith("Copied the first 800 rows as CSV");
+  });
+
+  it("says so when a result closed before the click goes out", async () => {
+    const id = await openResult(500, true);
+    await runner.disconnectProfile("p1");
+    clipboard.copyText.mockResolvedValue(true);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(api.fetchPage).not.toHaveBeenCalled();
+    expect(toasts.success).toHaveBeenCalledWith("Copied the 500 loaded rows as CSV");
+  });
+
+  it("toasts a failed copy", async () => {
+    const id = await openResult();
+    clipboard.copyText.mockResolvedValue(false);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(toasts.error).toHaveBeenCalledWith("Couldn't copy to the clipboard.");
+    expect(toasts.success).not.toHaveBeenCalled();
+  });
+
+  it("saves under a stamped file name and toasts the path", async () => {
+    const id = await openResult();
+    runner.setExport({ format: "json" });
+    save.saveText.mockResolvedValue("/tmp/result.json");
+    await runner.exportResult(tabId(), id, "save");
+    const [filename, format, text] = save.saveText.mock.calls[0];
+    expect(filename).toMatch(/^result-\d{4}-\d{2}-\d{2}-\d{4}\.json$/);
+    expect(format).toBe("json");
+    expect(JSON.parse(text)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+    expect(toasts.success).toHaveBeenCalledWith("Saved 3 rows to /tmp/result.json");
+  });
+
+  it("toasts a browser download without a path", async () => {
+    const id = await openResult(1);
+    save.saveText.mockResolvedValue("download");
+    await runner.exportResult(tabId(), id, "save");
+    expect(toasts.success).toHaveBeenCalledWith("Saved 1 row as CSV");
+  });
+
+  it("says nothing for a canceled save", async () => {
+    const id = await openResult();
+    save.saveText.mockResolvedValue(null);
+    await runner.exportResult(tabId(), id, "save");
+    expect(toasts.success).not.toHaveBeenCalled();
+    expect(toasts.error).not.toHaveBeenCalled();
+  });
+
+  it("toasts a failed save", async () => {
+    const id = await openResult();
+    save.saveText.mockRejectedValue(new Error("disk full"));
+    await runner.exportResult(tabId(), id, "save");
+    expect(toasts.error).toHaveBeenCalledWith("Couldn't save the export: disk full");
+  });
+});
+
+describe("exportFilename", () => {
+  it("stamps local time", () => {
+    expect(runner.exportFilename("csv", new Date(2026, 9, 31, 7, 5))).toBe("result-2026-10-31-0705.csv");
+    expect(runner.exportFilename("markdown", new Date(2026, 0, 2, 23, 59))).toBe("result-2026-01-02-2359.md");
   });
 });
 

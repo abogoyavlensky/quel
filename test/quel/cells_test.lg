@@ -43,9 +43,22 @@
   (is (= "2026-10-21 10:00:00" (cells/encode "TIMESTAMP" "2026-10-21 10:00:00")))
   (is (= "1.50" (cells/encode "NUMERIC" "1.50"))))
 
-(deftest binary-columns-show-a-placeholder
-  (is (= "(binary)" (cells/encode "BYTEA" "Þ�")))
+(deftest binary-columns-become-hex
+  (is (= "\\x4142" (cells/encode "BYTEA" "AB")))
+  (is (= "\\x4142" (cells/encode "BLOB" "AB")))
+  (is (= "\\x4142" (cells/encode "blob" "AB")) "the type name's case does not matter")
+  (is (= "\\x" (cells/encode "BYTEA" "")))
   (is (nil? (cells/encode "BYTEA" nil)) "NULL stays NULL"))
 
+;; SQLite lets a BLOB column hold any value.
+(deftest only-strings-in-binary-columns-are-hex
+  (is (= 42 (cells/encode "BLOB" 42)))
+  (is (= 1.5 (cells/encode "BLOB" 1.5))))
+
+(deftest large-binary-values-show-their-size
+  (let [at-cap (apply str (repeat 65536 "a"))]
+    (is (= (str "\\x" (apply str (repeat 65536 "61"))) (cells/encode "BYTEA" at-cap)))
+    (is (= "(binary, 65537 bytes)" (cells/encode "BYTEA" (str at-cap "a"))))))
+
 (deftest typed-rows-line-up-with-their-types
-  (is (= [1 "(binary)" nil] (cells/encode-row ["INT4" "BYTEA" "TEXT"] [1 "x" nil]))))
+  (is (= [1 "\\x78" nil] (cells/encode-row ["INT4" "BYTEA" "TEXT"] [1 "x" nil]))))

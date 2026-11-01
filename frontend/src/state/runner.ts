@@ -1,6 +1,9 @@
-import { toast } from "sonner";
+import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
 import * as api from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
+import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
+import { saveText } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import type { Statement } from "@/sql/split";
@@ -18,6 +21,7 @@ import {
   type EditorTab,
   MAX_CLOSED,
   MESSAGES,
+  type ResultTab,
   type Workspace,
   activeTabOf,
   addMessage,
@@ -187,7 +191,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
 // Run from the selected workspace's active editor: the statement under the
 // cursor (or the selection's statements), or the whole script. A
-// disconnected workspace sends nothing: a toast says so right away, with a
+// disconnected workspace sends nothing: a notice says so right away, with a
 // Connect button, and the run is marked refused (the results keep saying so
 // until a connect); one that is connecting drops the run, as a second run
 // in flight is dropped.
@@ -197,8 +201,8 @@ export async function runCurrent(mode: RunMode): Promise<void> {
   if (w.status !== "connected") {
     updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
     const name = store.getState().profiles.find((p) => p.id === w.profileId)?.name ?? "The profile";
-    // One id: a second press replaces the toast rather than stacking.
-    toast.error(`${name} isn't connected.`, {
+    // One id: a second press replaces the notice rather than stacking.
+    notify.error(`${name} isn't connected.`, {
       id: "not-connected",
       action: { label: "Connect", onClick: () => void connectProfile(w.profileId) },
     });
@@ -258,6 +262,41 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
       updateTab(tabId, (t) => ({ ...t, runningQueryId: null }));
     }
   }
+}
+
+// Load every page of an open result, up to maxRows in all. True once the
+// cursor is done or capped; false when the rows cannot all be had: the
+// result or tab is gone, another statement is running in the tab, or the
+// cursor closed (canceled, an error, a disconnect).
+export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<boolean> {
+  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  for (;;) {
+    const result = find();
+    if (!result || result.cursor === "closed") return false;
+    if (result.cursor !== "open") return true;
+    if (result.fetching) {
+      // A page of this result is already coming (the grid asked for it).
+      await untilNotFetching(find);
+      continue;
+    }
+    if (findTab(tabId)?.runningQueryId) return false;
+    await fetchMore(tabId, resultId, maxRows);
+    const after = find();
+    // fetchMore returns at once when it cannot go on (a disconnected
+    // workspace): no change means no progress.
+    if (after?.cursor === "open" && !after.fetching && after.rows.length === result.rows.length) return false;
+  }
+}
+
+// Resolves once the result is gone or no longer fetching.
+function untilNotFetching(find: () => ResultTab | undefined): Promise<void> {
+  return new Promise((resolve) => {
+    const unsubscribe = store.subscribe(() => {
+      if (find()?.fetching) return;
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 // Cancel what the tab has in flight; a script stops after it.
@@ -460,6 +499,60 @@ export function openRowDetails(): void {
   store.setState({ rowDetails: true });
 }
 
+export function setExport(choice: Partial<{ format: ExportFormat; separator: CsvSeparator }>): void {
+  store.setState((s) => ({ export: { ...s.export, ...choice } }));
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+// The suggested file name: result-YYYY-MM-DD-HHMM.<ext>, in local time.
+export function exportFilename(format: ExportFormat, now = new Date()): string {
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return `result-${date}-${pad(now.getHours())}${pad(now.getMinutes())}.${EXTENSIONS[format]}`;
+}
+
+const FORMAT_NAMES: Record<ExportFormat, string> = { csv: "CSV", json: "JSON", markdown: "Markdown" };
+
+// Copy or save a result in the format the store holds. An open result is
+// loaded to the end first; if that cannot be done nothing goes out.
+export async function exportResult(
+  tabId: string,
+  resultId: string,
+  action: "copy" | "save",
+  maxRows = MAX_ROWS,
+): Promise<void> {
+  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
+  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
+  const result = find();
+  if (!result) return void stopped();
+
+  const { format, separator } = store.getState().export;
+  const text = formatResult(format, result.columns, result.rows, separator);
+  const n = result.rows.length;
+  const rows = n === 1 ? "1 row" : `${n.toLocaleString("en-US")} rows`;
+  const which =
+    result.cursor === "capped"
+      ? `the first ${rows}`
+      : result.cursor === "closed"
+        ? `the ${n.toLocaleString("en-US")} loaded ${n === 1 ? "row" : "rows"}`
+        : rows;
+  if (action === "copy") {
+    if (await copyText(text)) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
+    else notify.error("Couldn't copy to the clipboard.");
+    return;
+  }
+  try {
+    const saved = await saveText(exportFilename(format), format, text);
+    if (saved === null) return;
+    notify.success(
+      saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,
+    );
+  } catch (e) {
+    notify.error(`Couldn't save the export: ${errorText(e)}`);
+  }
+}
+
 export function pin(tabId: string, resultId: string): void {
   updateResult(tabId, resultId, (r) => ({ ...r, pinned: !r.pinned }));
 }
@@ -584,7 +677,7 @@ export async function connectProfile(id: string): Promise<void> {
       return;
     }
     updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
-    toast.dismiss("not-connected");
+    notify.dismiss("not-connected");
   } catch (e) {
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }
