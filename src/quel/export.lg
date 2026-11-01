@@ -1,0 +1,20 @@
+(ns quel.export)
+
+;; Results to files. Formatting happens in the frontend (the grid holds the
+;; rows); this side asks where to save and writes the text. DDL export
+;; comes later.
+
+(defn filters
+  "The save dialog's file filters for an export format: \"csv\", \"json\"
+   or \"markdown\". Throws on any other."
+  [format]
+  (case format
+    "csv" [["CSV" "*.csv"]]
+    "json" [["JSON" "*.json"]]
+    "markdown" [["Markdown" "*.md"]]
+    (throw (ex-info (str "Unknown export format: " format) {:format format}))))
+
+(defn write!
+  "Save text to path."
+  [path text]
+  (spit path text))

@@ -178,7 +178,7 @@
             (is (= "2026-10-21" d))
             (is (= "2026-10-21T10:00:00.5" ts))
             (is (= (* 8 60) (utc-minute-of-day tz)) (str "got " tz))
-            (is (= "(binary)" b))
+            (is (= "\\xdeadbeef" b))
             (is (= "1.50" n))
             (is (= "9007199254740993" big))
             (is (nil? nd))))))))

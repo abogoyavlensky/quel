@@ -1,4 +1,5 @@
-(ns quel.cells)
+(ns quel.cells
+  (:require [string :as str]))
 
 ;; Driver values to cells the grid can render. Every value crosses the
 ;; bridge as JSON, so whatever JavaScript would mangle is converted here,
@@ -9,10 +10,11 @@
 ;; and BLOB as []byte, which the shim surfaces as strings. pgx (Postgres,
 ;; Redshift) returns numeric, uuid, json, intervals and arrays as strings,
 ;; and date, timestamp and timestamptz as Go time.Time values, formatted
-;; here by the column's type. bytea also arrives as a string, but one that
-;; has lost its bytes (the shim turns []byte into text), so it shows as a
-;; placeholder until the shim keeps binary values (docs/backlog). The
-;; large-text cap comes later.
+;; here by the column's type. bytea also arrives as a string, and so does
+;; a BLOB: let-go boxes a []byte as a Go string with the same bytes, so
+;; (bytes s) gets them back and they go out as hex. Only a SQLite column
+;; with no declared type is missed: its blobs cannot be told from text.
+;; The large-text cap comes later.
 
 ;; The largest integer a JavaScript number holds exactly: 2^53 - 1.
 (def ^:private max-safe-int 9007199254740991)
@@ -26,7 +28,29 @@
     (NaN? x) "NaN"
     (infinite? x) (if (pos? x) "Infinity" "-Infinity")))
 
-(def ^:private binary-types #{"BYTEA"})
+(def ^:private binary-types #{"BYTEA" "BLOB"})
+
+;; Past this many bytes a binary value shows its size, not its bytes: a
+;; page of large blobs would flood the bridge.
+(def ^:private max-binary-bytes 65536)
+
+;; "00" to "ff", so hex needs no format call per byte.
+(def ^:private hex-pairs
+  (mapv (fn [b] (str (get "0123456789abcdef" (quot b 16)) (get "0123456789abcdef" (rem b 16))))
+        (range 256)))
+
+(defn- binary? [type-name]
+  (and (string? type-name) (contains? binary-types (str/upper-case type-name))))
+
+(defn- hex
+  "A binary value, held as a string, as Postgres-style hex: \\x and two
+   lowercase digits per byte."
+  [s]
+  (let [bs (bytes s)
+        n (count bs)]
+    (if (> n max-binary-bytes)
+      (str "(binary, " n " bytes)")
+      (apply str "\\x" (map (fn [b] (hex-pairs (bit-and b 0xff))) bs)))))
 
 ;; Go time layouts per column type: ISO-8601, as precise as the value.
 (def ^:private time-layouts
@@ -44,8 +68,9 @@
   ([type-name v]
    (cond
      (nil? v) nil
-     ;; Before strings: bytea arrives as one.
-     (contains? binary-types type-name) "(binary)"
+     ;; Before strings: bytea and blobs arrive as one. SQLite lets a BLOB
+     ;; column hold a number, which takes the normal path.
+     (and (binary? type-name) (string? v)) (hex v)
      (boolean? v) v
      (string? v) v
      (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))

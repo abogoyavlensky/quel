@@ -1,3 +1,4 @@
+import type { ExportFormat } from "@/grid/export";
 import { call } from "@/lib/bridge";
 import type {
   ClosedTab,
@@ -32,6 +33,17 @@ export const fetchPage = (queryId: string) => call<FetchResult>("fetch-page", qu
 export const cancel = (queryId: string) => call<{ canceled: boolean }>("cancel", queryId);
 
 export const closeResult = (queryId: string) => call<void>("close-result", queryId);
+
+// The bridge lowers a nil reply to {} or null, so a call that may answer
+// nil (a canceled dialog) is a path only when it is a string.
+const pathOrNull = async (p: Promise<unknown>) => {
+  const r = await p;
+  return typeof r === "string" && r !== "" ? r : null;
+};
+
+// The path the export was saved to, or null when the user canceled the dialog.
+export const exportResult = (format: ExportFormat, filename: string, text: string) =>
+  pathOrNull(call("export-result", format, filename, text));
 
 export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
 
@@ -70,7 +82,7 @@ export const testConnection = (input: ProfileInput) => call<{ ok: boolean; label
 export const connect = (profileId: string) => call<OpenResult>("connect", profileId);
 
 // The SQLite file the user picks in a native dialog, or null.
-export const chooseFile = () => call<string | null>("choose-file");
+export const chooseFile = () => pathOrNull(call("choose-file"));
 
 // Each profile's saved editor tabs, and the selected profile. The bridge
 // lowers a nil reply to {} or null, so the calls that may answer nil

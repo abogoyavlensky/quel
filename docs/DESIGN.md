@@ -328,10 +328,15 @@ The grid receives arrays, not maps:
 - dates and timestamps (pgx hands them over as Go `time.Time`) become
   ISO-8601 strings shaped by the column type: `DATE` as `2026-10-21`,
   `TIMESTAMP` as `2026-10-21T10:00:00.5`, `TIMESTAMPTZ` with its offset;
-- binary values show as `(binary)` for now: the `sql` shim turns `[]byte`
-  into a string, which loses Postgres `bytea` bytes. The intended
-  truncated hex preview waits on the shim keeping binary values (see the
-  backlog);
+- binary values (`BYTEA`, and a SQLite column declared `BLOB`) become
+  Postgres-style hex, `\x` and two lowercase digits per byte. let-go boxes
+  a `[]byte` as a Go string with the same bytes, so `(bytes s)` gets them
+  back. The whole value goes out, so exports and the row details panel
+  have the real data; the grid cuts what it shows. Past 64 KiB a value
+  is `(binary, N bytes)` instead. Only strings are encoded this way (a
+  number in a `BLOB` column stays a number), and a blob in a SQLite
+  column with no declared type is missed: it cannot be told from text
+  once boxed (see the backlog);
 - text longer than 64 KB is truncated, with a flag, and the full value is
   fetched on demand;
 - anything opaque falls back to its string form, never an error.
@@ -532,6 +537,41 @@ JSON) and is disabled for NULL. "Copy row as JSON" maps column names to
 cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
 `navigator.clipboard` and falls back to the Wails runtime's clipboard.
 
+### Export
+
+The grid footer has an **Export** button that opens a popover: a format
+(CSV, JSON or Markdown, one always chosen), for CSV a separator (comma,
+semicolon or tab), and **Copy** and **Save**. The choice is app-wide and
+in memory (`AppState.export`), so the popover opens as it was left.
+
+Which rows go out is decided at the click. An `open` result loads the rest
+first, page by page with `fetchMore` (the footer shows the progress, Cancel
+stops it). If the cursor ends `done` or `capped` the rows are exported; if
+it ends `closed` (a cancel, an error, a disconnect), or another statement
+runs in the tab, nothing is exported and a toast says so. A `done`,
+`capped` or already `closed` result exports what it holds. The cap is
+`MAX_ROWS`, 100,000; a toast says "the first 100,000 rows" when it applies
+and "the N loaded rows" for a result that was closed before the click.
+
+The formats are pure functions over the columns and rows (`grid/export.ts`):
+
+- **CSV**, RFC 4180: a header row, `\r\n` after every record, a field quoted
+  when it holds the separator, `"`, CR or LF. NULL is an empty field. UTF-8,
+  no BOM.
+- **JSON**: an array of objects with two-space indent. Keys are the ones
+  "Copy row as JSON" uses (`jsonKeys`: repeated names get `_2`, `_3`). A
+  valid `JSON`, `JSONB` or `SUPER` cell goes in as raw JSON, its own text
+  re-indented, so big numbers keep their digits; other cells go in as they
+  are.
+- **Markdown**: a GitHub-flavoured table, `---:` for numeric columns. `\`
+  and `|` are escaped, line breaks become `<br>`, NULL is `*NULL*`.
+
+Saving (`lib/save.ts`): in the app's webview the backend `export-result`
+opens the native save dialog and writes the file (Wails' macOS webview
+handles no browser downloads). In server mode and in a plain browser Wails'
+dialogs are unavailable, so the browser downloads a `Blob`. The suggested
+name is `result-YYYY-MM-DD-HHMM.<ext>` in local time.
+
 ### Palettes and keys
 
 | Key (macOS / other) | What it does |
@@ -677,7 +717,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
 | Structure | `list-schemas`, `list-objects` (a schema's tables and views), `list-columns`, `completion-schema`; later `describe-object` (table info), `object-ddl`, `schema-ddl`, `diagram-model` |
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
-| Export | `export-ddl`, `export-result` (both open a save dialog) |
+| Export | `export-result` (the format, a suggested file name and the text; a save dialog; the path, or nil when canceled); `export-ddl` is planned and will open a save dialog too |
 | History | `list-history`, `clear-history` |
 | Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
 | Updates | `check-update` (the current version, whether this copy can install, a newer release or nil, whether it is the skipped one), `skip-update`, `download-update` (blocks until staged and verified), `restart-to-update` |
@@ -818,7 +858,7 @@ package feature, not app glue.
 |---|---|---|
 | `letgo-packages/sql` | Done in `sql-v0.3.0`: `NewCtx`/`QueryCtx`/`ExecCtx` (cancellable queries), `Conn` (sessions), a `Connectable` covering `*sql.Conn`, `ColumnTypeNames`; the shim ships in-tree | cancellation, per-tab sessions, column types |
 | `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
-| `letgo-packages/sql` | `ScanRow` keeps binary values as bytes (today `[]byte` becomes a string) | the bytea / BLOB preview |
+| `letgo-packages/sql` | Not needed: let-go keeps a `[]byte` as a string with the same bytes; `quel.cells` hex-encodes it | the bytea / BLOB values |
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
 | `letgo-packages/wails` | Done in `wails-v0.6.0`: in-app updates over Wails' updater, with a signer check, a required checksum and helper mode in the shim's `init()` | in-app updates |
 | `letgo-packages/keyring` | Done in `keyring-v0.1.0`: `put!`, `get`, `delete!` over `zalando/go-keyring` (macOS Keychain, Secret Service), and `use-memory!` for tests | saved passwords |
@@ -859,7 +899,8 @@ package feature, not app glue.
    read-only profiles; `Cmd+K`.
 3. **PostgreSQL and DuckDB.**
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
-   JSON; copy-as formats.
+   JSON; copy-as formats. Results to CSV, JSON and Markdown (copy or save)
+   done 2026-10-31.
 5. **Later.** SSH tunnels, Redshift IAM authentication, inline editing,
    Redis, Linux.
 

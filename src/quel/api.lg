@@ -2,6 +2,7 @@
   (:require [integrant.core :as ig]
             [quel.conn :as conn]
             [quel.exec :as exec]
+            [quel.export :as export]
             [quel.menu :as menu]
             [quel.meta :as meta]
             ;; Loaded for their quel.meta methods.
@@ -87,6 +88,17 @@
   [{:keys [app]}]
   (w/open-file app {:title "Choose a Database File" :filters menu/db-filters}))
 
+(defn export-result
+  "Ask where to save a result exported as format (\"csv\", \"json\" or
+   \"markdown\"), write text there, and return the path; nil when the user
+   cancels."
+  [{:keys [app]} format filename text]
+  (when-let [path (w/save-file app {:title "Export Result"
+                                    :filename filename
+                                    :filters (export/filters format)})]
+    (export/write! path text)
+    path))
+
 ;; Each profile's saved editor tabs (quel.workspace), and which profile
 ;; was selected.
 
@@ -145,6 +157,7 @@
    "test-connection" #'test-connection
    "connect" #'connect
    "choose-file" #'choose-file
+   "export-result" #'export-result
    "load-workspace" #'load-workspace
    "save-workspace" #'save-workspace
    "close-tab" #'close-tab

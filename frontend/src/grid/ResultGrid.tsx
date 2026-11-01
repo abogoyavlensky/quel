@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ExportMenu } from "@/components/ExportMenu";
 import { cn } from "@/lib/utils";
 import type { ResultTab } from "@/state/store";
 import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
@@ -209,7 +210,10 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
       </div>
       <div className="flex h-9 shrink-0 items-center justify-between border-t px-3.5 text-xs text-muted-foreground">
         <span aria-live="polite">{footer(result)}</span>
-        <span className="tabular-nums">{result.elapsedMs.toLocaleString()} ms</span>
+        <div className="flex items-center gap-2">
+          <ExportMenu tabId={tabId} result={result} />
+          <span className="tabular-nums">{result.elapsedMs.toLocaleString()} ms</span>
+        </div>
       </div>
     </div>
   );

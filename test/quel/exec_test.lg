@@ -66,6 +66,17 @@
       (is (= [{:name "id" :type "INTEGER"} {:name "name" :type "TEXT"}]
              (:columns (run execs conns id "select id, name from t")))))))
 
+;; High bytes must survive the scan, and a number in a BLOB column stays one.
+(deftest binary-columns-come-back-as-hex
+  (with-env
+    (fn [execs conns id]
+      (let [db (conn/db conns id)]
+        (sql/execute! db ["create table b (v blob)"])
+        (sql/execute! db ["insert into b values (x'deadbeef'), (null), (42)"]))
+      (let [r (run execs conns id "select v from b")]
+        (is (= [{:name "v" :type "BLOB"}] (:columns r)))
+        (is (= [["\\xdeadbeef"] [nil] [42]] (:rows r)))))))
+
 (deftest the-first-page-and-has-more
   (with-env
     (fn [execs conns id]

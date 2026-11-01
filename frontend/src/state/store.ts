@@ -1,5 +1,6 @@
 import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
+import type { CsvSeparator, ExportFormat } from "@/grid/export";
 import type { Cell, ClosedTab, Column, Profile, UpdateState } from "@/lib/types";
 
 // The app's state: the saved profiles and a workspace per profile (its
@@ -100,6 +101,7 @@ export interface AppState {
   workspaces: Record<string, Workspace>; // by profile id
   notice: string | null; // a one-line hint for the status bar
   rowDetails: boolean; // the row details panel is open; in memory only
+  export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
   // The open palette: the command list or Go to Connection. At most one
@@ -151,6 +153,7 @@ export function initialState(): AppState {
     workspaces: {},
     notice: null,
     rowDetails: false,
+    export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,
     palette: null,
