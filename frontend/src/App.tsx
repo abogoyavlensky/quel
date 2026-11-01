@@ -5,6 +5,8 @@ import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
+import { focusEditorKey, focusTabKey, openPalette } from "@/state/palette";
+import { shortcutOf } from "@/state/shortcuts";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { isMac } from "@/components/keys";
 import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId, toggleRowDetails } from "@/state/runner";
@@ -34,6 +36,8 @@ function useMenu() {
       }),
       onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
       onEvent("menu:check-updates", () => void checkForUpdates({ manual: true })),
+      onEvent("menu:command-palette", () => openPalette("commands")),
+      onEvent("menu:go-to-connection", () => openPalette("connections")),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -81,6 +85,30 @@ function useStopKey() {
   }, []);
 }
 
+// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘1–⌘9 pick a tab
+// (state/shortcuts.ts). Only the palettes have native View menu items: nine
+// "Tab N" items would be clutter, and a menu item does not exist in server
+// mode, where the key must come from here. With the app window a palette key
+// may arrive twice (menu and page); opening sets the state, so that is
+// harmless. Caught in the capture phase, before the editor sees it.
+function useGlobalKeys() {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = shortcutOf(e, isMac);
+      if (!k) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (k.kind === "palette") openPalette(k.palette);
+      else if (k.kind === "editor") focusEditorKey();
+      else focusTabKey(k.n);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+}
+
 // Pending tab saves go out now when the window hides or the page goes
 // away: the app is likely quitting.
 function useFlushOnHide() {
@@ -101,6 +129,7 @@ export default function App() {
   useMenu();
   useRowDetailsKey();
   useStopKey();
+  useGlobalKeys();
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);

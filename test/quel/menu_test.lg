@@ -20,12 +20,12 @@
   (mapcat (fn [item] (cons (:label item) (labels (:items item)))) items))
 
 (deftest every-item-with-a-click-has-one
-  (is (= 9 (count (on-clicks (menu/spec {:app nil}))))))
+  (is (= 11 (count (on-clicks (menu/spec {:app nil}))))))
 
 (deftest the-tab-and-query-items-are-there
   (is (every? (set (labels (menu/spec {:app nil})))
               ["New Tab" "New Connection…" "Open Database…" "Close Tab" "Reopen Closed Tab" "Query" "Run" "Run Script" "Cancel"
-               "Help" "Check for Updates…"])))
+               "Help" "Check for Updates…" "View" "Command Palette…" "Go to Connection…"])))
 
 (deftest wails-accepts-the-spec
   @app
@@ -34,3 +34,8 @@
 (deftest reopen-closed-tab-has-its-key
   (let [item (->> (menu/spec {:app nil}) (mapcat :items) (filter #(= "Reopen Closed Tab" (:label %))) first)]
     (is (= "CmdOrCtrl+Shift+T" (:accelerator item)))))
+
+(deftest the-palettes-have-their-keys
+  (let [item (fn [label] (->> (menu/spec {:app nil}) (mapcat :items) (filter #(= label (:label %))) first))]
+    (is (= "CmdOrCtrl+Shift+P" (:accelerator (item "Command Palette…"))))
+    (is (= "CmdOrCtrl+P" (:accelerator (item "Go to Connection…"))))))

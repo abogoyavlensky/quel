@@ -11,7 +11,9 @@ import type { Engine } from "@/lib/types";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
+import { CommandPalette } from "./CommandPalette";
 import { EditorTabs } from "./EditorTabs";
+import { GoToConnection } from "./GoToConnection";
 import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { RunButton } from "./RunButton";
@@ -97,6 +99,8 @@ export function AppShell() {
         )}
       </ResizablePanelGroup>
       <StatusBar />
+      <CommandPalette />
+      <GoToConnection />
       <ProfileDialog />
       <UpdateDialog />
     </div>

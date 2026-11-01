@@ -104,6 +104,9 @@ export interface AppState {
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
+  // The open palette: the command list or Go to Connection. At most one
+  // (state/palette.ts); in memory only.
+  palette: "commands" | "connections" | null;
 }
 
 export const MESSAGES = "messages";
@@ -153,6 +156,7 @@ export function initialState(): AppState {
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,
+    palette: null,
   };
 }
 
