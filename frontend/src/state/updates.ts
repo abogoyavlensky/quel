@@ -1,6 +1,6 @@
-import { toast } from "sonner";
 import * as api from "@/lib/api";
 import { onEvent } from "@/lib/bridge";
+import { notify } from "@/lib/notify";
 import type { UpdateCheck, UpdateInfo, UpdateState } from "@/lib/types";
 import { flushAllAndWait } from "./persist";
 import { store } from "./store";
@@ -42,18 +42,18 @@ export async function checkForUpdates({ manual = false } = {}): Promise<void> {
   try {
     c = await api.checkUpdate();
   } catch (e) {
-    if (manual) toast.error(`Could not check for updates: ${errorText(e)}`, { id: "update-check" });
+    if (manual) notify.error(`Could not check for updates: ${errorText(e)}`, { id: "update-check" });
     else console.warn("update check failed:", e);
     return;
   }
   if (busy()) return;
   if (!c.enabled) {
-    if (manual) toast("Update checks are off.", { id: "update-check" });
+    if (manual) notify.info("Update checks are off.", { id: "update-check" });
     return;
   }
   if (!found(c) || (c.skipped && !manual)) {
     if (!found(c)) set({ phase: "idle" });
-    if (manual && !found(c)) toast(`Quel ${c.current} is the latest version.`, { id: "update-check" });
+    if (manual && !found(c)) notify.info(`Quel ${c.current} is the latest version.`, { id: "update-check" });
     return;
   }
   set({ phase: "available", info: c });

@@ -8,8 +8,8 @@ const api = vi.hoisted(() => ({
   restartToUpdate: vi.fn(),
 }));
 vi.mock("@/lib/api", () => api);
-const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
-vi.mock("sonner", () => ({ toast }));
+const notify = vi.hoisted(() => ({ info: vi.fn(), error: vi.fn() }));
+vi.mock("@/lib/notify", () => ({ notify }));
 const flushAllAndWait = vi.hoisted(() => vi.fn());
 vi.mock("./persist", () => ({ flushAllAndWait }));
 // The progress listener: tests call emit to send an event.
@@ -48,7 +48,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  for (const f of [...Object.values(api), toast, toast.error, flushAllAndWait]) f.mockReset();
+  for (const f of [...Object.values(api), notify.info, notify.error, flushAllAndWait]) f.mockReset();
   flushAllAndWait.mockResolvedValue(null);
   listeners.clear();
   store.setState(initialState(), true);
@@ -66,7 +66,7 @@ describe("checks", () => {
     await updates.checkForUpdates();
     expect(update()).toEqual({ phase: "available", info: check() });
     expect(store.getState().updateDialogOpen).toBe(false);
-    expect(toast).not.toHaveBeenCalled();
+    expect(notify.info).not.toHaveBeenCalled();
   });
 
   it("an automatic check hides a skipped release", async () => {
@@ -86,7 +86,7 @@ describe("checks", () => {
     api.checkUpdate.mockResolvedValue(check({ release: null }));
     await updates.checkForUpdates({ manual: true });
     expect(update()).toEqual({ phase: "idle" });
-    expect(toast).toHaveBeenCalledWith("Quel 0.2.0 is the latest version.", expect.anything());
+    expect(notify.info).toHaveBeenCalledWith("Quel 0.2.0 is the latest version.", expect.anything());
   });
 
   it("a nil release lowered to {} counts as up to date", async () => {
@@ -98,16 +98,16 @@ describe("checks", () => {
   it("checks off: a manual check says so", async () => {
     api.checkUpdate.mockResolvedValue({ current: "0.2.0", enabled: false });
     await updates.checkForUpdates({ manual: true });
-    expect(toast).toHaveBeenCalledWith("Update checks are off.", expect.anything());
+    expect(notify.info).toHaveBeenCalledWith("Update checks are off.", expect.anything());
   });
 
   it("a failed automatic check stays quiet; a manual one toasts", async () => {
     api.checkUpdate.mockRejectedValue(new Error("offline"));
     await updates.checkForUpdates();
     expect(update()).toEqual({ phase: "idle" });
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(notify.error).not.toHaveBeenCalled();
     await updates.checkForUpdates({ manual: true });
-    expect(toast.error).toHaveBeenCalledWith("Could not check for updates: offline", expect.anything());
+    expect(notify.error).toHaveBeenCalledWith("Could not check for updates: offline", expect.anything());
   });
 
   it("a check leaves a download alone", async () => {

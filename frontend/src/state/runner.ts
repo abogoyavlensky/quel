@@ -1,7 +1,7 @@
-import { toast } from "sonner";
 import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
 import * as api from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
 import { saveText } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
@@ -191,7 +191,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
 // Run from the selected workspace's active editor: the statement under the
 // cursor (or the selection's statements), or the whole script. A
-// disconnected workspace sends nothing: a toast says so right away, with a
+// disconnected workspace sends nothing: a notice says so right away, with a
 // Connect button, and the run is marked refused (the results keep saying so
 // until a connect); one that is connecting drops the run, as a second run
 // in flight is dropped.
@@ -201,8 +201,8 @@ export async function runCurrent(mode: RunMode): Promise<void> {
   if (w.status !== "connected") {
     updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
     const name = store.getState().profiles.find((p) => p.id === w.profileId)?.name ?? "The profile";
-    // One id: a second press replaces the toast rather than stacking.
-    toast.error(`${name} isn't connected.`, {
+    // One id: a second press replaces the notice rather than stacking.
+    notify.error(`${name} isn't connected.`, {
       id: "not-connected",
       action: { label: "Connect", onClick: () => void connectProfile(w.profileId) },
     });
@@ -522,7 +522,7 @@ export async function exportResult(
   maxRows = MAX_ROWS,
 ): Promise<void> {
   const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
-  const stopped = () => toast.error("Export stopped: not all rows could be loaded.");
+  const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
   if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
   const result = find();
   if (!result) return void stopped();
@@ -538,18 +538,18 @@ export async function exportResult(
         ? `the ${n.toLocaleString("en-US")} loaded ${n === 1 ? "row" : "rows"}`
         : rows;
   if (action === "copy") {
-    if (await copyText(text)) toast.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
-    else toast.error("Couldn't copy to the clipboard.");
+    if (await copyText(text)) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
+    else notify.error("Couldn't copy to the clipboard.");
     return;
   }
   try {
     const saved = await saveText(exportFilename(format), format, text);
     if (saved === null) return;
-    toast.success(
+    notify.success(
       saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,
     );
   } catch (e) {
-    toast.error(`Couldn't save the export: ${errorText(e)}`);
+    notify.error(`Couldn't save the export: ${errorText(e)}`);
   }
 }
 
@@ -677,7 +677,7 @@ export async function connectProfile(id: string): Promise<void> {
       return;
     }
     updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
-    toast.dismiss("not-connected");
+    notify.dismiss("not-connected");
   } catch (e) {
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
   }

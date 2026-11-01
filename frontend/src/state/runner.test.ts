@@ -19,7 +19,7 @@ const api = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => api);
 
 const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), dismiss: vi.fn() }));
-vi.mock("sonner", () => ({ toast: toasts }));
+vi.mock("@/lib/notify", () => ({ notify: toasts }));
 
 const clipboard = vi.hoisted(() => ({ copyText: vi.fn() }));
 vi.mock("@/lib/clipboard", () => clipboard);

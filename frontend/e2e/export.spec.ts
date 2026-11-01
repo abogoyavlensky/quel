@@ -62,6 +62,20 @@ test("copies a result as CSV, JSON and Markdown", async ({ page, context }) => {
   );
 });
 
+test("the export's notice can be closed", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await connectFixture(page, db);
+  await run(page, small);
+  await expect(page.getByRole("gridcell", { name: "customer 2", exact: true })).toBeVisible();
+
+  await copyAs(page, "CSV");
+  const notice = page.locator("[data-sonner-toast]", { hasText: "Copied 2 rows as CSV" });
+  await expect(notice).toBeVisible();
+  await notice.hover();
+  await notice.getByRole("button", { name: "Close toast" }).click();
+  await expect(notice).toHaveCount(0);
+});
+
 test("reopens on the last format", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await connectFixture(page, db);
