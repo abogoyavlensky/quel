@@ -541,7 +541,7 @@ cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
 
 The grid footer has an **Export** button that opens a popover: a format
 (CSV, JSON or Markdown, one always chosen), for CSV a separator (comma,
-semicolon or tab), and **Copy** and **Save…**. The choice is app-wide and
+semicolon or tab), and **Copy** and **Save**. The choice is app-wide and
 in memory (`AppState.export`), so the popover opens as it was left.
 
 Which rows go out is decided at the click. An `open` result loads the rest

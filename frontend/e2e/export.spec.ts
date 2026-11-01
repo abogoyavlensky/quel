@@ -99,7 +99,7 @@ test("saves a CSV with the chosen separator as a download", async ({ page }) => 
   await popover(page).getByRole("combobox", { name: "Separator" }).click();
   await page.getByRole("option", { name: "Semicolon" }).click();
   const download = page.waitForEvent("download");
-  await popover(page).getByRole("button", { name: "Save…" }).click();
+  await popover(page).getByRole("button", { name: "Save", exact: true }).click();
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/^result-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/);
   expect(readFileSync((await file.path()) as string, "utf8")).toBe("id;name;gone\r\n1;customer 1;\r\n2;customer 2;\r\n");

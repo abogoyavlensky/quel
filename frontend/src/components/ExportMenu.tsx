@@ -94,7 +94,7 @@ export function ExportMenu({ tabId, result }: { tabId: string; result: ResultTab
             Copy
           </Button>
           <Button size="sm" className="flex-1" disabled={busy} onClick={() => void run("save")}>
-            Save…
+            Save
           </Button>
         </div>
       </PopoverContent>
