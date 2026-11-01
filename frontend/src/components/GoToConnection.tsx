@@ -1,5 +1,14 @@
 import { useRef } from "react";
-import { Command, CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList, keywordsFilter } from "@/components/ui/command";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  keywordsFilter,
+} from "@/components/ui/command";
 import { focusEditor } from "@/editor/states";
 import { closePalette, restoreFocus } from "@/state/palette";
 import { selectProfile } from "@/state/runner";
@@ -46,20 +55,23 @@ export function GoToConnection() {
         <CommandInput placeholder="Go to connection…" />
         <CommandList>
           <CommandEmpty>{profiles.length === 0 ? "No saved connections." : "No matching connections."}</CommandEmpty>
-          {profiles.map((p) => (
-            <CommandItem
-              key={p.id}
-              value={p.id}
-              keywords={[p.name, engineLabel[p.engine]]}
-              onSelect={() => pick(p.id)}
-              className="h-[38px] px-2.5 data-selected:bg-primary/10 [&>svg:last-child]:hidden"
-            >
-              <ConnMark engine={p.engine} color={p.color} status={workspaces[p.id]?.status ?? "disconnected"} />
-              <span className="min-w-0 flex-1 truncate">{p.name}</span>
-              {p.id === selected && <span className="shrink-0 text-xs text-muted-foreground">Current</span>}
-              <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
-            </CommandItem>
-          ))}
+          {/* A group, as in the Command Palette: its padding insets the highlight. */}
+          <CommandGroup>
+            {profiles.map((p) => (
+              <CommandItem
+                key={p.id}
+                value={p.id}
+                keywords={[p.name, engineLabel[p.engine]]}
+                onSelect={() => pick(p.id)}
+                className="h-[38px] px-2.5 data-selected:bg-primary/10 [&>svg:last-child]:hidden"
+              >
+                <ConnMark engine={p.engine} color={p.color} status={workspaces[p.id]?.status ?? "disconnected"} />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                {p.id === selected && <span className="shrink-0 text-xs text-muted-foreground">Current</span>}
+                <span className="shrink-0 text-xs text-muted-foreground">{engineLabel[p.engine]}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
         </CommandList>
       </Command>
     </CommandDialog>
