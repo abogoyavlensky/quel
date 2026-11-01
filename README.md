@@ -29,6 +29,9 @@ stage.
   tabs, and pinning to keep a result while you run others. A row's values
   open in a side panel, with JSON formatted.
 - **Structure:** schemas, tables, views and columns in the sidebar.
+- **Export:** results can be exported to CSV, JSON or Markdown.
+- **Keyboard-friendly:** there is command palette and most actions have a keyboard shortcut.
+- **In-app updates:** updates are downloaded and installed automatically.
 
 ## Install
 
