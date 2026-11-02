@@ -61,3 +61,19 @@
         (is (= ["name"] (get-in c [:schemas "main" "v"])))
         (is (= ["x"] (get-in c [:schemas "main" "it's a table"])))
         (is (not (contains? (get-in c [:schemas "main"]) "broken")))))))
+
+(deftest sqlite-describe-schema
+  (with-db
+    (fn [db]
+      (let [d (meta/describe-schema :sqlite db "main")]
+        (is (= (meta/objects :sqlite db "main") (:objects d)))
+        (is (= {:functions [] :types [] :sequences []} (dissoc d :objects)))))))
+
+(deftest sqlite-describe-object
+  (with-db
+    (fn [db]
+      (let [d (meta/describe-object :sqlite db "main" "t")]
+        (is (= ["id" "name"] (mapv :name (:columns d))))
+        (is (every? #(contains? % :pk) (:columns d)))
+        (is (every? #(contains? % :fk) (:columns d)))
+        (is (every? vector? [(:indexes d) (:keys d) (:sequences d)]))))))
