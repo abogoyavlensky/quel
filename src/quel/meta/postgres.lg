@@ -84,3 +84,63 @@
 
 (defmethod meta/completion-rows :redshift [_ db]
   (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [redshift-completion-sql])))
+
+;; Schema contents beyond tables and views: functions, types, standalone
+;; sequences. Postgres only, except functions (Redshift's below). Whatever
+;; an extension brings (PostGIS adds a thousand functions) is left out.
+
+(defn- not-extension [classid alias]
+  (str " and not exists (select 1 from pg_depend d where d.classid = '" classid "'::regclass"
+       " and d.objid = " alias ".oid and d.deptype = 'e')"))
+
+(def ^:private postgres-functions-sql
+  (str "select p.proname as name,"
+       " case p.prokind when 'p' then 'procedure' else 'function' end as kind,"
+       " pg_get_function_identity_arguments(p.oid) as args"
+       " from pg_proc p join pg_namespace n on n.oid = p.pronamespace"
+       " where n.nspname = $1 and p.prokind in ('f', 'p')"
+       (not-extension "pg_proc" "p")
+       " order by p.proname, args"))
+
+(defmethod meta/functions :postgres [_ db schema]
+  (mapv #(select-keys % [:name :kind :args]) (sql/execute! db [postgres-functions-sql schema])))
+
+;; Enums, domains, and composite types made with CREATE TYPE (relkind 'c');
+;; every table, view and sequence has a composite row type too, which stays
+;; out. Range types are not listed.
+(def ^:private types-sql
+  (str "select t.typname as name,"
+       " case t.typtype when 'e' then 'enum' when 'd' then 'domain' else 'composite' end as kind,"
+       " case when t.typtype = 'd' then format_type(t.typbasetype, t.typtypmod) end as detail"
+       " from pg_type t join pg_namespace n on n.oid = t.typnamespace"
+       " left join pg_class c on c.oid = t.typrelid"
+       " where n.nspname = $1 and (t.typtype in ('e', 'd') or (t.typtype = 'c' and c.relkind = 'c'))"
+       (not-extension "pg_type" "t")
+       " order by t.typname"))
+
+(def ^:private enum-values-sql
+  (str "select t.typname as name, e.enumlabel as label"
+       " from pg_enum e join pg_type t on t.oid = e.enumtypid"
+       " join pg_namespace n on n.oid = t.typnamespace"
+       " where n.nspname = $1 order by t.typname, e.enumsortorder"))
+
+(defmethod meta/types :postgres [_ db schema]
+  (let [values (reduce (fn [m {:keys [name label]}] (update m name (fnil conj []) label))
+                       {} (sql/execute! db [enum-values-sql schema]))]
+    (mapv (fn [{:keys [name kind detail]}]
+            {:name name :kind kind :detail detail :values (get values name [])})
+          (sql/execute! db [types-sql schema]))))
+
+;; Sequences a column owns (serial: deptype 'a', identity: 'i') show under
+;; their table, not here.
+(def ^:private sequences-sql
+  (str "select c.relname as name"
+       " from pg_class c join pg_namespace n on n.oid = c.relnamespace"
+       " where n.nspname = $1 and c.relkind = 'S'"
+       " and not exists (select 1 from pg_depend d where d.classid = 'pg_class'::regclass"
+       " and d.objid = c.oid and d.refclassid = 'pg_class'::regclass and d.deptype in ('a', 'i'))"
+       (not-extension "pg_class" "c")
+       " order by c.relname"))
+
+(defmethod meta/sequences :postgres [_ db schema]
+  (mapv #(select-keys % [:name]) (sql/execute! db [sequences-sql schema])))
