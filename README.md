@@ -28,7 +28,8 @@ stage.
 - **Results:** a fast grid that loads rows as you scroll, several result
   tabs, and pinning to keep a result while you run others. A row's values
   open in a side panel, with JSON formatted.
-- **Structure:** schemas, tables, views and columns in the sidebar.
+- **Structure:** schemas, tables, views, functions, types and sequences in
+  the sidebar; a table's columns, indexes and keys.
 - **Export:** results can be exported to CSV, JSON or Markdown.
 - **Keyboard-friendly:** there is command palette and most actions have a keyboard shortcut.
 - **In-app updates:** updates are downloaded and installed automatically.
@@ -83,8 +84,7 @@ only to the databases you connect to.
 ## Status
 
 Quel is at an early stage: the features above work, and the rest is on
-the way. Next up are indexes, constraints and other structure details,
-DDL export, confirmation before statements that change data, and
+the way. Next up are table info, DDL export, confirmation before statements that change data, and
 read-only connections. After that: DuckDB, ER diagrams, and export of
 results to CSV and JSON. The full plan is in
 [docs/DESIGN.md](docs/DESIGN.md).

@@ -377,6 +377,18 @@ Postgres tests run those queries against Postgres. What `pg_catalog`
 misses on Redshift (external schemas and datashares, late-binding view
 columns) is in `docs/backlog/`, waiting for a cluster.
 
+The structure tree shows, under a schema, Tables, Views, Functions, Types
+(enums with their values, domains with their base type, composite types)
+and the Sequences no column owns; under a table or view, its columns with
+PK and FK badges, then Indexes, Keys (primary, unique, foreign, check)
+and the Sequences its columns own. A group or section shows only when it
+has members, so each engine shows what it has: SQLite has indexes and
+keys (no check constraints, which live only in its schema SQL), Redshift
+functions and keys (no indexes; dist and sort keys are backlogged).
+Whatever belongs to an extension is hidden. Opening a schema makes one
+call (`describe-schema`), opening an object one more (`describe-object`);
+nothing reads the whole database but completion.
+
 The structure tree loads lazily, one level per expand. Its queries run on
 the connection's pool, not a tab's session, so temp tables and SQLite
 `ATTACH`es made in a tab do not show (backlogged). `completion-schema`
@@ -715,7 +727,7 @@ with string keys); errors reject the frontend's promise with the message.
 |---|---|
 | Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
 | Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
-| Structure | `list-schemas`, `list-objects` (a schema's tables and views), `list-columns`, `completion-schema`; later `describe-object` (table info), `object-ddl`, `schema-ddl`, `diagram-model` |
+| Structure | `list-schemas`, `describe-schema` (a schema's tables, views, functions, types and sequences), `describe-object` (an object's columns, indexes, keys and sequences), `completion-schema`; later `object-ddl`, `schema-ddl`, `diagram-model` |
 | Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-result` (the format, a suggested file name and the text; a save dialog; the path, or nil when canceled); `export-ddl` is planned and will open a save dialog too |
 | History | `list-history`, `clear-history` |
@@ -896,7 +908,8 @@ package feature, not app glue.
    formatted and highlighted, values and rows copied.
 2. **Structure.** Indexes / dist and sort keys, constraints, functions,
    procedures, table info; DDL view and export; write confirmation and
-   read-only profiles; `Cmd+K`.
+   read-only profiles; `Cmd+K`. Indexes, keys, functions, types and
+   sequences in the tree done 2026-11-02; dist and sort keys backlogged.
 3. **PostgreSQL and DuckDB.**
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
    JSON; copy-as formats. Results to CSV, JSON and Markdown (copy or save)
@@ -917,8 +930,10 @@ settles them; update this section when it does.
   described, including `SHOW TABLE` and `svv_all_*` permissions for
   non-superusers.
 - The structure tree on Redshift (first released build, against a real
-  cluster, as a non-superuser): `list-schemas`, `list-objects`,
-  `list-columns` and `completion-schema` answer; Redshift's internal
+  cluster, as a non-superuser): `list-schemas`, `describe-schema`,
+  `describe-object` and `completion-schema` answer, including the
+  functions query (`pg_proc` without `prokind`, `oidvectortypes`) and the
+  keys query (`pg_constraint`, `any(conkey)`, `pg_get_constraintdef`); Redshift's internal
   schemas stay hidden (the filter drops `pg_*` and
   `information_schema` only); and how long `completion-schema` takes on
   a large cluster.
