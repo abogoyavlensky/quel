@@ -65,6 +65,12 @@ describe("openPalette", () => {
     openPalette("connections");
     expect(store.getState().palette).toBeNull();
   });
+
+  it("is refused while a run waits for its confirmation", () => {
+    store.setState({ runConfirm: { profileId: "p1", reason: "writes", statements: ["delete from t"], total: 1 } });
+    openPalette("commands");
+    expect(store.getState().palette).toBeNull();
+  });
 });
 
 describe("modalOpen", () => {
@@ -72,6 +78,9 @@ describe("modalOpen", () => {
     expect(modalOpen(initialState())).toBe(false);
     expect(modalOpen({ ...initialState(), profileDialog: { mode: "new" } })).toBe(true);
     expect(modalOpen({ ...initialState(), updateDialogOpen: true })).toBe(true);
+    expect(
+      modalOpen({ ...initialState(), runConfirm: { profileId: "p1", reason: "always", statements: [], total: 1 } }),
+    ).toBe(true);
     expect(modalOpen({ ...initialState(), palette: "commands" })).toBe(true);
   });
 });
