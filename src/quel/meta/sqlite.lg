@@ -1,6 +1,7 @@
 (ns quel.meta.sqlite
   (:require [quel.meta :as meta]
-            [sql.core :as sql]))
+            [sql.core :as sql]
+            [string :as str]))
 
 ;; SQLite's catalog, through its table-valued pragma functions (modernc
 ;; v1.57.0 is SQLite 3.5x; pragma_table_list needs 3.37).
@@ -44,3 +45,58 @@
                          (meta/objects :sqlite db schema))))
        (take meta/completion-limit)
        vec))
+
+;; Indexes and keys. sqlite_autoindex_* indexes (from UNIQUE and a non-rowid
+;; PRIMARY KEY) are listed: their names say what they are. A rowid INTEGER
+;; PRIMARY KEY has no index at all.
+
+(defn- index-columns [db schema index]
+  (mapv (fn [{:keys [name]}] (or name "<expr>"))
+        (sql/execute! db ["select name from pragma_index_info(?, ?) order by seqno" index schema])))
+
+(defn- column-list [cols] (str "(" (str/join ", " cols) ")"))
+
+(defn- index-list [db schema name]
+  (sql/execute! db [(str "select name, \"unique\" as is_unique, origin, partial"
+                         " from pragma_index_list(?, ?) order by name")
+                    name schema]))
+
+(defmethod meta/indexes :sqlite [_ db schema name]
+  (mapv (fn [{index :name :keys [is_unique origin partial]}]
+          {:name index
+           :definition (str (column-list (index-columns db schema index))
+                            (when (= 1 partial) " partial"))
+           :unique (= 1 is_unique)
+           :primary (= "pk" origin)})
+        (index-list db schema name)))
+
+(defn- primary-key [db schema name]
+  (let [cols (mapv :name (sql/execute! db ["select name from pragma_table_xinfo(?, ?) where pk > 0 order by pk"
+                                           name schema]))]
+    (when (seq cols)
+      [{:name nil :kind "primary-key" :columns cols :definition (str "PRIMARY KEY " (column-list cols))}])))
+
+(defn- uniques [db schema name]
+  (for [{index :name :keys [origin]} (index-list db schema name)
+        :when (= "u" origin)
+        :let [cols (index-columns db schema index)]]
+    {:name nil :kind "unique" :columns cols :definition (str "UNIQUE " (column-list cols))}))
+
+;; One row per column of each key, grouped by the key's id. A null "to" is
+;; the parent's primary key.
+(defn- foreign-keys [db schema name]
+  (->> (sql/execute! db [(str "select id, \"table\" as parent, \"from\" as src, \"to\" as dst"
+                              " from pragma_foreign_key_list(?, ?) order by id, seq")
+                         name schema])
+       (partition-by :id)
+       (map (fn [rows]
+              (let [src (mapv :src rows)
+                    dst (keep :dst rows)
+                    parent (:parent (first rows))]
+                {:name nil :kind "foreign-key" :columns src
+                 :definition (str "FOREIGN KEY " (column-list src) " REFERENCES " parent
+                                  (when (seq dst) (column-list dst)))})))))
+
+;; Check constraints live only in sqlite_schema.sql, so they are not listed.
+(defmethod meta/constraints :sqlite [_ db schema name]
+  (vec (concat (primary-key db schema name) (uniques db schema name) (foreign-keys db schema name))))
