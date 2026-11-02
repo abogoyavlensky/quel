@@ -17,13 +17,14 @@ import { ConnMark } from "./ConnMark";
 // tint gets lost on a red or orange tag. It opens the update dialog.
 //
 // The strip is the window's drag area: on macOS the title bar is hidden
-// (:mac-title-bar :hidden) and the traffic lights float over its left end.
-// The button opts out (no-drag), so a click on it is a click. It is 36px,
-// so the tint shows around the pill; the standard title bar's lights sit a
-// few pixels above its centre. The content is centred, with the same wide
-// padding on both sides so the pill never runs under the button or the
-// lights; fullscreen, where the lights go away, needs nothing. Server mode
-// and Linux have no traffic lights; it reads the same.
+// (:mac-title-bar :hidden-inset-compact) and the traffic lights float over
+// its left end. The button opts out (no-drag), so a click on it is a click.
+// That preset adds an empty toolbar in AppKit's compact style, and macOS
+// centres the lights in its 38px band: the strip is 38px, so they sit on
+// its centre line, with the tint around the pill. The content is centred,
+// with the same wide padding on both sides so the pill never runs under
+// the button or the lights; fullscreen, where the lights go away, needs
+// nothing. Server mode and Linux have no traffic lights; it reads the same.
 export function TitleBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
@@ -36,7 +37,7 @@ export function TitleBar() {
     <header
       style={tag ? ({ "--tag": `var(--color-tag-${tag})` } as CSSProperties) : undefined}
       className={cn(
-        "relative flex h-9 shrink-0 items-center justify-center border-b bg-chrome px-40 text-xs [--wails-draggable:drag] select-none",
+        "relative flex h-[38px] shrink-0 items-center justify-center border-b bg-chrome px-40 text-xs [--wails-draggable:drag] select-none",
         tag &&
           "border-[color-mix(in_oklab,var(--tag)_25%,var(--border))] bg-[color-mix(in_oklab,var(--tag)_12%,var(--chrome))]",
       )}

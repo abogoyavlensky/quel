@@ -479,10 +479,12 @@ at the bottom right.
   a grey stop to disconnect (play is Run's icon, so it is not reused). The pencil shows on hover, and a
   right-click offers Connect or Disconnect, Edit… and Delete….
 - **The window.** On macOS the title bar is hidden (`:mac-title-bar
-  :hidden`): the top strip is the drag area
+  :hidden-inset-compact`): the top strip is the drag area
   (`--wails-draggable: drag`) and the traffic lights float over its left
-  end. The strip is 36px, so the tint shows around the connection pill;
-  the standard title bar's lights sit a few pixels above its centre. Its
+  end. That preset (the wails package's, from `wails-v0.7.0`) adds an
+  empty toolbar in AppKit's compact style, and macOS centres the lights in
+  its 38px band; the strip is 38px to match, so the lights sit on its
+  centre line. Wails cannot place the lights itself. Its
   content is centred with the same wide padding on both sides, so the
   pill clears the lights and the Update button at the right end, and
   fullscreen needs nothing. The button opts out of the drag area
