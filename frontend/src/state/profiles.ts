@@ -76,7 +76,7 @@ export async function deleteProfile(id: string): Promise<void> {
   if (store.getState().selected === id) {
     const first = store.getState().profiles.find((p) => p.id !== id);
     if (first) await selectProfile(first.id, { remember: false });
-    else store.setState({ selected: null, notice: null });
+    else store.setState({ selected: null });
   }
 }
 

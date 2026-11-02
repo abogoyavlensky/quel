@@ -4,6 +4,9 @@ import type { WorkspaceInput } from "@/lib/types";
 const api = vi.hoisted(() => ({ saveWorkspace: vi.fn() }));
 vi.mock("@/lib/api", () => api);
 
+const toasts = vi.hoisted(() => ({ error: vi.fn(), dismiss: vi.fn() }));
+vi.mock("@/lib/notify", () => ({ notify: toasts }));
+
 const texts = vi.hoisted(() => ({}) as Record<string, string>);
 vi.mock("@/editor/states", () => ({
   currentInput: (id: string) => ({ text: texts[id] ?? "", selection: { from: 1, to: 2 } }),
@@ -29,6 +32,8 @@ const sent = (i: number) => api.saveWorkspace.mock.calls[i][1] as WorkspaceInput
 beforeEach(() => {
   vi.useFakeTimers();
   api.saveWorkspace.mockReset();
+  toasts.error.mockReset();
+  toasts.dismiss.mockReset();
   api.saveWorkspace.mockResolvedValue(undefined);
   for (const k of Object.keys(texts)) delete texts[k];
   store.setState({ ...initialState(), selected: "p1", workspaces: { p1: newWorkspace("p1") } }, true);
@@ -132,11 +137,22 @@ describe("persist", () => {
     api.saveWorkspace.mockRejectedValueOnce(new Error("database is locked"));
     persist.scheduleSave("p1");
     await vi.advanceTimersByTimeAsync(800);
-    expect(store.getState().notice).toBe("Could not save tabs: database is locked");
+    expect(toasts.error).toHaveBeenCalledWith("Could not save tabs: database is locked", {
+      id: "save-failed-p1",
+      duration: Infinity,
+    });
+    expect(toasts.dismiss).not.toHaveBeenCalled();
     persist.scheduleSave("p1");
     await vi.advanceTimersByTimeAsync(800);
     expect(api.saveWorkspace).toHaveBeenCalledTimes(2);
-    expect(store.getState().notice).toBeNull();
+    expect(toasts.dismiss).toHaveBeenCalledWith("save-failed-p1");
+  });
+
+  it("a good save with no failure before dismisses nothing", async () => {
+    persist.scheduleSave("p1");
+    await vi.advanceTimersByTimeAsync(800);
+    expect(api.saveWorkspace).toHaveBeenCalledTimes(1);
+    expect(toasts.dismiss).not.toHaveBeenCalled();
   });
 
   it("flushAllAndWait waits for a save already running", async () => {

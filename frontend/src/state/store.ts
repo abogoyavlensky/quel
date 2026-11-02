@@ -98,7 +98,6 @@ export interface AppState {
   profileDialog: ProfileDialog;
   selected: string | null; // the profile whose workspace shows
   workspaces: Record<string, Workspace>; // by profile id
-  notice: string | null; // a one-line hint for the status bar
   rowDetails: boolean; // the row details panel is open; in memory only
   // The user hid the sidebar (saved in the app database); null until it is
   // read at start-up, which shows it. state/layout.ts.
@@ -153,7 +152,6 @@ export function initialState(): AppState {
     profileDialog: null,
     selected: null,
     workspaces: {},
-    notice: null,
     rowDetails: false,
     sidebarHidden: null,
     export: { format: "csv", separator: "," },
