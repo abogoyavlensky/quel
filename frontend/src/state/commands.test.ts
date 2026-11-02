@@ -18,6 +18,9 @@ const updates = vi.hoisted(() => ({ checkForUpdates: vi.fn() }));
 vi.mock("./updates", () => updates);
 const palette = vi.hoisted(() => ({ openPalette: vi.fn() }));
 vi.mock("./palette", () => palette);
+const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
+vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
+vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
 import { commands } from "./commands";
@@ -70,6 +73,7 @@ describe("commands", () => {
       "new-connection",
       "edit-connection",
       "row-details",
+      "sidebar",
       "check-updates",
     ]);
   });
@@ -126,13 +130,20 @@ describe("commands", () => {
     expect(title(initialState())).toBe("Show Row Details");
     expect(title({ ...initialState(), rowDetails: true })).toBe("Hide Row Details");
   });
+
+  it("offers the sidebar entry only with a tab strip, titled after the sidebar", () => {
+    expect(ids(state("disconnected", (w) => (w.loadError = "boom")))).not.toContain("sidebar");
+    const title = (s: AppState) => commands(s).find((c) => c.id === "sidebar")!.title;
+    expect(title(state())).toBe("Hide Sidebar");
+    expect(title({ ...state(), sidebarHidden: true })).toBe("Show Sidebar");
+  });
 });
 
 describe("focus", () => {
   it("keeps focus only for the entries that do not move it", () => {
     const w = state("connected", (w) => (w.closed = [{ id: "c1" } as (typeof w.closed)[number]]));
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
-    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details"]);
+    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
     expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
   });

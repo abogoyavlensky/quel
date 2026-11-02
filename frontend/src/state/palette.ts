@@ -1,5 +1,6 @@
 import { focusEditor } from "@/editor/states";
 import { selectTab } from "@/state/runner";
+import { toggleSidebar } from "./layout";
 import { store, selectedWorkspace, type AppState } from "@/state/store";
 
 // The two palettes (components/CommandPalette.tsx, GoToConnection.tsx) and
@@ -51,6 +52,12 @@ function loadedWorkspace() {
 // ⌘E: the current tab's editor.
 export function focusEditorKey(): void {
   if (loadedWorkspace()) focusEditor();
+}
+
+// ⌘B: hide or show the sidebar (layout.ts does nothing without a tab
+// strip).
+export function toggleSidebarKey(): void {
+  if (!modalOpen(store.getState())) toggleSidebar();
 }
 
 // ⌘1–⌘9: tab n, and its editor; 9 is the last tab, as in browsers.

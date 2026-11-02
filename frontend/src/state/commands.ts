@@ -7,9 +7,11 @@ import {
   ROW_KEY,
   RUN_KEY,
   SCRIPT_KEY,
+  SIDEBAR_KEY,
   STOP_KEY,
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
+import { sidebarShown, toggleSidebar } from "./layout";
 import { openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
@@ -181,6 +183,16 @@ export function commands(s: AppState): Command[] {
     keys: ROW_KEY,
     run: toggleRowDetails,
   });
+  add(
+    loaded && {
+      id: "sidebar",
+      keepsFocus: true,
+      group: "View",
+      title: sidebarShown(s) ? "Hide Sidebar" : "Show Sidebar",
+      keys: SIDEBAR_KEY,
+      run: toggleSidebar,
+    },
+  );
 
   add({
     id: "check-updates",
