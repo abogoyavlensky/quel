@@ -1,8 +1,36 @@
+import { Lock, ShieldAlert } from "lucide-react";
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import type { RunPolicy } from "@/sql/guard";
+import { RUN_POLICIES } from "@/state/profileForm";
 import { selectedWorkspace, useApp } from "@/state/store";
 import { engineLabel, tagInk } from "./colors";
 import { ConnMark } from "./ConnMark";
+
+// A run policy other than Never ask, at the end of the connection pill.
+// Neutral ink: colour belongs to the tag.
+const policyMark: Record<Exclude<RunPolicy, "never">, { icon: typeof Lock; text: string }> = {
+  writes: { icon: ShieldAlert, text: "Asks before changes" },
+  always: { icon: ShieldAlert, text: "Asks before every query" },
+  "read-only": { icon: Lock, text: "Read-only" },
+};
+
+function PolicyMark({ policy }: { policy: RunPolicy }) {
+  if (policy === "never") return null;
+  const { icon: Icon, text } = policyMark[policy];
+  return (
+    <>
+      <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+      <span
+        className="flex shrink-0 items-center gap-1 text-muted-foreground"
+        title={RUN_POLICIES.find((p) => p.value === policy)?.hint}
+      >
+        <Icon aria-hidden className="size-3" />
+        {text}
+      </span>
+    </>
+  );
+}
 
 // The strip across the top of the window: the selected connection, or
 // "Quel" with none. A colour tag tints the strip and colours the name, the
@@ -13,6 +41,7 @@ import { ConnMark } from "./ConnMark";
 // pixels above its centre. The content is centred, so it
 // reserves no room for them, and fullscreen, where they go away, needs
 // nothing. Server mode and Linux have no traffic lights; it reads the same.
+// The pill ends with the profile's run policy, unless it is Never ask.
 export function TitleBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
@@ -42,6 +71,7 @@ export function TitleBar() {
             {profile.name}
           </span>
           <span className="shrink-0 text-muted-foreground">{engineLabel[profile.engine]}</span>
+          <PolicyMark policy={profile["run-policy"]} />
         </span>
       ) : (
         <span className="text-muted-foreground">Quel</span>
