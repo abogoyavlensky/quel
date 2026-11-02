@@ -2,16 +2,16 @@ import type { ExportFormat } from "@/grid/export";
 import { call } from "@/lib/bridge";
 import type {
   ClosedTab,
-  ColumnInfo,
   CompletionSchema,
   FetchResult,
-  ObjectInfo,
+  ObjectDetails,
   OpenResult,
   Profile,
   ProfileInput,
   RunResult,
   SavedTab,
   SavedWorkspace,
+  SchemaContents,
   SchemaInfo,
   UpdateCheck,
   WorkspaceInput,
@@ -48,20 +48,42 @@ export const exportResult = (format: ExportFormat, filename: string, text: strin
 export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
 
 // The structure of an open database. The bridge lowers an empty list to
-// {} or null, so the list calls check the shape.
+// {} or null, at any depth, and may drop a nil value, so the replies are
+// normalized here.
 
-const list = async <T>(p: Promise<unknown>) => {
-  const r = await p;
-  return Array.isArray(r) ? (r as T[]) : [];
+const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const strOrNull = (v: unknown): string | null => (typeof v === "string" ? v : null);
+type Raw = Record<string, unknown> | null | undefined;
+
+export const listSchemas = async (connId: string) => arr<SchemaInfo>(await call("list-schemas", connId));
+
+export const describeSchema = async (connId: string, schema: string): Promise<SchemaContents> => {
+  const r = (await call<Raw>("describe-schema", connId, schema)) ?? {};
+  return {
+    objects: arr(r.objects),
+    functions: arr(r.functions),
+    types: arr<Record<string, unknown>>(r.types).map((t) => ({
+      ...(t as unknown as SchemaContents["types"][number]),
+      detail: strOrNull(t.detail),
+      values: arr<string>(t.values),
+    })),
+    sequences: arr(r.sequences),
+  };
 };
 
-export const listSchemas = (connId: string) => list<SchemaInfo>(call("list-schemas", connId));
-
-export const listObjects = (connId: string, schema: string) =>
-  list<ObjectInfo>(call("list-objects", connId, schema));
-
-export const listColumns = (connId: string, schema: string, name: string) =>
-  list<ColumnInfo>(call("list-columns", connId, schema, name));
+export const describeObject = async (connId: string, schema: string, name: string): Promise<ObjectDetails> => {
+  const r = (await call<Raw>("describe-object", connId, schema, name)) ?? {};
+  return {
+    columns: arr(r.columns),
+    indexes: arr(r.indexes),
+    keys: arr<Record<string, unknown>>(r.keys).map((k) => ({
+      ...(k as unknown as ObjectDetails["keys"][number]),
+      name: strOrNull(k.name),
+      columns: arr<string>(k.columns),
+    })),
+    sequences: arr(r.sequences),
+  };
+};
 
 export const completionSchema = async (connId: string): Promise<CompletionSchema> => {
   const r = await call<Partial<CompletionSchema> | null>("completion-schema", connId);
