@@ -28,7 +28,7 @@ const SEPARATORS: { value: CsvSeparator; label: string }[] = [
 export function ExportMenu({ tabId, result }: { tabId: string; result: ResultTab }) {
   const { format, separator } = useApp((s) => s.export);
   const [open, setOpen] = useState(false);
-  // The export is loading the rest of an open result (the grid footer shows
+  // The export is loading the rest of an open result (the results footer shows
   // the progress): both buttons are disabled until it is done.
   const [busy, setBusy] = useState(false);
 
