@@ -100,6 +100,9 @@ export interface AppState {
   workspaces: Record<string, Workspace>; // by profile id
   notice: string | null; // a one-line hint for the status bar
   rowDetails: boolean; // the row details panel is open; in memory only
+  // The user hid the sidebar (saved in the app database); null until it is
+  // read at start-up, which shows it. state/layout.ts.
+  sidebarHidden: boolean | null;
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
@@ -152,6 +155,7 @@ export function initialState(): AppState {
     workspaces: {},
     notice: null,
     rowDetails: false,
+    sidebarHidden: null,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,
