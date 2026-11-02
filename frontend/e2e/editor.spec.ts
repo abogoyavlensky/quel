@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { connectFixture, ensureProfile, profileRow } from "./connect";
+import { connectFixture, ensureProfile, expectConnected, profileRow } from "./connect";
 
 // The editor itself: Tab, the block behind the statement ⌘↵ will run, the
 // completion popup's icons, and the message on a profile that is not
@@ -75,6 +75,6 @@ test("an empty tab of a profile that is not connected says so", async ({ page })
   await expect(page.getByText("Editor offline isn't connected.")).toBeVisible();
   await expect(page.getByText("Run the statement under the cursor")).toHaveCount(0);
   await page.getByRole("button", { name: "Connect to Editor offline" }).click();
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
   await expect(page.getByText("Run the statement under the cursor")).toBeVisible();
 });

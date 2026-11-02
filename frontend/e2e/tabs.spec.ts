@@ -59,7 +59,7 @@ test("tabs keep their names, pins and text across a reload, and closed ones reop
   // A pinned tab is not closed (the middle click takes the path Cmd+W does).
   await tab(page, "Query 2").click({ button: "middle" });
   await expect(editorTabs(page)).toHaveText(["Query 2", "Counts"]);
-  await expect(page.getByRole("status")).toHaveText("Unpin the tab to close it.");
+  await expect(page.locator("[data-sonner-toast]", { hasText: "Unpin the tab to close it." })).toBeVisible();
 
   // Close the other, and reopen it from the history menu, text and all.
   await page.getByRole("button", { name: "Close Counts" }).click();

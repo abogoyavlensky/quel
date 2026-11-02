@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { ensureProfile, profileRow } from "./connect";
+import { ensureProfile, expectConnected, expectNotConnected, profileRow } from "./connect";
 
 // The two palettes and the keys that reach the editor and the tabs: ⌘P goes
 // to a connection, ⇧⌘P runs a command, ⌘E and ⌘1–9 move to the editor and
@@ -36,7 +36,7 @@ test("palettes, the editor key and the tab keys", async ({ page }) => {
   await choose(page, "ControlOrMeta+p", "Go to Connection", name);
   await expect(page.getByRole("banner")).toContainText(name);
   await expect(editor(page)).toBeFocused();
-  await expect(page.getByRole("status")).not.toHaveText("Ready");
+  await expectNotConnected(page);
 
   // ⇧⌘P → New Tab adds a tab, and the editor has focus.
   await expect(editorTabs(page)).toHaveCount(1);
@@ -46,7 +46,7 @@ test("palettes, the editor key and the tab keys", async ({ page }) => {
 
   // ⇧⌘P → Connect connects the selected connection.
   await choose(page, "ControlOrMeta+Shift+p", "Command Palette", "Connect");
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
   // Connect does not move focus, so the palette gives it back.
   await expect(editor(page)).toBeFocused();
 
