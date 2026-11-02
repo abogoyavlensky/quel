@@ -216,3 +216,53 @@ export function split(text: string): Statement[] {
   finish();
   return out;
 }
+
+// The statement's words for classify.ts: unquoted words lower-cased, plus
+// `(`, `)` and `=`, in order. Comments, string literals and dollar-quoted
+// bodies are skipped by the same rules as split. A quoted identifier
+// ("..." or `...`) is one token: `"` and its content lower-cased, a doubled
+// quote collapsed, so it never equals a keyword. `[` and `]` are dropped as
+// punctuation, so a SQLite [name] gives its words; that can only make a
+// statement look more like a write.
+export function tokens(text: string): string[] {
+  const out: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    const prev = i > 0 ? text[i - 1] : "";
+    if (c === "-" && text[i + 1] === "-") {
+      const nl = text.indexOf("\n", i);
+      i = nl < 0 ? text.length : nl;
+    } else if (c === "/" && text[i + 1] === "*") {
+      i = skipBlockComment(text, i);
+    } else if (c === "'") {
+      const escaped = (prev === "E" || prev === "e") && !(i > 1 && isIdentChar(text[i - 2]));
+      i = skipQuoted(text, i, "'", escaped);
+    } else if (c === '"' || c === "`") {
+      const j = skipQuoted(text, i, c, false);
+      const end = text[j - 1] === c && j - 1 > i ? j - 1 : j;
+      out.push('"' + text.slice(i + 1, end).split(c + c).join(c).toLowerCase());
+      i = j;
+    } else if (c === "$" && !isIdentChar(prev)) {
+      dollarTag.lastIndex = i;
+      const m = dollarTag.exec(text);
+      if (m) {
+        const close = text.indexOf(m[0], i + m[0].length);
+        i = close < 0 ? text.length : close + m[0].length;
+      } else {
+        i++;
+      }
+    } else if (isIdentStart(c)) {
+      let j = i + 1;
+      while (j < text.length && isIdentChar(text[j])) j++;
+      const word = text.slice(i, j).toLowerCase();
+      // E'...': the E is the string's prefix, not a word.
+      if (!(word === "e" && text[j] === "'")) out.push(word);
+      i = j;
+    } else {
+      if (c === "(" || c === ")" || c === "=") out.push(c);
+      i++;
+    }
+  }
+  return out;
+}
