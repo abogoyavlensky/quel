@@ -13,7 +13,8 @@
 ;; tests run them against Postgres, which shows they parse and have the
 ;; right shape, nothing more. What pg_catalog misses on Redshift - external
 ;; schemas, datashares, late-binding view columns - is in docs/backlog.
-;; quel.meta.redshift comes with Redshift-only catalog work.
+;; quel.meta.redshift comes with Redshift-only catalog work (dist and sort
+;; keys, external schemas).
 
 (def ^:private schema-filter
   "n.nspname not like 'pg\\_%' and n.nspname <> 'information_schema'")
@@ -208,3 +209,22 @@
 (defmethod meta/owned-sequences :postgres [_ db schema name]
   (mapv (fn [{:keys [name col]}] {:name name :column col})
         (sql/execute! db [owned-sequences-sql schema name])))
+
+;; Redshift, unverified against Redshift: functions without prokind
+;; (Postgres 11+) or the extension filter (Redshift has no extensions),
+;; and keys through the Postgres query, which stays in the shared subset.
+;; Redshift has no user types, no indexes (dist and sort keys instead,
+;; backlogged), and IDENTITY columns rather than sequences, so those
+;; methods fall to the [] default.
+
+(def ^:private redshift-functions-sql
+  (str "select p.proname as name, oidvectortypes(p.proargtypes) as args"
+       " from pg_proc p join pg_namespace n on n.oid = p.pronamespace"
+       " where n.nspname = $1"
+       " order by p.proname, args"))
+
+(defmethod meta/functions :redshift [_ db schema]
+  (mapv (fn [{:keys [name args]}] {:name name :kind "function" :args args})
+        (sql/execute! db [redshift-functions-sql schema])))
+
+(defmethod meta/constraints :redshift [engine db schema name] (constraints* engine db schema name))

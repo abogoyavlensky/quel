@@ -399,7 +399,20 @@
         (is (= (meta/columns :postgres db schema "items") (meta/columns :redshift db schema "items")))
         (let [c (meta/completion-schema :redshift db)]
           (is (= "public" (:default-schema c)))
-          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"]))))))))
+          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"]))))
+        ;; No extension filter on Redshift: citext's functions show here.
+        (is (= [{:name "add_one" :kind "function" :args "integer"}
+                {:name "add_one" :kind "function" :args "integer, integer"}
+                {:name "noop" :kind "function" :args ""}]
+               (filterv #(#{"add_one" "noop"} (:name %)) (meta/functions :redshift db schema))))
+        (is (= (meta/constraints :postgres db schema "orders") (meta/constraints :redshift db schema "orders")))
+        (is (= [] (meta/types :redshift db schema)))
+        (is (= [] (meta/sequences :redshift db schema)))
+        (is (= [] (meta/indexes :redshift db schema "orders")))
+        (is (= [] (meta/owned-sequences :redshift db schema "items")))
+        (let [by (into {} (map (juxt :name identity) (:columns (meta/describe-object :redshift db schema "orders"))))]
+          (is (:pk (by "id")))
+          (is (:fk (by "item_id"))))))))
 
 (deftest postgres-schema-contents
   (with-pg
