@@ -122,6 +122,12 @@
 (defn select-profile [{:keys [store]} profile-id]
   (workspace/select-profile! store profile-id))
 
+(defn sidebar-hidden [{:keys [store]}]
+  (workspace/sidebar-hidden store))
+
+(defn set-sidebar-hidden [{:keys [store]} hidden?]
+  (workspace/set-sidebar-hidden! store (true? hidden?)))
+
 ;; New versions (quel.updates).
 
 (defn check-update [{:keys [updates]}]
@@ -166,6 +172,8 @@
    "reopen-tab" #'reopen-tab
    "selected-profile" #'selected-profile
    "select-profile" #'select-profile
+   "sidebar-hidden" #'sidebar-hidden
+   "set-sidebar-hidden" #'set-sidebar-hidden
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update

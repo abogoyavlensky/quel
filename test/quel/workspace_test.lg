@@ -181,3 +181,14 @@
         (is (= b (workspace/selected-profile db)))
         (workspace/select-profile! db nil)
         (is (nil? (workspace/selected-profile db)))))))
+
+(deftest the-sidebar-setting-round-trips
+  (with-store
+    (fn [db _]
+      (is (false? (workspace/sidebar-hidden db)))
+      (workspace/set-sidebar-hidden! db true)
+      (workspace/set-sidebar-hidden! db true)
+      (is (true? (workspace/sidebar-hidden db)))
+      (workspace/set-sidebar-hidden! db false)
+      (is (false? (workspace/sidebar-hidden db)))
+      (is (= 0 (:n (sql/execute-one! db ["select count(*) as n from settings where key = 'sidebar-hidden'"])))))))
