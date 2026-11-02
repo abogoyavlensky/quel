@@ -6,6 +6,7 @@ import { toast } from "sonner";
 // sonner. Pass an id to replace a notice rather than stack another.
 export interface NoticeOptions {
   id?: string;
+  duration?: number; // ms on screen; Infinity keeps it until dismissed
   action?: { label: string; onClick: () => void };
 }
 
