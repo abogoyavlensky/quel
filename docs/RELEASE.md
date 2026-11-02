@@ -171,7 +171,7 @@ tools, `gh` and the tap, on any machine.
 ## How users get a release
 
 A published release reaches running copies of Quel at their next launch
-or within 6 hours: an Update button in the status bar offers it, and the
+or within 6 hours: an Update button in the top strip offers it, and the
 app downloads it, checks its checksum and that it is signed with the same
 Developer ID, swaps `Quel.app` and restarts. The cask says `auto_updates
 true`, so a plain `brew upgrade` skips Quel; `brew upgrade --cask quel`

@@ -53,7 +53,7 @@ like any other app downloaded from the internet.
 ### Update
 
 Quel tells you when a new version is out: an **Update** button appears at
-the right end of the status bar (or use Help → Check for Updates…). It
+the right end of the top strip (or use Help → Check for Updates…). It
 downloads the new version, checks that it is signed by the same developer,
 and restarts into it. You can also skip a version, or update with Homebrew:
 
