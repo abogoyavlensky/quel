@@ -9,7 +9,7 @@ import type { CsvSeparator, ExportFormat } from "@/grid/export";
 import { exportResult, setExport } from "@/state/runner";
 import { type ResultTab, useApp } from "@/state/store";
 
-// The grid footer's Export button: a popover to pick the format (and, for
+// The results footer's Export button: a popover to pick the format (and, for
 // CSV, the separator), then copy the result or save it to a file. The
 // choice is app-wide (AppState.export), so it opens as it was left.
 
