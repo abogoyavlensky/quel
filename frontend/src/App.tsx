@@ -6,7 +6,7 @@ import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
 import { loadSidebar } from "@/state/layout";
-import { focusEditorKey, focusTabKey, openPalette, toggleSidebarKey } from "@/state/palette";
+import { focusEditorKey, focusResultKey, focusTabKey, openPalette, toggleSidebarKey } from "@/state/palette";
 import { shortcutOf } from "@/state/shortcuts";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { isMac } from "@/components/keys";
@@ -81,7 +81,8 @@ function useStopKey() {
   }, []);
 }
 
-// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘1–⌘9 pick a tab,
+// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘R the result
+// grid, ⌘1–⌘9 pick a tab,
 // ⌘B hides or shows the sidebar (state/shortcuts.ts). Only the palettes
 // have native View menu items: nine "Tab N" items would be clutter, a
 // toggle like ⌘B cannot take the double delivery (as ⌘I), and a menu item
@@ -97,6 +98,7 @@ function useGlobalKeys() {
       e.stopPropagation();
       if (k.kind === "palette") openPalette(k.palette);
       else if (k.kind === "editor") focusEditorKey();
+      else if (k.kind === "result") focusResultKey();
       else if (k.kind === "sidebar") toggleSidebarKey();
       else focusTabKey(k.n);
     };

@@ -10,13 +10,14 @@ vi.mock("./layout", () => ({ toggleSidebar }));
 import {
   closePalette,
   focusEditorKey,
+  focusResultKey,
   focusTabKey,
   modalOpen,
   openPalette,
   restoreFocus,
   toggleSidebarKey,
 } from "./palette";
-import { initialState, newTabState, newWorkspace, store } from "./store";
+import { MESSAGES, initialState, newTabState, newWorkspace, store } from "./store";
 
 // A workspace for profile p with n tabs.
 function seed(n = 1, patch: Partial<ReturnType<typeof newWorkspace>> = {}) {
@@ -72,6 +73,43 @@ describe("modalOpen", () => {
     expect(modalOpen({ ...initialState(), profileDialog: { mode: "new" } })).toBe(true);
     expect(modalOpen({ ...initialState(), updateDialogOpen: true })).toBe(true);
     expect(modalOpen({ ...initialState(), palette: "commands" })).toBe(true);
+  });
+});
+
+describe("focusResultKey", () => {
+  // The current tab with one result, r1, shown or not.
+  function withResult(active: string) {
+    seed();
+    store.setState((s) => {
+      const w = s.workspaces.p;
+      const tab = { ...w.tabs[0], results: [{ id: "r1" } as (typeof w.tabs)[0]["results"][number]], active };
+      return { workspaces: { p: { ...w, tabs: [tab] } } };
+    });
+  }
+  const grid = () => {
+    const el = { focus: vi.fn() };
+    vi.stubGlobal("document", { activeElement: null, querySelector: () => el });
+    return el;
+  };
+
+  it("focuses the grid of the shown result", () => {
+    withResult("r1");
+    const el = grid();
+    focusResultKey();
+    expect(el.focus).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing on Messages, with no such result, or under a dialog", () => {
+    const el = grid();
+    focusResultKey();
+    withResult(MESSAGES);
+    focusResultKey();
+    withResult("gone");
+    focusResultKey();
+    withResult("r1");
+    store.setState({ updateDialogOpen: true });
+    focusResultKey();
+    expect(el.focus).not.toHaveBeenCalled();
   });
 });
 

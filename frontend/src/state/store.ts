@@ -177,6 +177,15 @@ export function activeTabOf(w: Workspace): EditorTab {
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
 }
 
+// The selected workspace's current tab shows one of its results, not its
+// messages.
+export function showsResult(s: AppState): boolean {
+  const w = selectedWorkspace(s);
+  if (!w || w.loadError) return false;
+  const tab = activeTabOf(w);
+  return tab.active !== MESSAGES && tab.results.some((r) => r.id === tab.active);
+}
+
 export function updateWorkspace(profileId: string, f: (w: Workspace) => Workspace): void {
   store.setState((s) => {
     const w = s.workspaces[profileId];

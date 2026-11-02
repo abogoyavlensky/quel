@@ -4,6 +4,7 @@ import {
   GOTO_KEY,
   NEW_TAB_KEY,
   REOPEN_KEY,
+  RESULT_KEY,
   ROW_KEY,
   RUN_KEY,
   SCRIPT_KEY,
@@ -12,7 +13,7 @@ import {
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
 import { sidebarShown, toggleSidebar } from "./layout";
-import { openPalette } from "./palette";
+import { focusResult, openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
   cancel,
@@ -24,7 +25,7 @@ import {
   runCurrent,
   toggleRowDetails,
 } from "./runner";
-import { type AppState, activeTabOf, selectedWorkspace } from "./store";
+import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { checkForUpdates } from "./updates";
 
 // The Command Palette's entries: what can run now, as a hand-written list.
@@ -96,6 +97,16 @@ export function commands(s: AppState): Command[] {
       keys: FOCUS_KEY,
       run: () => void setTimeout(focusEditor),
     },
+  );
+  add(
+    loaded &&
+      showsResult(s) && {
+        id: "focus-result",
+        group: "Tabs",
+        title: "Focus Result",
+        keys: RESULT_KEY,
+        run: () => void setTimeout(focusResult),
+      },
   );
 
   add(

@@ -16,7 +16,7 @@ const profiles = vi.hoisted(() => ({ openProfileDialog: vi.fn() }));
 vi.mock("./profiles", () => profiles);
 const updates = vi.hoisted(() => ({ checkForUpdates: vi.fn() }));
 vi.mock("./updates", () => updates);
-const palette = vi.hoisted(() => ({ openPalette: vi.fn() }));
+const palette = vi.hoisted(() => ({ openPalette: vi.fn(), focusResult: vi.fn() }));
 vi.mock("./palette", () => palette);
 const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
 vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
@@ -129,6 +129,20 @@ describe("commands", () => {
     const title = (s: AppState) => commands(s).find((c) => c.id === "row-details")!.title;
     expect(title(initialState())).toBe("Show Row Details");
     expect(title({ ...initialState(), rowDetails: true })).toBe("Hide Row Details");
+  });
+
+  it("offers Focus Result only while the tab shows a result, after Focus Editor", () => {
+    expect(ids(state())).not.toContain("focus-result");
+    const withResult = (active: string) =>
+      state("connected", (w) => {
+        w.tabs[0].results = [{ id: "r1" } as (typeof w.tabs)[0]["results"][number]];
+        w.tabs[0].active = active;
+      });
+    expect(ids(withResult("messages"))).not.toContain("focus-result");
+    const got = ids(withResult("r1"));
+    expect(got.slice(got.indexOf("focus-editor"), got.indexOf("focus-editor") + 2)).toEqual(["focus-editor", "focus-result"]);
+    const entry = commands(withResult("r1")).find((c) => c.id === "focus-result")!;
+    expect(entry.keepsFocus).toBeFalsy();
   });
 
   it("offers the sidebar entry only with a tab strip, titled after the sidebar", () => {

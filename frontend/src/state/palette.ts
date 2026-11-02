@@ -1,7 +1,7 @@
 import { focusEditor } from "@/editor/states";
 import { selectTab } from "@/state/runner";
 import { toggleSidebar } from "./layout";
-import { store, selectedWorkspace, type AppState } from "@/state/store";
+import { store, selectedWorkspace, showsResult, type AppState } from "@/state/store";
 
 // The two palettes (components/CommandPalette.tsx, GoToConnection.tsx) and
 // the keys that reach the editor and the tabs from anywhere.
@@ -52,6 +52,19 @@ function loadedWorkspace() {
 // ⌘E: the current tab's editor.
 export function focusEditorKey(): void {
   if (loadedWorkspace()) focusEditor();
+}
+
+// The active result's grid (ResultGrid marks it; only the active result's
+// grid is mounted).
+export function focusResult(): void {
+  document.querySelector<HTMLElement>("[data-result-grid]")?.focus();
+}
+
+// ⌘R: the grid of the result the current tab shows. Nothing on Messages,
+// with no result, or under a dialog. The selected row stays as it is.
+export function focusResultKey(): void {
+  const s = store.getState();
+  if (!modalOpen(s) && showsResult(s)) focusResult();
 }
 
 // ⌘B: hide or show the sidebar (layout.ts does nothing without a tab

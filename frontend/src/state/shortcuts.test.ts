@@ -30,6 +30,12 @@ describe("shortcutOf", () => {
     expect(shortcutOf(ev("e", ctrl), false)).toEqual({ kind: "editor" });
   });
 
+  it("focuses the result on ⌘R", () => {
+    expect(shortcutOf(ev("r", cmd), true)).toEqual({ kind: "result" });
+    expect(shortcutOf(ev("r", ctrl), false)).toEqual({ kind: "result" });
+    expect(shortcutOf(ev("R", { ...cmd, shiftKey: true }), true)).toBeNull();
+  });
+
   it("hides and shows the sidebar on ⌘B", () => {
     expect(shortcutOf(ev("b", cmd), true)).toEqual({ kind: "sidebar" });
     expect(shortcutOf(ev("b", ctrl), false)).toEqual({ kind: "sidebar" });

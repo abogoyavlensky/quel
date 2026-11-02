@@ -107,6 +107,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
         ref={scroller}
         role="grid"
         aria-label="Result"
+        data-result-grid=""
         aria-rowcount={result.rows.length + 1}
         aria-colcount={result.columns.length}
         tabIndex={0}
