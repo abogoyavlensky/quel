@@ -3,7 +3,6 @@
             [quel.conn :as conn]
             [quel.exec :as exec]
             [quel.export :as export]
-            [quel.menu :as menu]
             [quel.meta :as meta]
             ;; Loaded for their quel.meta methods.
             [quel.meta.postgres]
@@ -83,10 +82,13 @@
         t (profiles/target p (profiles/saved-password secrets p))]
     (assoc (conn/open-target! conns t) :profile-id profile-id)))
 
+(def db-filters
+  [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
+
 (defn choose-file
   "The SQLite file the user picks, or nil when they cancel."
   [{:keys [app]}]
-  (w/open-file app {:title "Choose a Database File" :filters menu/db-filters}))
+  (w/open-file app {:title "Choose a Database File" :filters db-filters}))
 
 (defn export-result
   "Ask where to save a result exported as format (\"csv\", \"json\" or

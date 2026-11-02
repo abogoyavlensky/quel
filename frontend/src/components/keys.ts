@@ -7,7 +7,6 @@ export const STOP_KEY = isMac ? "⌘." : "Ctrl+.";
 export const NEW_TAB_KEY = isMac ? "⌘T" : "Ctrl+T";
 export const CLOSE_TAB_KEY = isMac ? "⌘W" : "Ctrl+W";
 export const REOPEN_KEY = isMac ? "⇧⌘T" : "Ctrl+Shift+T";
-export const OPEN_DB_KEY = isMac ? "⌘O" : "Ctrl+O";
 export const PALETTE_KEY = isMac ? "⇧⌘P" : "Ctrl+Shift+P";
 export const GOTO_KEY = isMac ? "⌘P" : "Ctrl+P";
 export const FOCUS_KEY = isMac ? "⌘E" : "Ctrl+E";

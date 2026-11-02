@@ -3,7 +3,6 @@ import {
   FOCUS_KEY,
   GOTO_KEY,
   NEW_TAB_KEY,
-  OPEN_DB_KEY,
   REOPEN_KEY,
   ROW_KEY,
   RUN_KEY,
@@ -11,7 +10,6 @@ import {
   STOP_KEY,
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
-import { chooseFile } from "@/lib/api";
 import { openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
@@ -174,17 +172,6 @@ export function commands(s: AppState): Command[] {
       run: () => openProfileDialog({ mode: "edit", id: selected }),
     },
   );
-  add({
-    id: "open-database",
-    group: "Connection",
-    title: "Open Database…",
-    keys: OPEN_DB_KEY,
-    run: async () => {
-      // A chosen file becomes a new SQLite profile, filled in for Save.
-      const path = await chooseFile();
-      if (path) openProfileDialog({ mode: "new", path });
-    },
-  });
 
   add({
     id: "row-details",

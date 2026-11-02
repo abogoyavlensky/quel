@@ -29,11 +29,6 @@ function useMenu() {
       onEvent("menu:run", () => void runCurrent("statement")),
       onEvent("menu:run-script", () => void runCurrent("script")),
       onEvent("menu:cancel", active(cancel)),
-      onEvent("menu:open-db", (data) => {
-        const path = (data as { path?: string } | null)?.path;
-        // A chosen file becomes a new SQLite profile, filled in for Save.
-        if (path) openProfileDialog({ mode: "new", path });
-      }),
       onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
       onEvent("menu:check-updates", () => void checkForUpdates({ manual: true })),
       onEvent("menu:command-palette", () => openPalette("commands")),

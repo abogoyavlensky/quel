@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Profile } from "@/lib/types";
-import { emptyForm, fileForm, fromProfile, missing, toInput, withEngine } from "./profileForm";
+import { emptyForm, fromProfile, missing, nameFromPath, toInput, withEngine } from "./profileForm";
 
 const saved: Profile = {
   id: "p1",
@@ -75,12 +75,9 @@ describe("profile form", () => {
     expect(missing({ ...emptyForm(), name: "n", host: "h" })).toBeNull();
   });
 
-  it("a chosen file becomes a SQLite profile named after it", () => {
-    expect(fileForm("/data/Sales Report.sqlite3")).toMatchObject({
-      engine: "sqlite",
-      name: "Sales Report",
-      path: "/data/Sales Report.sqlite3",
-    });
-    expect(fileForm("/data/archive.tar")).toMatchObject({ name: "archive.tar" });
+  it("names a connection after its file", () => {
+    expect(nameFromPath("/data/Sales Report.sqlite3")).toBe("Sales Report");
+    expect(nameFromPath("/data/archive.tar")).toBe("archive.tar");
+    expect(nameFromPath("C:\\data\\x.sqlite")).toBe("x");
   });
 });

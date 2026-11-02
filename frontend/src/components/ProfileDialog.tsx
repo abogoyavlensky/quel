@@ -32,7 +32,7 @@ import {
   type ProfileForm,
   SSL_MODES,
   emptyForm,
-  fileForm,
+  nameFromPath,
   fromProfile,
   missing,
   toInput,
@@ -66,7 +66,6 @@ export function ProfileDialog() {
         {dialog && (
           <ProfileEditor
             editing={editing}
-            path={dialog.mode === "new" ? dialog.path : undefined}
             askDelete={dialog.mode === "edit" && !!dialog.confirmDelete}
           />
         )}
@@ -77,15 +76,13 @@ export function ProfileDialog() {
 
 function ProfileEditor({
   editing,
-  path,
   askDelete = false,
 }: {
   editing: Profile | undefined;
-  path: string | undefined;
   askDelete?: boolean;
 }) {
   const [form, setForm] = useState<ProfileForm>(() =>
-    editing ? fromProfile(editing) : path ? fileForm(path) : emptyForm(),
+    editing ? fromProfile(editing) : emptyForm(),
   );
   const [test, setTest] = useState<TestState>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
@@ -167,7 +164,8 @@ function ProfileEditor({
   async function onBrowse() {
     try {
       const path = await chooseFile();
-      if (path) set({ path });
+      // A new file names an unnamed connection after itself.
+      if (path) set({ path, ...(form.name.trim() === "" ? { name: nameFromPath(path) } : {}) });
     } catch (err) {
       setError(errorText(err));
     }

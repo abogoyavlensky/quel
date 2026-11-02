@@ -164,10 +164,11 @@ encoding is involved. A profile with no saved password leaves the key out,
 and pgx's `PGPASSWORD` and `.pgpass` fallbacks apply as in `psql`. Errors
 are redacted with the password in its raw and DSN-escaped forms, and pgx's
 own parse errors drop the DSN it quotes. Every SQLite file opens as a
-`file:` URI, so a `?` or `#` in its path stays part of the name. A file
-The UI connects only through profiles: File > Open Database… (`⌘O`)
-turns the chosen SQLite file into a new profile, filled in for Save. The
-`open-db` handler still opens a bare path or URL, for the smoke test.
+`file:` URI, so a `?` or `#` in its path stays part of the name.
+The UI connects only through profiles, made with New Connection (the
+sidebar's +, the File menu, the Command Palette); for a SQLite file,
+Browse… names an unnamed one after the file. The `open-db` handler still
+opens a bare path or URL, for the smoke test.
 
 ### The app database
 
