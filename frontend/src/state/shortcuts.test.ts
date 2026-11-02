@@ -30,6 +30,19 @@ describe("shortcutOf", () => {
     expect(shortcutOf(ev("e", ctrl), false)).toEqual({ kind: "editor" });
   });
 
+  it("focuses the result on ⌘R", () => {
+    expect(shortcutOf(ev("r", cmd), true)).toEqual({ kind: "result" });
+    expect(shortcutOf(ev("r", ctrl), false)).toEqual({ kind: "result" });
+    expect(shortcutOf(ev("R", { ...cmd, shiftKey: true }), true)).toBeNull();
+  });
+
+  it("hides and shows the sidebar on ⌘B", () => {
+    expect(shortcutOf(ev("b", cmd), true)).toEqual({ kind: "sidebar" });
+    expect(shortcutOf(ev("b", ctrl), false)).toEqual({ kind: "sidebar" });
+    expect(shortcutOf(ev("B", { ...cmd, shiftKey: true }), true)).toBeNull();
+    expect(shortcutOf(ev("b", { ...cmd, altKey: true }), true)).toBeNull();
+  });
+
   it("picks a tab on ⌘1–⌘9, by code", () => {
     expect(shortcutOf(ev("1", { ...cmd, code: "Digit1" }), true)).toEqual({ kind: "tab", n: 1 });
     expect(shortcutOf(ev("&", { ...cmd, code: "Digit1" }), true)).toEqual({ kind: "tab", n: 1 });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HistoryIcon, PanelRight, Pin, Plus, X } from "lucide-react";
+import { HistoryIcon, PanelLeft, PanelRight, Pin, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ClosedTab } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { sidebarShown, toggleSidebar } from "@/state/layout";
 import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin, toggleRowDetails } from "@/state/runner";
 import { type EditorTab, type Workspace, useApp } from "@/state/store";
-import { ROW_KEY } from "./keys";
+import { ROW_KEY, SIDEBAR_KEY } from "./keys";
 
 // The selected workspace's editor tabs. Each is its own database session:
 // SET, temp tables and an open transaction stay in the tab they were made in.
@@ -120,6 +121,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
       </Button>
       <div className="flex-1" />
       <ClosedTabsMenu closed={closed} />
+      <SidebarToggle />
       <RowDetailsToggle />
     </div>
   );
@@ -174,6 +176,25 @@ function firstLine(body: string): string {
       .split("\n")
       .find((l) => l.trim() !== "")
       ?.trim() ?? ""
+  );
+}
+
+// Hides and shows the sidebar on the left. It sits by the row details
+// toggle so the panel buttons are together.
+function SidebarToggle() {
+  const shown = useApp(sidebarShown);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Sidebar"
+      aria-pressed={shown}
+      title={`Sidebar (${SIDEBAR_KEY})`}
+      onClick={toggleSidebar}
+      className={cn(shown && "bg-muted text-foreground")}
+    >
+      <PanelLeft />
+    </Button>
   );
 }
 

@@ -5,7 +5,8 @@ import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
-import { focusEditorKey, focusTabKey, openPalette } from "@/state/palette";
+import { loadSidebar } from "@/state/layout";
+import { focusEditorKey, focusResultKey, focusTabKey, openPalette, toggleSidebarKey } from "@/state/palette";
 import { shortcutOf } from "@/state/shortcuts";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { isMac } from "@/components/keys";
@@ -29,11 +30,6 @@ function useMenu() {
       onEvent("menu:run", () => void runCurrent("statement")),
       onEvent("menu:run-script", () => void runCurrent("script")),
       onEvent("menu:cancel", active(cancel)),
-      onEvent("menu:open-db", (data) => {
-        const path = (data as { path?: string } | null)?.path;
-        // A chosen file becomes a new SQLite profile, filled in for Save.
-        if (path) openProfileDialog({ mode: "new", path });
-      }),
       onEvent("menu:new-connection", () => openProfileDialog({ mode: "new" })),
       onEvent("menu:check-updates", () => void checkForUpdates({ manual: true })),
       onEvent("menu:command-palette", () => openPalette("commands")),
@@ -85,10 +81,12 @@ function useStopKey() {
   }, []);
 }
 
-// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘1–⌘9 pick a tab
-// (state/shortcuts.ts). Only the palettes have native View menu items: nine
-// "Tab N" items would be clutter, and a menu item does not exist in server
-// mode, where the key must come from here. With the app window a palette key
+// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘R the result
+// grid, ⌘1–⌘9 pick a tab,
+// ⌘B hides or shows the sidebar (state/shortcuts.ts). Only the palettes
+// have native View menu items: nine "Tab N" items would be clutter, a
+// toggle like ⌘B cannot take the double delivery (as ⌘I), and a menu item
+// does not exist in server mode, where the key must come from here. With the app window a palette key
 // may arrive twice (menu and page); opening sets the state, so that is
 // harmless. Caught in the capture phase, before the editor sees it.
 function useGlobalKeys() {
@@ -100,6 +98,8 @@ function useGlobalKeys() {
       e.stopPropagation();
       if (k.kind === "palette") openPalette(k.palette);
       else if (k.kind === "editor") focusEditorKey();
+      else if (k.kind === "result") focusResultKey();
+      else if (k.kind === "sidebar") toggleSidebarKey();
       else focusTabKey(k.n);
     };
     window.addEventListener("keydown", onKey, true);
@@ -133,6 +133,7 @@ export default function App() {
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
+    void loadSidebar();
   }, []);
   // New versions: 10 s after start, then every 6 hours.
   useEffect(() => {

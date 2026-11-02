@@ -3,16 +3,17 @@ import {
   FOCUS_KEY,
   GOTO_KEY,
   NEW_TAB_KEY,
-  OPEN_DB_KEY,
   REOPEN_KEY,
+  RESULT_KEY,
   ROW_KEY,
   RUN_KEY,
   SCRIPT_KEY,
+  SIDEBAR_KEY,
   STOP_KEY,
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
-import { chooseFile } from "@/lib/api";
-import { openPalette } from "./palette";
+import { sidebarShown, toggleSidebar } from "./layout";
+import { focusResult, openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
   cancel,
@@ -24,7 +25,7 @@ import {
   runCurrent,
   toggleRowDetails,
 } from "./runner";
-import { type AppState, activeTabOf, selectedWorkspace } from "./store";
+import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { checkForUpdates } from "./updates";
 
 // The Command Palette's entries: what can run now, as a hand-written list.
@@ -96,6 +97,16 @@ export function commands(s: AppState): Command[] {
       keys: FOCUS_KEY,
       run: () => void setTimeout(focusEditor),
     },
+  );
+  add(
+    loaded &&
+      showsResult(s) && {
+        id: "focus-result",
+        group: "Tabs",
+        title: "Focus Result",
+        keys: RESULT_KEY,
+        run: () => void setTimeout(focusResult),
+      },
   );
 
   add(
@@ -174,17 +185,6 @@ export function commands(s: AppState): Command[] {
       run: () => openProfileDialog({ mode: "edit", id: selected }),
     },
   );
-  add({
-    id: "open-database",
-    group: "Connection",
-    title: "Open Database…",
-    keys: OPEN_DB_KEY,
-    run: async () => {
-      // A chosen file becomes a new SQLite profile, filled in for Save.
-      const path = await chooseFile();
-      if (path) openProfileDialog({ mode: "new", path });
-    },
-  });
 
   add({
     id: "row-details",
@@ -194,6 +194,16 @@ export function commands(s: AppState): Command[] {
     keys: ROW_KEY,
     run: toggleRowDetails,
   });
+  add(
+    loaded && {
+      id: "sidebar",
+      keepsFocus: true,
+      group: "View",
+      title: sidebarShown(s) ? "Hide Sidebar" : "Show Sidebar",
+      keys: SIDEBAR_KEY,
+      run: toggleSidebar,
+    },
+  );
 
   add({
     id: "check-updates",

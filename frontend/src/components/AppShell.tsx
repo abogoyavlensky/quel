@@ -8,6 +8,7 @@ import { type Completion, dialectFor } from "@/editor/setup";
 import * as api from "@/lib/api";
 import { metaKeys } from "@/lib/query";
 import type { Engine } from "@/lib/types";
+import { sidebarShown } from "@/state/layout";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -27,7 +28,8 @@ import { UpdateDialog } from "./UpdateDialog";
 // connections on the left, the selected profile's
 // structure under them; on the right that profile's workspace: its editor
 // tabs, the active tab's editor above its results; on the far right,
-// while open, the row details panel; the status bar below all.
+// while open, the row details panel; the status bar below all. The left
+// column can be hidden (⌘B, state/layout.ts); it then leaves the window.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
@@ -36,24 +38,29 @@ export function AppShell() {
   const tab = workspace && activeTabOf(workspace);
   const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null, engine);
   const rowDetails = useApp((s) => s.rowDetails);
+  const showSidebar = useApp(sidebarShown);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <TitleBar />
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        {/* Ids keep each panel's size while the row details come and go. */}
-        <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-chrome">
-          <ResizablePanelGroup orientation="vertical">
-            <ResizablePanel defaultSize="40" minSize={80}>
-              <ConnectionsPanel />
+        {/* Ids keep each panel's size while the sidebar and the row details come and go. */}
+        {showSidebar && (
+          <>
+            <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-chrome" data-quel-sidebar="">
+              <ResizablePanelGroup orientation="vertical">
+                <ResizablePanel defaultSize="40" minSize={80}>
+                  <ConnectionsPanel />
+                </ResizablePanel>
+                <ResizableHandle />
+                <ResizablePanel minSize={120}>
+                  <StructureTree />
+                </ResizablePanel>
+              </ResizablePanelGroup>
             </ResizablePanel>
             <ResizableHandle />
-            <ResizablePanel minSize={120}>
-              <StructureTree />
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </ResizablePanel>
-        <ResizableHandle />
+          </>
+        )}
         <ResizablePanel id="workspace" minSize={360}>
           {workspace?.loadError ? (
             <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-sm">

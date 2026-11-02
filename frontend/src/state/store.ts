@@ -86,12 +86,11 @@ export interface Workspace {
   runRefused: boolean;
 }
 
-// The profile dialog: closed, a new profile (a SQLite one for path, when
-// File > Open Database chose a file), or editing one.
+// The profile dialog: closed, a new profile, or editing one.
 // confirmDelete opens the edit dialog with its delete confirmation up (the
 // sidebar's Delete… item).
 export type ProfileDialog =
-  { mode: "new"; path?: string } | { mode: "edit"; id: string; confirmDelete?: boolean } | null;
+  { mode: "new" } | { mode: "edit"; id: string; confirmDelete?: boolean } | null;
 
 export interface AppState {
   profiles: Profile[]; // by name, as the backend lists them
@@ -101,6 +100,9 @@ export interface AppState {
   workspaces: Record<string, Workspace>; // by profile id
   notice: string | null; // a one-line hint for the status bar
   rowDetails: boolean; // the row details panel is open; in memory only
+  // The user hid the sidebar (saved in the app database); null until it is
+  // read at start-up, which shows it. state/layout.ts.
+  sidebarHidden: boolean | null;
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
@@ -153,6 +155,7 @@ export function initialState(): AppState {
     workspaces: {},
     notice: null,
     rowDetails: false,
+    sidebarHidden: null,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,
@@ -172,6 +175,15 @@ export function selectedWorkspace(s: AppState): Workspace | undefined {
 
 export function activeTabOf(w: Workspace): EditorTab {
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
+}
+
+// The selected workspace's current tab shows one of its results, not its
+// messages.
+export function showsResult(s: AppState): boolean {
+  const w = selectedWorkspace(s);
+  if (!w || w.loadError) return false;
+  const tab = activeTabOf(w);
+  return tab.active !== MESSAGES && tab.results.some((r) => r.id === tab.active);
 }
 
 export function updateWorkspace(profileId: string, f: (w: Workspace) => Workspace): void {

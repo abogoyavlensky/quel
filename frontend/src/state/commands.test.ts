@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/editor/states", () => ({ focusEditor: vi.fn() }));
-const api = vi.hoisted(() => ({ chooseFile: vi.fn() }));
-vi.mock("@/lib/api", () => api);
 const runner = vi.hoisted(() => ({
   cancel: vi.fn(),
   closeTab: vi.fn(),
@@ -18,8 +16,11 @@ const profiles = vi.hoisted(() => ({ openProfileDialog: vi.fn() }));
 vi.mock("./profiles", () => profiles);
 const updates = vi.hoisted(() => ({ checkForUpdates: vi.fn() }));
 vi.mock("./updates", () => updates);
-const palette = vi.hoisted(() => ({ openPalette: vi.fn() }));
+const palette = vi.hoisted(() => ({ openPalette: vi.fn(), focusResult: vi.fn() }));
 vi.mock("./palette", () => palette);
+const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
+vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
+vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
 import { commands } from "./commands";
@@ -48,10 +49,10 @@ function state(status: ConnStatus = "disconnected", patch: (w: ReturnType<typeof
 }
 
 const ids = (s: AppState) => commands(s).map((c) => c.id);
-const ALWAYS = ["new-connection", "open-database", "row-details", "check-updates"];
+const ALWAYS = ["new-connection", "row-details", "check-updates"];
 
 beforeEach(() => {
-  for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates), api.chooseFile]) f.mockReset();
+  for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates)]) f.mockReset();
   palette.openPalette.mockReset();
 });
 
@@ -71,8 +72,8 @@ describe("commands", () => {
       "go-to-connection",
       "new-connection",
       "edit-connection",
-      "open-database",
       "row-details",
+      "sidebar",
       "check-updates",
     ]);
   });
@@ -129,15 +130,36 @@ describe("commands", () => {
     expect(title(initialState())).toBe("Show Row Details");
     expect(title({ ...initialState(), rowDetails: true })).toBe("Hide Row Details");
   });
+
+  it("offers Focus Result only while the tab shows a result, after Focus Editor", () => {
+    expect(ids(state())).not.toContain("focus-result");
+    const withResult = (active: string) =>
+      state("connected", (w) => {
+        w.tabs[0].results = [{ id: "r1" } as (typeof w.tabs)[0]["results"][number]];
+        w.tabs[0].active = active;
+      });
+    expect(ids(withResult("messages"))).not.toContain("focus-result");
+    const got = ids(withResult("r1"));
+    expect(got.slice(got.indexOf("focus-editor"), got.indexOf("focus-editor") + 2)).toEqual(["focus-editor", "focus-result"]);
+    const entry = commands(withResult("r1")).find((c) => c.id === "focus-result")!;
+    expect(entry.keepsFocus).toBeFalsy();
+  });
+
+  it("offers the sidebar entry only with a tab strip, titled after the sidebar", () => {
+    expect(ids(state("disconnected", (w) => (w.loadError = "boom")))).not.toContain("sidebar");
+    const title = (s: AppState) => commands(s).find((c) => c.id === "sidebar")!.title;
+    expect(title(state())).toBe("Hide Sidebar");
+    expect(title({ ...state(), sidebarHidden: true })).toBe("Show Sidebar");
+  });
 });
 
 describe("focus", () => {
   it("keeps focus only for the entries that do not move it", () => {
     const w = state("connected", (w) => (w.closed = [{ id: "c1" } as (typeof w.closed)[number]]));
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
-    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details"]);
+    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
-    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "open-database", "check-updates"]);
+    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
   });
 });
 
@@ -164,16 +186,6 @@ describe("run", () => {
     expect(profiles.openProfileDialog).toHaveBeenLastCalledWith({ mode: "new" });
     void find(state(), "edit-connection").run();
     expect(profiles.openProfileDialog).toHaveBeenLastCalledWith({ mode: "edit", id: "p" });
-  });
-
-  it("turns a chosen file into a new profile, and a cancelled choice into nothing", async () => {
-    api.chooseFile.mockResolvedValueOnce("/tmp/a.db");
-    await find(state(), "open-database").run();
-    expect(profiles.openProfileDialog).toHaveBeenCalledWith({ mode: "new", path: "/tmp/a.db" });
-    profiles.openProfileDialog.mockReset();
-    api.chooseFile.mockResolvedValueOnce(null);
-    await find(state(), "open-database").run();
-    expect(profiles.openProfileDialog).not.toHaveBeenCalled();
   });
 
   it("switches to Go to Connection and asks for updates manually", () => {

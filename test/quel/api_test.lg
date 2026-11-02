@@ -38,7 +38,7 @@
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file" "export-result"
-           "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile"
+           "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))

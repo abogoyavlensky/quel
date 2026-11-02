@@ -130,6 +130,10 @@ export const selectedProfile = async () => {
 
 export const selectProfile = (profileId: string | null) => call<void>("select-profile", profileId);
 
+// Whether the user hid the sidebar, saved app-wide like the selection.
+export const sidebarHidden = async () => (await call<unknown>("sidebar-hidden")) === true;
+export const setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hidden", hidden);
+
 // New versions (quel.updates). download-update resolves once the update is
 // downloaded, verified and staged; restart-to-update quits the app.
 

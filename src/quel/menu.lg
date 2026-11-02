@@ -12,9 +12,6 @@
 ;;
 ;; The items emit events; the frontend does the work.
 
-(def db-filters
-  [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
-
 (defn- reporting
   "Run f; show an error dialog instead of letting a failure vanish into
    stderr, which is where an unawaited menu click's exception goes."
@@ -23,13 +20,6 @@
     (f)
     (catch e
       (w/message! app :error (str what " failed") (ex-message e)))))
-
-(defn open-db! [{:keys [app]}]
-  (reporting app "Open Database"
-    (fn []
-      (when-let [path (w/open-file app {:title "Open Database"
-                                        :filters db-filters})]
-        (w/emit! app "menu:open-db" {:path path})))))
 
 (defn- emitter
   "A click handler that emits `event` to the frontend, which does the work."
@@ -61,8 +51,6 @@
              :on-click (partial #'new-tab! env)}
             {:label "New Connection…"
              :on-click (partial #'new-connection! env)}
-            {:label "Open Database…" :accelerator "CmdOrCtrl+O"
-             :on-click (partial #'open-db! env)}
             {:separator true}
             {:label "Close Tab" :accelerator "CmdOrCtrl+W"
              :on-click (partial #'close-tab! env)}

@@ -3,7 +3,6 @@
             [quel.conn :as conn]
             [quel.exec :as exec]
             [quel.export :as export]
-            [quel.menu :as menu]
             [quel.meta :as meta]
             ;; Loaded for their quel.meta methods.
             [quel.meta.postgres]
@@ -83,10 +82,13 @@
         t (profiles/target p (profiles/saved-password secrets p))]
     (assoc (conn/open-target! conns t) :profile-id profile-id)))
 
+(def db-filters
+  [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
+
 (defn choose-file
   "The SQLite file the user picks, or nil when they cancel."
   [{:keys [app]}]
-  (w/open-file app {:title "Choose a Database File" :filters menu/db-filters}))
+  (w/open-file app {:title "Choose a Database File" :filters db-filters}))
 
 (defn export-result
   "Ask where to save a result exported as format (\"csv\", \"json\" or
@@ -119,6 +121,12 @@
 
 (defn select-profile [{:keys [store]} profile-id]
   (workspace/select-profile! store profile-id))
+
+(defn sidebar-hidden [{:keys [store]}]
+  (workspace/sidebar-hidden store))
+
+(defn set-sidebar-hidden [{:keys [store]} hidden?]
+  (workspace/set-sidebar-hidden! store (true? hidden?)))
 
 ;; New versions (quel.updates).
 
@@ -164,6 +172,8 @@
    "reopen-tab" #'reopen-tab
    "selected-profile" #'selected-profile
    "select-profile" #'select-profile
+   "sidebar-hidden" #'sidebar-hidden
+   "set-sidebar-hidden" #'set-sidebar-hidden
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update

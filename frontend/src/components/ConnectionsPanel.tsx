@@ -25,8 +25,7 @@ const statusLabel: Record<ConnStatus, string> = {
 // workspace; each connects (a plug) and disconnects (a stop) on its
 // own button, always shown, and several can be connected at once. The
 // pencil shows on hover; right-click a row for Connect or Disconnect,
-// Edit and Delete. New ones come from the + button, or from
-// File > Open Database for a SQLite file.
+// Edit and Delete. New ones come from the + button.
 export function ConnectionsPanel() {
   const selected = useApp((s) => s.selected);
   const workspaces = useApp((s) => s.workspaces);
