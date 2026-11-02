@@ -51,4 +51,12 @@
              next_tab_number integer not null default 1)"
           ;; App-wide values: the selected profile.
           "create table settings (key text primary key, value text)"]
-     :down ["drop table settings" "drop table workspaces" "drop table editor_tabs"]})])
+     :down ["drop table settings" "drop table workspaces" "drop table editor_tabs"]})
+
+   (rt/sql-migration
+    {:id "003-add-run-policy"
+     ;; What Quel does before a run on the profile: never, writes, always
+     ;; or read-only (quel.profiles/run-policies; docs/DESIGN.md, Write
+     ;; safety). Client-side only: the connection itself is unchanged.
+     :up ["alter table profiles add column run_policy text not null default 'never'"]
+     :down ["alter table profiles drop column run_policy"]})])

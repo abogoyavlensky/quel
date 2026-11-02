@@ -51,7 +51,8 @@
   (with-store
     (fn [db dir]
       (let [p (profiles/validate db (profiles/normalize (assoc pg "path" "/x")))]
-        (is (= [5432 "prefer" "none" nil] [(:port p) (:ssl-mode p) (:color p) (:path p)])))
+        (is (= [5432 "prefer" "none" nil "never"]
+               [(:port p) (:ssl-mode p) (:color p) (:path p) (:run-policy p)])))
       (let [p (profiles/validate db (profiles/normalize (assoc pg "engine" "redshift")))]
         (is (= [5439 "require"] [(:port p) (:ssl-mode p)])))
       (let [p (profiles/validate db (profiles/normalize {"name" "f" "engine" "sqlite" "path" "/x.db"
@@ -68,7 +69,8 @@
         (is (= "A file path is required." (bad {"name" "f" "engine" "sqlite"})))
         (is (= "The port must be between 1 and 65535." (bad (assoc pg "port" 70000))))
         (is (= "Unknown SSL mode bogus." (bad (assoc pg "ssl-mode" "bogus"))))
-        (is (= "Unknown colour pink." (bad (assoc pg "color" "pink"))))))))
+        (is (= "Unknown colour pink." (bad (assoc pg "color" "pink"))))
+        (is (= "Unknown run policy bogus." (bad (assoc pg "run-policy" "bogus"))))))))
 
 (deftest save-new-then-edit
   (with-store
@@ -76,7 +78,7 @@
       (let [p (profiles/save! db s (assoc pg "password" "s3cret" "color" "red"))]
         (is (= {:name "Warehouse" :engine "postgres" :host "db.example.com" :port 5432
                 :database "app" :user "admin" :ssl-mode "prefer" :path nil :color "red"
-                :has-password true}
+                :run-policy "never" :has-password true}
                (dissoc p :id)))
         (is (= 36 (count (:id p))))
         (is (= "s3cret" (secrets/password s (:id p))))
@@ -93,6 +95,12 @@
         (let [e (profiles/save! db s (assoc pg "id" (:id p) "password" "x" "forget-password" true))]
           (is (false? (:has-password e)))
           (is (nil? (secrets/password s (:id p)))))
+        ;; The run policy round-trips, and an edit replaces it.
+        (let [e (profiles/save! db s (assoc pg "id" (:id p) "run-policy" "read-only"))]
+          (is (= "read-only" (:run-policy e)))
+          (is (= "read-only" (:run-policy (profiles/fetch db (:id p)))))
+          (is (= ["read-only"] (mapv :run-policy (profiles/list-all db)))))
+        (is (= "writes" (:run-policy (profiles/save! db s (assoc pg "id" (:id p) "run-policy" "writes")))))
         (profiles/save! db s (assoc pg "id" (:id p) "password" "again"))
         (let [e (profiles/save! db s (assoc pg "id" (:id p) "password" ""))]
           (is (false? (:has-password e)))
