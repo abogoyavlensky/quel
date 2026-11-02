@@ -195,16 +195,19 @@ from `quel.menu` to `quel.api`, its last user. ⌘O is left unbound.
 - Modify: `src/quel/menu.lg`, `src/quel/api.lg`, `test/quel/menu_test.lg`
 - Modify: `frontend/src/App.tsx`, `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/components/keys.ts`, `frontend/src/state/store.ts`, `frontend/src/components/ProfileDialog.tsx`, `frontend/src/state/profileForm.ts`, `frontend/src/state/profileForm.test.ts`, `frontend/src/components/ConnectionsPanel.tsx`, `docs/DESIGN.md`
 
-- [ ] **Step 1: Backend.** In `menu.lg` delete `open-db!` and the "Open Database…" item; move `db-filters` (with its value unchanged) into `api.lg` above `choose-file`, use it there unqualified, and drop the `[quel.menu :as menu]` require from `api.lg` if nothing else in it uses `menu/`. Check that no other namespace refers to `menu/db-filters` (`grep -rn db-filters src test`). In `menu_test.lg`: `every-item-with-a-click-has-one` expects 10; remove `"Open Database…"` from `the-tab-and-query-items-are-there`.
-- [ ] **Step 2: Frontend.** Remove the `menu:open-db` listener (`App.tsx`), the `open-database` command and the `chooseFile`/`OPEN_DB_KEY` imports (`commands.ts`), `OPEN_DB_KEY` (`keys.ts`). In `store.ts` the `new` dialog becomes `{ mode: "new" }` and its comment loses the Open Database clause. In `ProfileDialog.tsx` drop the `path` prop; the form starts from `editing ? fromProfile(editing) : emptyForm()`.
-- [ ] **Step 3: Browse fills an empty name.** Rename `fileForm(path)` to `nameFromPath(path): string` in `profileForm.ts` (same rule: last path segment, `.db`/`.sqlite`/`.sqlite3` dropped case-insensitively, the whole path if that leaves nothing). In `onBrowse`, after a path is chosen: `set({ path, ...(form.name.trim() === "" ? { name: nameFromPath(path) } : {}) })`. Update `profileForm.test.ts` to test `nameFromPath` (the two existing cases, plus a Windows path `C:\data\x.sqlite` → `x`).
-- [ ] **Step 4: Tests.** In `commands.test.ts`: drop `"open-database"` from `ALWAYS`, the full id list and the `movers` list; delete the "turns a chosen file into a new profile" test, and the `chooseFile` mock if nothing else uses it.
-- [ ] **Step 5: Docs and comments.** `DESIGN.md:168`: "The UI connects only through profiles, made with New Connection (the sidebar's +, the File menu, the Command Palette). The `open-db` handler still opens a bare path or URL, for the smoke test." `ConnectionsPanel.tsx` header comment: drop "or from File > Open Database for a SQLite file".
-- [ ] **Step 6: Verify.**
+- [x] **Step 1: Backend.** In `menu.lg` delete `open-db!` and the "Open Database…" item; move `db-filters` (with its value unchanged) into `api.lg` above `choose-file`, use it there unqualified, and drop the `[quel.menu :as menu]` require from `api.lg` if nothing else in it uses `menu/`. Check that no other namespace refers to `menu/db-filters` (`grep -rn db-filters src test`). In `menu_test.lg`: `every-item-with-a-click-has-one` expects 10; remove `"Open Database…"` from `the-tab-and-query-items-are-there`.
+- [x] **Step 2: Frontend.** Remove the `menu:open-db` listener (`App.tsx`), the `open-database` command and the `chooseFile`/`OPEN_DB_KEY` imports (`commands.ts`), `OPEN_DB_KEY` (`keys.ts`). In `store.ts` the `new` dialog becomes `{ mode: "new" }` and its comment loses the Open Database clause. In `ProfileDialog.tsx` drop the `path` prop; the form starts from `editing ? fromProfile(editing) : emptyForm()`.
+- [x] **Step 3: Browse fills an empty name.** Rename `fileForm(path)` to `nameFromPath(path): string` in `profileForm.ts` (same rule: last path segment, `.db`/`.sqlite`/`.sqlite3` dropped case-insensitively, the whole path if that leaves nothing). In `onBrowse`, after a path is chosen: `set({ path, ...(form.name.trim() === "" ? { name: nameFromPath(path) } : {}) })`. Update `profileForm.test.ts` to test `nameFromPath` (the two existing cases, plus a Windows path `C:\data\x.sqlite` → `x`).
+- [x] **Step 4: Tests.** In `commands.test.ts`: drop `"open-database"` from `ALWAYS`, the full id list and the `movers` list; delete the "turns a chosen file into a new profile" test, and the `chooseFile` mock if nothing else uses it.
+- [x] **Step 5: Docs and comments.** `DESIGN.md:168`: "The UI connects only through profiles, made with New Connection (the sidebar's +, the File menu, the Command Palette). The `open-db` handler still opens a bare path or URL, for the smoke test." `ConnectionsPanel.tsx` header comment: drop "or from File > Open Database for a SQLite file".
+- [x] **Step 6: Verify.**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` (or plain `lgx test` where GTK is present) — Expected: all pass.
   Run: `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass, no type errors.
   Run: `grep -rn "Open Database\|open-database\|OPEN_DB\|menu:open-db\|fileForm" src test frontend/src frontend/e2e docs/DESIGN.md` — Expected: no hits.
-- [ ] **Step 7: Commit** `Remove Open Database; Browse names a new SQLite connection`.
+- [x] **Step 7: Commit** `Remove Open Database; Browse names a new SQLite connection`.
+
+> Deviation: `DESIGN.md` line 167 ended in a stray "A file" left from #4; dropped while rewriting the next sentence.
+> Deviation: the installed `lgx` was 0.5.1 and rejected `lgx.edn`; `mise install` brought the pinned 0.5.4, and every `lgx` command ran through `mise exec --`.
 
 ### Task 2: Backend: the sidebar setting
 
@@ -212,11 +215,11 @@ from `quel.menu` to `quel.api`, its last user. ⌘O is left unbound.
 - Modify: `src/quel/workspace.lg`, `src/quel/api.lg`
 - Test: `test/quel/workspace_test.lg`, `test/quel/api_test.lg`
 
-- [ ] **Step 1: Write the failing test.** In `workspace_test.lg`, `the-sidebar-setting-round-trips` (with `with-store`): starts `false`; `(set-sidebar-hidden! db true)` → `true`; setting `true` twice is fine; `false` → `false` and the `settings` row is gone. In `api_test.lg` add `"sidebar-hidden" "set-sidebar-hidden"` to the handler set.
-- [ ] **Step 2: Run to see it fail.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` — Expected: the new tests fail.
-- [ ] **Step 3: Implement.** In `workspace.lg`, after `select-profile!`: `(sidebar-hidden db)` → `true` when a `settings` row with key `'sidebar-hidden'` exists, else `false`; `(set-sidebar-hidden! db hidden?)` upserts `('sidebar-hidden', 'true')` when truthy, deletes the row otherwise, returns `nil`. Extend the namespace comment that names the settings table ("the selected profile" → "the selected profile and whether the sidebar is hidden"). In `api.lg`: `(defn sidebar-hidden [{:keys [store]}] (workspace/sidebar-hidden store))` and `(defn set-sidebar-hidden [{:keys [store]} hidden?] (workspace/set-sidebar-hidden! store (true? hidden?)))`, registered by var as `"sidebar-hidden"` and `"set-sidebar-hidden"` next to the selection handlers.
-- [ ] **Step 4: Run tests.** Same command — Expected: all pass.
-- [ ] **Step 5: Commit** `Backend: remember whether the sidebar is hidden`.
+- [x] **Step 1: Write the failing test.** In `workspace_test.lg`, `the-sidebar-setting-round-trips` (with `with-store`): starts `false`; `(set-sidebar-hidden! db true)` → `true`; setting `true` twice is fine; `false` → `false` and the `settings` row is gone. In `api_test.lg` add `"sidebar-hidden" "set-sidebar-hidden"` to the handler set.
+- [x] **Step 2: Run to see it fail.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` — Expected: the new tests fail.
+- [x] **Step 3: Implement.** In `workspace.lg`, after `select-profile!`: `(sidebar-hidden db)` → `true` when a `settings` row with key `'sidebar-hidden'` exists, else `false`; `(set-sidebar-hidden! db hidden?)` upserts `('sidebar-hidden', 'true')` when truthy, deletes the row otherwise, returns `nil`. Extend the namespace comment that names the settings table ("the selected profile" → "the selected profile and whether the sidebar is hidden"). In `api.lg`: `(defn sidebar-hidden [{:keys [store]}] (workspace/sidebar-hidden store))` and `(defn set-sidebar-hidden [{:keys [store]} hidden?] (workspace/set-sidebar-hidden! store (true? hidden?)))`, registered by var as `"sidebar-hidden"` and `"set-sidebar-hidden"` next to the selection handlers.
+- [x] **Step 4: Run tests.** Same command — Expected: all pass.
+- [x] **Step 5: Commit** `Backend: remember whether the sidebar is hidden`.
 
 ### Task 3: Frontend sidebar state
 
@@ -224,30 +227,30 @@ from `quel.menu` to `quel.api`, its last user. ⌘O is left unbound.
 - Modify: `frontend/src/lib/api.ts`, `frontend/src/state/store.ts`
 - Create: `frontend/src/state/layout.ts`, `frontend/src/state/layout.test.ts`
 
-- [ ] **Step 1: API and store.** `api.ts`: `sidebarHidden = async () => (await call<unknown>("sidebar-hidden")) === true` and `setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hidden", hidden)`. `store.ts`: `sidebarHidden: boolean | null` in `AppState` with the comment "the user hid the sidebar (saved in the app database); null until read at start-up, which shows it", initial `null`.
-- [ ] **Step 2: Write the failing tests** in `layout.test.ts` (mock `@/lib/api` as the other state tests do):
+- [x] **Step 1: API and store.** `api.ts`: `sidebarHidden = async () => (await call<unknown>("sidebar-hidden")) === true` and `setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hidden", hidden)`. `store.ts`: `sidebarHidden: boolean | null` in `AppState` with the comment "the user hid the sidebar (saved in the app database); null until read at start-up, which shows it", initial `null`.
+- [x] **Step 2: Write the failing tests** in `layout.test.ts` (mock `@/lib/api` as the other state tests do):
   - `sidebarShown`: `null` and `false` show; `true` hides when a loaded workspace is selected; `true` still shows with no selection, with a `loadError` workspace, and with a selected profile whose workspace is not in the store yet.
   - `loadSidebar`: applies `true` from the API; does not overwrite a value already set (a toggle came first); a rejected read leaves `null`.
   - `toggleSidebar`: with a loaded workspace, `null` → `true` and saves `true`; `true` → `false` and saves `false`; without a tab strip, changes nothing and saves nothing; a rejected save does not throw and keeps the new state.
-- [ ] **Step 3: Run to see them fail.** `npm --prefix frontend test -- layout` — Expected: FAIL (module missing).
-- [ ] **Step 4: Implement `layout.ts`** with `hasTabStrip` and `sidebarShown` as in the Design, plus:
+- [x] **Step 3: Run to see them fail.** `npm --prefix frontend test -- layout` — Expected: FAIL (module missing).
+- [x] **Step 4: Implement `layout.ts`** with `hasTabStrip` and `sidebarShown` as in the Design, plus:
   - `loadSidebar(): Promise<void>` — reads `api.sidebarHidden()`; on success sets `sidebarHidden` only if it is still `null`; on failure does nothing.
   - `toggleSidebar(): void` — returns unless `hasTabStrip(state)`; `hidden = sidebarShown(state)`; sets `sidebarHidden: hidden`; `void api.setSidebarHidden(hidden).catch(() => {})`; if `hidden` and `document.activeElement?.closest("[data-quel-sidebar]")`, `setTimeout(focusEditor)`. Vitest runs without a DOM: the tests stub `document` with `vi.stubGlobal("document", { activeElement: … })`, as `palette.test.ts` does, and a test covers the focus move (an `activeElement` whose `closest` returns an element → `focusEditor` is called after the timer).
   Header comment: what the module owns (the sidebar's visibility) and the "always shown without a tab strip" rule.
-- [ ] **Step 5: Run tests.** `npm --prefix frontend test` — Expected: all pass.
-- [ ] **Step 6: Commit** `Sidebar visibility state, saved in the app database`.
+- [x] **Step 5: Run tests.** `npm --prefix frontend test` — Expected: all pass.
+- [x] **Step 6: Commit** `Sidebar visibility state, saved in the app database`.
 
 ### Task 4: Sidebar UI, key and palette entry
 
 **Files:**
 - Modify: `frontend/src/components/keys.ts`, `frontend/src/state/shortcuts.ts`, `frontend/src/state/shortcuts.test.ts`, `frontend/src/state/palette.ts`, `frontend/src/state/palette.test.ts`, `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/components/AppShell.tsx`, `frontend/src/components/EditorTabs.tsx`, `frontend/src/App.tsx`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `shortcuts.test.ts`: ⌘B → `{ kind: "sidebar" }`, Ctrl+B on other platforms; ⇧⌘B and ⌥⌘B → `null`.
   - `palette.test.ts`: `toggleSidebarKey()` toggles with a loaded workspace and does nothing while a palette or the profile dialog is open.
   - `commands.test.ts`: a `sidebar` entry (View group, keys `SIDEBAR_KEY`, `keepsFocus: true`) only with a loaded workspace; titled "Hide Sidebar" when shown and "Show Sidebar" when `sidebarHidden` is `true`; add it to the full id list and the `kept` list in table order (after `row-details`).
-- [ ] **Step 2: Run to see them fail.** `npm --prefix frontend test` — Expected: the new cases fail.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run to see them fail.** `npm --prefix frontend test` — Expected: the new cases fail.
+- [x] **Step 3: Implement.**
   - `keys.ts`: `SIDEBAR_KEY = isMac ? "⌘B" : "Ctrl+B"`.
   - `shortcuts.ts`: add the `sidebar` kind; match `key === "b"` after the Shift check; update the header comment.
   - `palette.ts`: `toggleSidebarKey()` — `if (!modalOpen(store.getState())) toggleSidebar()` (`toggleSidebar` already checks for the tab strip).
@@ -255,55 +258,92 @@ from `quel.menu` to `quel.api`, its last user. ⌘O is left unbound.
   - `App.tsx` `useGlobalKeys`: `k.kind === "sidebar"` → `toggleSidebarKey()`; update the comment above it.
   - `AppShell.tsx`: `const showSidebar = useApp(sidebarShown)`; render the sidebar `ResizablePanel` and the `ResizableHandle` after it only when `showSidebar`, keeping `id="sidebar"`; put `data-quel-sidebar` on the panel. Update the component comment.
   - `EditorTabs.tsx`: `SidebarToggle` modelled on `RowDetailsToggle` — `PanelLeft` icon, `aria-label="Sidebar"`, `aria-pressed={shown}`, `title={\`Sidebar (${SIDEBAR_KEY})\`}`, `onClick={toggleSidebar}`, the same pressed style — placed between `ClosedTabsMenu` and `RowDetailsToggle`.
-- [ ] **Step 4: Load at start.** `App.tsx`: `void loadSidebar()` in the start-up effect, next to `loadProfiles().then(restoreSelection)` (not chained to it).
-- [ ] **Step 5: Run tests and checks.** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
-- [ ] **Step 6: Commit** `⌘B and a tab-strip button hide and show the sidebar`.
+- [x] **Step 4: Load at start.** `App.tsx`: `void loadSidebar()` in the start-up effect, next to `loadProfiles().then(restoreSelection)` (not chained to it).
+- [x] **Step 5: Run tests and checks.** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
+- [x] **Step 6: Commit** `⌘B and a tab-strip button hide and show the sidebar`.
+
+> Deviation: `commands.test.ts` mocks `@/lib/api` as `{}` and `./layout` partially (real `sidebarShown`, mocked `toggleSidebar`): `commands.ts` now reaches the API through `layout.ts`.
 
 ### Task 5: ⌘R focuses the result
 
 **Files:**
 - Modify: `frontend/src/components/keys.ts`, `frontend/src/state/shortcuts.ts`, `frontend/src/state/shortcuts.test.ts`, `frontend/src/state/palette.ts`, `frontend/src/state/palette.test.ts`, `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/grid/ResultGrid.tsx`, `frontend/src/App.tsx`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `shortcuts.test.ts`: ⌘R → `{ kind: "result" }`, Ctrl+R elsewhere; ⇧⌘R → `null`. Extend the "keys that are not ours" case so `k` is still `null`.
   - `palette.test.ts`: `focusResultKey()` focuses an element with `data-result-grid` when the active tab's `active` is a result id; does nothing when it is `MESSAGES`, when no result has that id, and while a dialog is open. There is no DOM in Vitest: stub `document` with `vi.stubGlobal("document", { querySelector: () => grid })`, where `grid = { focus: vi.fn() }`, as the `restoreFocus` tests stub `activeElement`.
   - `commands.test.ts`: `focus-result` (Tabs group, keys `RESULT_KEY`, not `keepsFocus`) after `focus-editor`, shown only when the active tab shows a result; add it to the id and `movers` lists where a result exists in the fixture, or add a fixture with one.
-- [ ] **Step 2: Run to see them fail.** `npm --prefix frontend test` — Expected: the new cases fail.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run to see them fail.** `npm --prefix frontend test` — Expected: the new cases fail.
+- [x] **Step 3: Implement.**
   - `keys.ts`: `RESULT_KEY = isMac ? "⌘R" : "Ctrl+R"`.
   - `shortcuts.ts`: `result` kind on `key === "r"` (no Shift).
   - `ResultGrid.tsx`: `data-result-grid` on the `role="grid"` scroller.
   - `palette.ts`: `focusResult()` (no guard: focuses `document.querySelector<HTMLElement>("[data-result-grid]")` if present) and `focusResultKey()` — `loadedWorkspace()`, then `activeTabOf(w)`; return if `tab.active === MESSAGES` or `!tab.results.some((r) => r.id === tab.active)`; else `focusResult()`.
   - `commands.ts`: `{ id: "focus-result", group: "Tabs", title: "Focus Result", keys: RESULT_KEY, run: () => void setTimeout(focusResult) }`, after `focus-editor`, when `loaded` and the active tab shows a result.
   - `App.tsx` `useGlobalKeys`: `k.kind === "result"` → `focusResultKey()`; the comment lists ⌘B and ⌘R.
-- [ ] **Step 4: Run tests and checks.** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
-- [ ] **Step 5: Commit** `⌘R puts focus in the result grid`.
+- [x] **Step 4: Run tests and checks.** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
+- [x] **Step 5: Commit** `⌘R puts focus in the result grid`.
+
+> Deviation: the "current tab shows a result" check is `showsResult(s)` in `store.ts`, next to `activeTabOf`, not in `palette.ts`: `commands.ts` needs it too, and `commands.test.ts` mocks `./palette` wholesale.
 
 ### Task 6: End-to-end test
 
 **Files:**
 - Create: `frontend/e2e/sidebar.spec.ts`
 
-- [ ] **Step 1: Write the spec** (server mode, `ControlOrMeta`; helpers from `./connect`, a profile named with `Date.now()` as `palette.spec.ts` does):
+- [x] **Step 1: Write the spec** (server mode, `ControlOrMeta`; helpers from `./connect`, a profile named with `Date.now()` as `palette.spec.ts` does):
   - `test.afterEach`: if the "Sidebar" button exists with `aria-pressed="false"`, click it — specs share one app run and its settings, and later specs click sidebar rows.
   - **Sidebar:** select and connect a profile; the "Saved connections" list is visible and the "Sidebar" button is pressed. `ControlOrMeta+b` hides the list (count 0) and unpresses the button. The save runs in the background, so wait for it before reloading: start `page.waitForResponse((r) => r.url().endsWith("/wails/runtime") && (r.request().postData() ?? "").includes('"set-sidebar-hidden"'))` before the key press and await it after (the pattern in `updates.spec.ts`). Reload the page, wait for the editor, the list is still hidden; click the button, the list shows (wait for its save the same way); `ControlOrMeta+b` twice ends shown.
   - **Focus leaves a hidden sidebar:** focus a connection row (`profileRow(page, name).focus()`), press `ControlOrMeta+b`: the editor is focused. Show the sidebar again.
   - **Focus Result:** run `select 1 as a` (fill the editor, `ControlOrMeta+Enter`); set `window.__noReload = true` with `page.evaluate`; `ControlOrMeta+r` → the grid (`getByRole("grid", { name: "Result" })`) is focused, and `window.__noReload` is still `true` (no reload); `ArrowDown` selects the first row (as `row-details.spec.ts` checks selection); `ControlOrMeta+e` returns to the editor. Select the Messages result tab, focus the editor, press `ControlOrMeta+r`: the editor keeps focus.
-- [ ] **Step 2: Run.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` (or plain `lgx e2e`) — Expected: all specs pass, the new one included. If Chromium reloads on Ctrl+R despite `preventDefault`, stop and report: the key choice needs revisiting for server mode.
-- [ ] **Step 3: Commit** `e2e: sidebar toggle and Focus Result`.
+- [x] **Step 2: Run.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` (or plain `lgx e2e`) — Expected: all specs pass, the new one included. If Chromium reloads on Ctrl+R despite `preventDefault`, stop and report: the key choice needs revisiting for server mode.
+- [x] **Step 3: Commit** `e2e: sidebar toggle and Focus Result`.
+
+> Deviation: writing the spec showed that two quick toggles send two saves, which the backend runs concurrently, so the older could land last. `toggleSidebar` now chains its saves (`Sidebar: save quick toggles in order`, with a unit test), committed before the spec.
 
 ### Task 7: Design doc
 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Update** the "Palettes and keys" table with ⌘B and ⌘R rows; in its **Keys** paragraph, name the two new keys among those `shortcutOf` matches and say neither has a native menu item (⌘B is a toggle, like ⌘I). Next to "The right-hand column is the row details panel…" add a paragraph on the sidebar: hidden or shown, never collapsed; the tab-strip button; always shown without a tab strip; saved in `settings` as `sidebar-hidden`. In **Dialog guards**, add ⌘B and ⌘R to the keys that do nothing under a dialog.
-- [ ] **Step 2: Commit** `Design: sidebar toggle and Focus Result`.
+- [x] **Step 1: Update** the "Palettes and keys" table with ⌘B and ⌘R rows; in its **Keys** paragraph, name the two new keys among those `shortcutOf` matches and say neither has a native menu item (⌘B is a toggle, like ⌘I). Next to "The right-hand column is the row details panel…" add a paragraph on the sidebar: hidden or shown, never collapsed; the tab-strip button; always shown without a tab strip; saved in `settings` as `sidebar-hidden`. In **Dialog guards**, add ⌘B and ⌘R to the keys that do nothing under a dialog.
+- [x] **Step 2: Commit** `Design: sidebar toggle and Focus Result`.
 
 ### Task 8: Final verification
 
-- [ ] **Step 1:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` — Expected: all pass.
-- [ ] **Step 2:** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
-- [ ] **Step 3:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke` — Expected: passes (`open-db` still there).
-- [ ] **Step 4:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` — Expected: all specs pass.
-- [ ] **Step 5:** Hand-check on a Mac (the user): ⌘B, the button and ⌘R in the app window; the File menu has no Open Database; ⌘O does nothing.
+- [x] **Step 1:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test` — Expected: all pass.
+- [x] **Step 2:** `npm --prefix frontend test && npm --prefix frontend run lint && (cd frontend && npx tsc -b)` — Expected: all pass.
+- [x] **Step 3:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke` — Expected: passes (`open-db` still there).
+- [x] **Step 4:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e` — Expected: all specs pass.
+- [x] **Step 5:** Hand-check on a Mac (the user): ⌘B, the button and ⌘R in the app window; the File menu has no Open Database; ⌘O does nothing.
+
+---
+
+**Status: completed** (except Task 8 Step 5, the hand check on a Mac, which is the user's).
+
+## Summary
+
+Implemented: ⌘B, a `PanelLeft` button in the tab strip (before the row
+details button) and "Hide/Show Sidebar" in the Command Palette hide and
+show the sidebar, saved app-wide in `settings` (`sidebar-hidden`) and
+always shown without a tab strip; ⌘R and "Focus Result" focus the
+active result grid; File > Open Database, ⌘O, its palette entry and the
+dialog's pre-filled path are gone, and Browse names an unnamed
+connection after its file. New: `state/layout.ts` (+ test),
+`e2e/sidebar.spec.ts`; backend `sidebar-hidden` / `set-sidebar-hidden`.
+
+Verified: 373 frontend tests, 168 backend tests, `lgx smoke`, and all 28
+Playwright specs (server mode; Chromium does not reload on Ctrl+R). Codex
+reviewed every task: no findings.
+
+Deviations:
+- A stray "A file" in `DESIGN.md` dropped (Task 1).
+- `lgx` 0.5.4 installed with `mise install`; the PATH had 0.5.1 (Task 1).
+- `commands.test.ts` mocks `@/lib/api` and part of `./layout` (Task 4).
+- `showsResult` lives in `store.ts` (Task 5).
+- Saves of the sidebar choice are chained, so quick toggles land in order (found while writing Task 6).
+
+What the plan could have specified better: that bridge calls run
+concurrently on the backend, so fire-and-forget saves of one setting
+need ordering; it was known (`quel.profiles` says so) but the design
+missed it.
