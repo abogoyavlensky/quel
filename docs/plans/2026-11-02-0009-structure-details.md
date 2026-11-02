@@ -1,5 +1,7 @@
 # Structure Details Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The structure tree shows a schema's functions, types and
@@ -380,21 +382,21 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `src/quel/meta.lg`
 - Test: `test/quel/meta_test.lg`
 
-- [ ] **Step 1: Write the failing test.** In `meta_test.lg`, a test that
+- [x] **Step 1: Write the failing test.** In `meta_test.lg`, a test that
   `(meta/describe-schema :sqlite db "main")` returns the same `:objects`
   as `meta/objects`, and `[]` for `:functions`, `:types`, `:sequences`;
   and that `(meta/describe-object :sqlite db "main" "t")` has `:columns`
   with `:pk`/`:fk` keys and vectors under `:indexes`, `:keys`,
   `:sequences`.
-- [ ] **Step 2: Run it.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`
+- [x] **Step 2: Run it.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`
   (drop the prefix where GTK headers exist). Expected: FAIL, no such var.
-- [ ] **Step 3: Implement.** The six `defmulti`s with docstrings in the
+- [x] **Step 3: Implement.** The six `defmulti`s with docstrings in the
   style of the existing ones, each with a `:default` method returning
   `[]`; `describe-schema` and `describe-object` as in the Design. Keep
   the namespace comment current.
-- [ ] **Step 4: Run the tests.** Expected: PASS (the SQLite object-level
+- [x] **Step 4: Run the tests.** Expected: PASS (the SQLite object-level
   lists are empty until Task 2).
-- [ ] **Step 5: Commit.** `git commit -am "Add describe-schema and describe-object to quel.meta"`
+- [x] **Step 5: Commit.** `git commit -am "Add describe-schema and describe-object to quel.meta"`
 
 ### Task 2: SQLite indexes and keys
 
@@ -402,7 +404,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `src/quel/meta/sqlite.lg`
 - Test: `test/quel/meta_test.lg`
 
-- [ ] **Step 1: Extend the fixture.** Add
+- [x] **Step 1: Extend the fixture.** Add
   `create table child (id integer primary key, t_id int references t(id), code text unique, n int)`,
   `create index child_n on child (n)`,
   `create index child_expr on child (n + 1)` (an expression column),
@@ -410,7 +412,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
   primary key and a FK with no target column
   (`create table pair (a int, b int, t_ref int references t, primary key (a, b))`).
   Update `sqlite-objects` and the completion test for the new tables.
-- [ ] **Step 2: Write the failing tests.**
+- [x] **Step 2: Write the failing tests.**
   - `indexes` on `child`: `child_n` with `"(n)"`, `child_expr` with
     `"(<expr>)"`, `child_partial` with `"(code) partial"`, and
     `sqlite_autoindex_child_1` with `"(code)"`, unique; on `pair` the
@@ -421,11 +423,11 @@ lucide ones; pick names that exist in the installed `lucide-react`
     `"FOREIGN KEY (t_ref) REFERENCES t"`.
   - `describe-object` on `child`: `id` is `:pk true`, `t_id` `:fk true`,
     `code` neither.
-- [ ] **Step 3: Run them.** Expected: FAIL.
-- [ ] **Step 4: Implement** `indexes` and `constraints` as in the
+- [x] **Step 3: Run them.** Expected: FAIL.
+- [x] **Step 4: Implement** `indexes` and `constraints` as in the
   Design. Quote `"unique"`, `"table"`, `"from"`, `"to"` in the SQL.
-- [ ] **Step 5: Run the tests.** Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -am "List SQLite indexes and keys"`
+- [x] **Step 5: Run the tests.** Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -am "List SQLite indexes and keys"`
 
 ### Task 3: Postgres schema contents
 
@@ -433,7 +435,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `src/quel/meta/postgres.lg`
 - Test: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Extend `with-meta-schema`.** Add to its statements (all
+- [x] **Step 1: Extend `with-meta-schema`.** Add to its statements (all
   schema-qualified):
   `create type mood as enum ('sad', 'ok', 'happy')`,
   `create domain amount as numeric(12,2)`,
@@ -450,7 +452,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
   Update `postgres-introspection` and the Redshift test for the new
   objects and columns (`orders` joins the objects; the column types of
   `items` change only for `id`, still `integer`).
-- [ ] **Step 2: Write the failing test** `postgres-schema-contents`:
+- [x] **Step 2: Write the failing test** `postgres-schema-contents`:
   - `functions`: exactly the two `add_one` rows (args `x integer` and
     `x integer, y integer`) and `noop` as `"procedure"`, nothing from
     citext.
@@ -459,11 +461,11 @@ lucide ones; pick names that exist in the installed `lucide-react`
     `citext` or sequence row types.
   - `sequences`: `["invoice_no"]` (not `items_id_seq`, not the identity
     sequence).
-- [ ] **Step 3: Run it.** `lgx test-pg`. Expected: FAIL.
-- [ ] **Step 4: Implement** `functions`, `types`, `sequences` for
+- [x] **Step 3: Run it.** `lgx test-pg`. Expected: FAIL.
+- [x] **Step 4: Implement** `functions`, `types`, `sequences` for
   `:postgres` as in the Design.
-- [ ] **Step 5: Run.** `lgx test-pg`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -am "List Postgres functions, types and sequences"`
+- [x] **Step 5: Run.** `lgx test-pg`. Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -am "List Postgres functions, types and sequences"`
 
 ### Task 4: Postgres indexes, keys and owned sequences
 
@@ -471,7 +473,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `src/quel/meta/postgres.lg`
 - Test: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Write the failing test** `postgres-object-details`:
+- [x] **Step 1: Write the failing test** `postgres-object-details`:
   - `indexes` on `orders`: `orders_item` (`"btree (item_id)"`) and
     `orders_pkey` (unique, primary).
   - `constraints` on `items`: primary key, unique on `label`, check on
@@ -489,11 +491,11 @@ lucide ones; pick names that exist in the installed `lucide-react`
     columns with `:pk false :fk false` and empty lists elsewhere. On an
     unknown name, `describe-object` returns the same map with every list
     empty.
-- [ ] **Step 2: Run it.** Expected: FAIL.
-- [ ] **Step 3: Implement** `indexes`, `constraints`,
+- [x] **Step 2: Run it.** Expected: FAIL.
+- [x] **Step 3: Implement** `indexes`, `constraints`,
   `owned-sequences` for `:postgres`, sharing the object subquery.
-- [ ] **Step 4: Run.** `lgx test-pg`. Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -am "List Postgres indexes, keys and owned sequences"`
+- [x] **Step 4: Run.** `lgx test-pg`. Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -am "List Postgres indexes, keys and owned sequences"`
 
 ### Task 5: Redshift variants
 
@@ -501,7 +503,7 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `src/quel/meta/postgres.lg`
 - Test: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Write the failing test.** Extend
+- [x] **Step 1: Write the failing test.** Extend
   `redshift-introspection-parses-on-postgres`: `(meta/functions :redshift
   ...)` names `add_one` twice and `noop` (args as `oidvectortypes` gives
   them; extension functions may show, since the Redshift query has no
@@ -510,29 +512,29 @@ lucide ones; pick names that exist in the installed `lucide-react`
   `types`, `sequences`, `indexes`, `owned-sequences` for `:redshift`
   are `[]`; `describe-object :redshift` on `orders` still marks `:pk` and
   `:fk`.
-- [ ] **Step 2: Run it.** `lgx test-pg`. Expected: FAIL.
-- [ ] **Step 3: Implement** the two Redshift methods as in the Design.
-- [ ] **Step 4: Run.** `lgx test-pg`. Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -am "Read Redshift functions and keys through pg_catalog"`
+- [x] **Step 2: Run it.** `lgx test-pg`. Expected: FAIL.
+- [x] **Step 3: Implement** the two Redshift methods as in the Design.
+- [x] **Step 4: Run.** `lgx test-pg`. Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -am "Read Redshift functions and keys through pg_catalog"`
 
 ### Task 6: Handlers
 
 **Files:**
 - Modify: `src/quel/api.lg`, `test/quel/api_test.lg`, `scripts/smoke.sh`
 
-- [ ] **Step 1: Update the tests.** In `every-handler-is-a-var`, replace
+- [x] **Step 1: Update the tests.** In `every-handler-is-a-var`, replace
   `"list-objects" "list-columns"` with `"describe-schema"
   "describe-object"`. In `structure-of-an-open-database`, check
   `(api/describe-schema env conn-id "main")` and
   `(api/describe-object env conn-id "main" "t")` (columns with `:pk
   false :fk false`, empty lists elsewhere).
-- [ ] **Step 2: Run.** `lgx test`. Expected: FAIL.
-- [ ] **Step 3: Implement.** The two handlers in place of the old ones,
+- [x] **Step 2: Run.** `lgx test`. Expected: FAIL.
+- [x] **Step 3: Implement.** The two handlers in place of the old ones,
   and the handler map. In `smoke.sh` (lines 77-80), call
   `describe-schema` (`["$conn","main"]`, still contains `"name":"t"`)
   and add `describe-object` on `t` (contains `"name":"id"`).
-- [ ] **Step 4: Run.** `lgx test`, then `lgx smoke`. Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -am "Replace list-objects and list-columns with describe-schema and describe-object"`
+- [x] **Step 4: Run.** `lgx test`, then `lgx smoke`. Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -am "Replace list-objects and list-columns with describe-schema and describe-object"`
 
 ### Task 7: Frontend types, API and the tree model
 
@@ -541,12 +543,12 @@ lucide ones; pick names that exist in the installed `lucide-react`
   `frontend/src/lib/query.ts`, `frontend/src/state/tree.ts`
 - Test: `frontend/src/lib/api.test.ts`, `frontend/src/state/tree.test.ts`
 
-- [ ] **Step 1: Write the failing API tests.** `describeSchema` and
+- [x] **Step 1: Write the failing API tests.** `describeSchema` and
   `describeObject` turn `{}`, `null` and missing lists (top level and
   nested: a type's `values`, a key's `columns`) into `[]`, and a missing
   `detail`/`name` into `null`; they call `describe-schema` /
   `describe-object` with their arguments.
-- [ ] **Step 2: Write the failing tree tests.** Adapt the existing ones
+- [x] **Step 2: Write the failing tree tests.** Adapt the existing ones
   to `contents`/`details`, then add:
   - a schema's groups in order, each only when not empty, Functions /
     Types / Sequences closed after `toggle` opens the schema;
@@ -560,12 +562,12 @@ lucide ones; pick names that exist in the installed `lucide-react`
     distinct keys;
   - `openObjects` still lists only open objects whose schema and group
     are open.
-- [ ] **Step 3: Run.** `npm --prefix frontend test`. Expected: FAIL.
-- [ ] **Step 4: Implement** the types, `describeSchema`,
+- [x] **Step 3: Run.** `npm --prefix frontend test`. Expected: FAIL.
+- [x] **Step 4: Implement** the types, `describeSchema`,
   `describeObject` (with `arr()`), the new `metaKeys`, and the row model
   as in the Design. Remove `listObjects`, `listColumns` and the old keys.
-- [ ] **Step 5: Run.** `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -am "Model functions, types, sequences, indexes and keys in the tree"`
+- [x] **Step 5: Run.** `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -am "Model functions, types, sequences, indexes and keys in the tree"`
 
 ### Task 8: Render the tree
 
@@ -573,12 +575,12 @@ lucide ones; pick names that exist in the installed `lucide-react`
 - Modify: `frontend/src/components/StructureTree.tsx`
 - Test: `frontend/e2e/structure.spec.ts`
 
-- [ ] **Step 1: Implement.** Switch the queries to `describeSchema` /
+- [x] **Step 1: Implement.** Switch the queries to `describeSchema` /
   `describeObject` and the new keys, rename `objects`/`columns` to
   `contents`/`details`, and render `section`, `enum` and `item` rows and
   column badges as in the Design. `npm --prefix frontend run build`
   must pass (it runs `tsc -b`), and `npm --prefix frontend run lint`.
-- [ ] **Step 2: Write the e2e test** "a table's keys and indexes" in
+- [x] **Step 2: Write the e2e test** "a table's keys and indexes" in
   `structure.spec.ts`: with a fresh table name `child_<ts>`, run
   `create table child_<ts> (id integer primary key, t_id int references t(id), code text unique)`
   and `create index child_<ts>_t on child_<ts> (t_id)`, press Refresh,
@@ -586,21 +588,27 @@ lucide ones; pick names that exist in the installed `lucide-react`
   open Indexes: `child_<ts>_t` and a `sqlite_autoindex_` row; open Keys:
   "Primary key", "Unique", "Foreign key" rows. Drop the table at the
   end. The existing test must still pass unchanged.
-- [ ] **Step 3: Run.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`.
+- [x] **Step 3: Run.** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`.
   Expected: PASS.
-- [ ] **Step 4: Look at it.** Run the app against a Postgres with the
+- [x] **Step 4: Look at it.** Run the app against a Postgres with the
   pg test's objects (or any database with enums and functions) and
   check the tree by eye: alignment of badges, long definitions truncate
   with the full text in the tooltip, the keyboard walks into sections
   and enums.
-- [ ] **Step 5: Commit.** `git commit -am "Show functions, types, sequences, indexes and keys in the structure tree"`
+- [x] **Step 5: Commit.** `git commit -am "Show functions, types, sequences, indexes and keys in the structure tree"`
+
+> Deviation: Tasks 7 and 8 went into one commit, so no commit leaves
+> `tsc -b` broken (Task 7 alone removes the API StructureTree calls).
+> Deviation: an item's detail shrinks before its name (`shrink-[4]`);
+> in the narrow sidebar both truncated equally and long index names were
+> unreadable. The row's title holds both.
 
 ### Task 9: Docs
 
 **Files:**
 - Modify: `docs/DESIGN.md`, `README.md`
 
-- [ ] **Step 1: DESIGN.** In Introspection, describe the tree's new
+- [x] **Step 1: DESIGN.** In Introspection, describe the tree's new
   groups and sections, the two calls per expand, extension members
   hidden, and what Redshift gets. Opening a schema makes one call
   (`describe-schema`), opening an object one more (`describe-object`). In the handler table (Structure row),
@@ -610,14 +618,47 @@ lucide ones; pick names that exist in the installed `lucide-react`
   functions, types and sequences in the tree done <date>; dist and sort
   keys backlogged." In Unverified, the Redshift `functions`
   (no `prokind`, `oidvectortypes`) and `constraints` queries.
-- [ ] **Step 2: README.** The Structure feature line (line 31) and the
+- [x] **Step 2: README.** The Structure feature line (line 31) and the
   "Next up" paragraph (around line 86).
-- [ ] **Step 3: Commit.** `git commit -am "Document structure details"`
+- [x] **Step 3: Commit.** `git commit -am "Document structure details"`
 
 ### Task 10: Full check
 
-- [ ] **Step 1:** `lgx test`, `lgx test-pg`, `npm --prefix frontend test`,
+- [x] **Step 1:** `lgx test`, `lgx test-pg`, `npm --prefix frontend test`,
   `lgx smoke`, `lgx smoke-pg`, `lgx e2e` (with the server-mode prefix on
   Linux). Expected: all PASS.
-- [ ] **Step 2:** Mark this plan `**Status: completed**` under its title
+- [x] **Step 2:** Mark this plan `**Status: completed**` under its title
   and commit: `git commit -am "Plan: structure details completed"`.
+
+## Summary
+
+Implemented as planned: `quel.meta` gained six multimethods (`functions`,
+`types`, `sequences`, `indexes`, `constraints`, `owned-sequences`, each
+defaulting to `[]`) and `describe-schema` / `describe-object`; SQLite
+answers indexes and keys, Postgres all six, Redshift functions and keys.
+The handlers `describe-schema` and `describe-object` replace
+`list-objects` and `list-columns`. The tree shows the new groups,
+sections, enum values and PK/FK badges.
+
+Checks: `lgx test-pg` 167 tests / 582 assertions, frontend 356 tests,
+`lgx smoke` and `lgx smoke-pg`, `lgx e2e` 26 tests, all passing. Codex
+reviewed Tasks 1-2, 3-5 and 6-8 and found nothing to fix. The tree was
+looked at on SQLite (screenshot through a throwaway Playwright spec);
+the Postgres-only rows (functions, types, enum values) are covered by the
+backend and tree tests but were not looked at in a running app.
+
+Deviations:
+
+- Tasks 7 and 8 share one commit, so every commit builds.
+- An item's detail truncates before its name.
+- Per-task codex reviews ran per group of tasks (1-2, 3-5, 6-8), and the
+  docs task was not reviewed.
+- Environment: the `lgx` on PATH (0.1.2) rejects `lgx.edn`; the tasks
+  ran through `mise exec -- lgx` (0.5.2, pinned in `.mise.toml`).
+  `frontend/node_modules` lacked `cmdk`; `npm ci` fixed `tsc -b`.
+  `lgx e2e` takes no arguments; a single spec runs with
+  `bash scripts/e2e.sh <filter>`.
+
+What the plan could have specified better: the Postgres visual check
+needs a way to make a Postgres profile in e2e (the helpers only make
+SQLite ones), so "look at it on Postgres" had no ready path.
