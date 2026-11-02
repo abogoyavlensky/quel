@@ -71,14 +71,29 @@ describe("loadSidebar", () => {
 });
 
 describe("toggleSidebar", () => {
-  it("hides and shows it, and saves each choice", () => {
+  it("hides and shows it, and saves each choice", async () => {
     store.setState(loaded(), true);
     toggleSidebar();
     expect(store.getState().sidebarHidden).toBe(true);
+    await vi.runAllTimersAsync();
     expect(api.setSidebarHidden).toHaveBeenLastCalledWith(true);
     toggleSidebar();
     expect(store.getState().sidebarHidden).toBe(false);
+    await vi.runAllTimersAsync();
     expect(api.setSidebarHidden).toHaveBeenLastCalledWith(false);
+  });
+
+  it("saves quick toggles one at a time, in order", async () => {
+    let finish = () => {};
+    api.setSidebarHidden.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    store.setState(loaded(), true);
+    toggleSidebar();
+    toggleSidebar();
+    await vi.runAllTimersAsync();
+    expect(api.setSidebarHidden.mock.calls).toEqual([[true]]);
+    finish();
+    await vi.runAllTimersAsync();
+    expect(api.setSidebarHidden.mock.calls).toEqual([[true], [false]]);
   });
 
   it("does nothing without a tab strip", () => {

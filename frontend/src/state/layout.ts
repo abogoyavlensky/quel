@@ -32,6 +32,10 @@ export async function loadSidebar(): Promise<void> {
   if (store.getState().sidebarHidden === null) store.setState({ sidebarHidden: hidden });
 }
 
+// Saves go one after another: the backend runs bridge calls concurrently,
+// so two quick toggles could otherwise land in the wrong order.
+let saving: Promise<void> = Promise.resolve();
+
 // Hide or show it, and save the choice in the background; a failed save
 // is dropped (the next start shows the old choice). Nothing to do without
 // a tab strip. Hiding it with focus inside moves focus to the editor
@@ -41,6 +45,6 @@ export function toggleSidebar(): void {
   if (!hasTabStrip(s)) return;
   const hidden = sidebarShown(s);
   store.setState({ sidebarHidden: hidden });
-  void api.setSidebarHidden(hidden).catch(() => {});
+  saving = saving.then(() => api.setSidebarHidden(hidden)).catch(() => {});
   if (hidden && document.activeElement?.closest("[data-quel-sidebar]")) setTimeout(focusEditor);
 }
