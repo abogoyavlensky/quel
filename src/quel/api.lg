@@ -47,11 +47,11 @@
 (defn list-schemas [{:keys [conns]} conn-id]
   (meta/schemas (conn/engine conns conn-id) (conn/db conns conn-id)))
 
-(defn list-objects [{:keys [conns]} conn-id schema]
-  (meta/objects (conn/engine conns conn-id) (conn/db conns conn-id) schema))
+(defn describe-schema [{:keys [conns]} conn-id schema]
+  (meta/describe-schema (conn/engine conns conn-id) (conn/db conns conn-id) schema))
 
-(defn list-columns [{:keys [conns]} conn-id schema name]
-  (meta/columns (conn/engine conns conn-id) (conn/db conns conn-id) schema name))
+(defn describe-object [{:keys [conns]} conn-id schema name]
+  (meta/describe-object (conn/engine conns conn-id) (conn/db conns conn-id) schema name))
 
 (defn completion-schema [{:keys [conns]} conn-id]
   (meta/completion-schema (conn/engine conns conn-id) (conn/db conns conn-id)))
@@ -148,8 +148,8 @@
    "close-result" #'close-result
    "close-session" #'close-session
    "list-schemas" #'list-schemas
-   "list-objects" #'list-objects
-   "list-columns" #'list-columns
+   "describe-schema" #'describe-schema
+   "describe-object" #'describe-object
    "completion-schema" #'completion-schema
    "list-profiles" #'list-profiles
    "save-profile" #'save-profile
