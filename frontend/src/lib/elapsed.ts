@@ -1,4 +1,4 @@
-// A running query's time for the status bar, in whole seconds: "12s",
+// A running query's time for the results footer, in whole seconds: "12s",
 // "1m 05s", "1h 02m". Nothing under a second, so a quick query shows none.
 export function formatElapsed(ms: number): string {
   const s = Math.floor(ms / 1000);
