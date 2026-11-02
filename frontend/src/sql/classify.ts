@@ -75,7 +75,11 @@ function explainClass(ts: string[]): StatementClass {
           i++;
           break;
         }
-      } else if (ts[i] === "analyze" || ts[i] === "analyse") analyze = true;
+      } else if (ts[i] === "analyze" || ts[i] === "analyse") {
+        // ANALYZE false / off turns it off. (ANALYZE 0 reads as on: tokens
+        // drops numbers, and a write is the safe mistake.)
+        analyze = ts[i + 1] !== "false" && ts[i + 1] !== "off";
+      }
     }
   } else {
     while (ts[i] === "analyze" || ts[i] === "analyse" || ts[i] === "verbose") {
