@@ -1,6 +1,7 @@
 (ns quel.meta.postgres
   (:require [quel.meta :as meta]
-            [sql.core :as sql]))
+            [sql.core :as sql]
+            [string :as str]))
 
 ;; Postgres and Redshift through pg_catalog (pg_namespace, pg_class,
 ;; pg_attribute, format_type), which Redshift has from its PostgreSQL 8.0
@@ -144,3 +145,66 @@
 
 (defmethod meta/sequences :postgres [_ db schema]
   (mapv #(select-keys % [:name]) (sql/execute! db [sequences-sql schema])))
+
+;; Under a table: indexes, keys, owned sequences. The object is found by
+;; schema and name ($1, $2).
+
+(def ^:private object-oid
+  (str "(select c2.oid from pg_class c2 join pg_namespace n2 on n2.oid = c2.relnamespace"
+       " where n2.nspname = $1 and c2.relname = $2)"))
+
+(def ^:private indexes-sql
+  (str "select i.relname as name, pg_get_indexdef(i.oid) as def,"
+       " x.indisunique as is_unique, x.indisprimary as is_primary"
+       " from pg_index x join pg_class i on i.oid = x.indexrelid"
+       " where x.indrelid = " object-oid
+       " order by i.relname"))
+
+;; "CREATE UNIQUE INDEX n ON s.t USING btree (a)" -> "btree (a)".
+(defn- index-definition [def]
+  (let [i (str/index-of def " USING ")]
+    (if i (subs def (+ i 7)) def)))
+
+(defmethod meta/indexes :postgres [_ db schema name]
+  (mapv (fn [{:keys [name def is_unique is_primary]}]
+          {:name name :definition (index-definition def)
+           :unique (true? is_unique) :primary (true? is_primary)})
+        (sql/execute! db [indexes-sql schema name])))
+
+;; One row per key column (none for a check over no column), grouped here:
+;; no array_agg on Redshift, and no arrays through the driver.
+(def ^:private constraints-sql
+  (str "select c.conname as name,"
+       " case c.contype when 'p' then 'primary-key' when 'u' then 'unique'"
+       " when 'f' then 'foreign-key' else 'check' end as kind,"
+       " pg_get_constraintdef(c.oid) as definition, a.attname as col"
+       " from pg_constraint c"
+       " left join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)"
+       " where c.conrelid = " object-oid " and c.contype in ('p', 'u', 'f', 'c')"
+       " order by c.conname, a.attnum"))
+
+(def ^:private kind-order {"primary-key" 0 "unique" 1 "foreign-key" 2 "check" 3})
+
+(defn- constraints* [_ db schema name]
+  (->> (sql/execute! db [constraints-sql schema name])
+       (partition-by :name)
+       (map (fn [rows]
+              (let [{:keys [name kind definition]} (first rows)]
+                {:name name :kind kind :columns (vec (keep :col rows)) :definition definition})))
+       (sort-by (juxt #(kind-order (:kind %)) :name))
+       vec))
+
+(defmethod meta/constraints :postgres [engine db schema name] (constraints* engine db schema name))
+
+(def ^:private owned-sequences-sql
+  (str "select s.relname as name, a.attname as col"
+       " from pg_depend d"
+       " join pg_class s on s.oid = d.objid and s.relkind = 'S'"
+       " join pg_attribute a on a.attrelid = d.refobjid and a.attnum = d.refobjsubid"
+       " where d.classid = 'pg_class'::regclass and d.refclassid = 'pg_class'::regclass"
+       " and d.deptype in ('a', 'i') and d.refobjid = " object-oid
+       " order by s.relname"))
+
+(defmethod meta/owned-sequences :postgres [_ db schema name]
+  (mapv (fn [{:keys [name col]}] {:name name :column col})
+        (sql/execute! db [owned-sequences-sql schema name])))

@@ -417,3 +417,36 @@
             "no table, view, sequence or extension types")
         (is (= [{:name "invoice_no"}] (meta/sequences :postgres db schema))
             "serial and identity sequences belong to their tables")))))
+
+(deftest postgres-object-details
+  (with-pg
+    (with-meta-schema
+      (fn [db schema]
+        (is (= [{:name "orders_item" :definition "btree (item_id)" :unique false :primary false}
+                {:name "orders_pkey" :definition "btree (id)" :unique true :primary true}]
+               (meta/indexes :postgres db schema "orders")))
+        (is (= [{:name "items_pkey" :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY (id)"}
+                {:name "items_label_key" :kind "unique" :columns ["label"] :definition "UNIQUE (label)"}
+                {:name "items_price_check" :kind "check" :columns ["price"]
+                 :definition "CHECK ((price >= (0)::numeric))"}]
+               (meta/constraints :postgres db schema "items")))
+        (is (= [{:name "orders_pkey" :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY (id)"}
+                {:name "orders_item_id_fkey" :kind "foreign-key" :columns ["item_id"]
+                 :definition (str "FOREIGN KEY (item_id) REFERENCES " schema ".items(id)")}]
+               (meta/constraints :postgres db schema "orders")))
+        (is (= [{:name "items_id_seq" :column "id"}] (meta/owned-sequences :postgres db schema "items")))
+        (is (= [{:name "orders_id_seq" :column "id"}] (meta/owned-sequences :postgres db schema "orders")))
+        (let [d (meta/describe-object :postgres db schema "orders")
+              by (into {} (map (juxt :name identity) (:columns d)))]
+          (is (= [true false] ((juxt :pk :fk) (by "id"))))
+          (is (= [false true] ((juxt :pk :fk) (by "item_id"))))
+          (is (= [false false] ((juxt :pk :fk) (by "status"))))
+          (is (= (str schema ".mood") (:type (by "status")))))
+        (doseq [f [meta/indexes meta/constraints meta/owned-sequences]]
+          (is (= [] (f :postgres db schema "item_labels")))
+          (is (= [] (f :postgres db schema "nope"))))
+        (is (= {:columns [{:name "label" :type "character varying(20)" :pk false :fk false}]
+                :indexes [] :keys [] :sequences []}
+               (meta/describe-object :postgres db schema "item_labels")))
+        (is (= {:columns [] :indexes [] :keys [] :sequences []}
+               (meta/describe-object :postgres db schema "nope")))))))
