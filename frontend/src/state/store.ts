@@ -2,6 +2,7 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { CsvSeparator, ExportFormat } from "@/grid/export";
 import type { Cell, ClosedTab, Column, Profile, UpdateState } from "@/lib/types";
+import type { ConfirmReason } from "@/sql/guard";
 
 // The app's state: the saved profiles and a workspace per profile (its
 // connection, its editor tabs, and each tab's results and messages).
@@ -92,6 +93,16 @@ export interface Workspace {
 export type ProfileDialog =
   { mode: "new" } | { mode: "edit"; id: string; confirmDelete?: boolean } | null;
 
+// A run waiting for the user's answer, as runner.ts asks it under the
+// profile's run policy (sql/guard.ts): the statements to show and how
+// many the run has. In memory only.
+export interface RunConfirm {
+  profileId: string;
+  reason: ConfirmReason;
+  statements: string[];
+  total: number;
+}
+
 export interface AppState {
   profiles: Profile[]; // by name, as the backend lists them
   profilesError: string | null;
@@ -109,6 +120,7 @@ export interface AppState {
   // The open palette: the command list or Go to Connection. At most one
   // (state/palette.ts); in memory only.
   palette: "commands" | "connections" | null;
+  runConfirm: RunConfirm | null; // RunConfirmDialog
 }
 
 export const MESSAGES = "messages";
@@ -160,6 +172,7 @@ export function initialState(): AppState {
     update: { phase: "idle" },
     updateDialogOpen: false,
     palette: null,
+    runConfirm: null,
   };
 }
 

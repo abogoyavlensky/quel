@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClosedTab, FetchResult, RunResult, SavedTab, SavedWorkspace } from "@/lib/types";
+import type { RunPolicy } from "@/sql/guard";
 
 const api = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -239,6 +240,102 @@ describe("runStatements", () => {
     api.run.mockResolvedValue(update(0));
     for (let i = 0; i < 510; i++) await runner.runStatements(tabId(), stmts("delete from t"));
     expect(tab().messages).toHaveLength(500);
+  });
+});
+
+describe("run policy", () => {
+  const withPolicy = (policy: RunPolicy) =>
+    store.setState({
+      profiles: [
+        {
+          id: "p1",
+          name: "Prod",
+          engine: "postgres",
+          host: "h",
+          port: 5432,
+          database: null,
+          user: null,
+          "ssl-mode": "prefer",
+          path: null,
+          color: "red",
+          "run-policy": policy,
+          "has-password": false,
+        },
+      ],
+    });
+  // Let the runner reach its question.
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("read-only refuses a script with a write, sending nothing", async () => {
+    withPolicy("read-only");
+    await runner.runStatements(tabId(), stmts("select 1; delete from t"));
+    expect(api.run).not.toHaveBeenCalled();
+    const t = tab();
+    expect(t.messages.at(-1)).toMatchObject({ kind: "error", sql: "delete from t" });
+    expect(t.messages.at(-1)?.text).toContain("Prod is read-only");
+    expect(t.active).toBe(MESSAGES);
+    expect(t.runningQueryId).toBeNull();
+    expect(store.getState().runConfirm).toBeNull();
+  });
+
+  it("asks before changes, and runs everything on Yes", async () => {
+    withPolicy("writes");
+    api.run.mockResolvedValue(update(1));
+    const running = runner.runStatements(tabId(), stmts("select 1; delete from t"));
+    await settle();
+    expect(api.run).not.toHaveBeenCalled();
+    expect(store.getState().runConfirm).toEqual({
+      profileId: "p1",
+      reason: "writes",
+      statements: ["delete from t"],
+      total: 2,
+    });
+    runner.answerRunConfirm(true);
+    await running;
+    expect(store.getState().runConfirm).toBeNull();
+    expect(api.run.mock.calls.map((c) => c[3])).toEqual(["select 1", "delete from t"]);
+  });
+
+  it("runs nothing on No", async () => {
+    withPolicy("writes");
+    const running = runner.runStatements(tabId(), stmts("delete from t"));
+    await settle();
+    runner.answerRunConfirm(false);
+    await running;
+    expect(api.run).not.toHaveBeenCalled();
+    expect(tab().messages).toHaveLength(0);
+    expect(store.getState().runConfirm).toBeNull();
+  });
+
+  it("runs nothing when the profile disconnected while asking", async () => {
+    withPolicy("always");
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    await settle();
+    store.setState((s) => ({ workspaces: { ...s.workspaces, p1: { ...ws(), status: "disconnected", connId: null } } }));
+    runner.answerRunConfirm(true);
+    await running;
+    expect(api.run).not.toHaveBeenCalled();
+  });
+
+  it("drops another run while asking, even one that would not ask", async () => {
+    withPolicy("writes");
+    api.run.mockResolvedValue(update(1));
+    const running = runner.runStatements(tabId(), stmts("delete from t"));
+    await settle();
+    await runner.runStatements(tabId(), stmts("select 1"));
+    expect(api.run).not.toHaveBeenCalled();
+    expect(store.getState().runConfirm?.statements).toEqual(["delete from t"]);
+    runner.answerRunConfirm(true);
+    await running;
+    expect(api.run).toHaveBeenCalledTimes(1);
+  });
+
+  it("never asks with Never ask", async () => {
+    withPolicy("never");
+    api.run.mockResolvedValue(update(1));
+    await runner.runStatements(tabId(), stmts("drop table t"));
+    expect(api.run).toHaveBeenCalledTimes(1);
+    expect(store.getState().runConfirm).toBeNull();
   });
 });
 
