@@ -1,6 +1,7 @@
 (ns quel.meta.postgres
   (:require [quel.meta :as meta]
-            [sql.core :as sql]))
+            [sql.core :as sql]
+            [string :as str]))
 
 ;; Postgres and Redshift through pg_catalog (pg_namespace, pg_class,
 ;; pg_attribute, format_type), which Redshift has from its PostgreSQL 8.0
@@ -12,7 +13,8 @@
 ;; tests run them against Postgres, which shows they parse and have the
 ;; right shape, nothing more. What pg_catalog misses on Redshift - external
 ;; schemas, datashares, late-binding view columns - is in docs/backlog.
-;; quel.meta.redshift comes with Redshift-only catalog work.
+;; quel.meta.redshift comes with Redshift-only catalog work (dist and sort
+;; keys, external schemas).
 
 (def ^:private schema-filter
   "n.nspname not like 'pg\\_%' and n.nspname <> 'information_schema'")
@@ -84,3 +86,145 @@
 
 (defmethod meta/completion-rows :redshift [_ db]
   (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [redshift-completion-sql])))
+
+;; Schema contents beyond tables and views: functions, types, standalone
+;; sequences. Postgres only, except functions (Redshift's below). Whatever
+;; an extension brings (PostGIS adds a thousand functions) is left out.
+
+(defn- not-extension [classid alias]
+  (str " and not exists (select 1 from pg_depend d where d.classid = '" classid "'::regclass"
+       " and d.objid = " alias ".oid and d.deptype = 'e')"))
+
+(def ^:private postgres-functions-sql
+  (str "select p.proname as name,"
+       " case p.prokind when 'p' then 'procedure' else 'function' end as kind,"
+       " pg_get_function_identity_arguments(p.oid) as args"
+       " from pg_proc p join pg_namespace n on n.oid = p.pronamespace"
+       " where n.nspname = $1 and p.prokind in ('f', 'p')"
+       (not-extension "pg_proc" "p")
+       " order by p.proname, args"))
+
+(defmethod meta/functions :postgres [_ db schema]
+  (mapv #(select-keys % [:name :kind :args]) (sql/execute! db [postgres-functions-sql schema])))
+
+;; Enums, domains, and composite types made with CREATE TYPE (relkind 'c');
+;; every table, view and sequence has a composite row type too, which stays
+;; out. Range types are not listed.
+(def ^:private types-sql
+  (str "select t.typname as name,"
+       " case t.typtype when 'e' then 'enum' when 'd' then 'domain' else 'composite' end as kind,"
+       " case when t.typtype = 'd' then format_type(t.typbasetype, t.typtypmod) end as detail"
+       " from pg_type t join pg_namespace n on n.oid = t.typnamespace"
+       " left join pg_class c on c.oid = t.typrelid"
+       " where n.nspname = $1 and (t.typtype in ('e', 'd') or (t.typtype = 'c' and c.relkind = 'c'))"
+       (not-extension "pg_type" "t")
+       " order by t.typname"))
+
+(def ^:private enum-values-sql
+  (str "select t.typname as name, e.enumlabel as label"
+       " from pg_enum e join pg_type t on t.oid = e.enumtypid"
+       " join pg_namespace n on n.oid = t.typnamespace"
+       " where n.nspname = $1 order by t.typname, e.enumsortorder"))
+
+(defmethod meta/types :postgres [_ db schema]
+  (let [values (reduce (fn [m {:keys [name label]}] (update m name (fnil conj []) label))
+                       {} (sql/execute! db [enum-values-sql schema]))]
+    (mapv (fn [{:keys [name kind detail]}]
+            {:name name :kind kind :detail detail :values (get values name [])})
+          (sql/execute! db [types-sql schema]))))
+
+;; Sequences a column owns (serial: deptype 'a', identity: 'i') show under
+;; their table, not here.
+(def ^:private sequences-sql
+  (str "select c.relname as name"
+       " from pg_class c join pg_namespace n on n.oid = c.relnamespace"
+       " where n.nspname = $1 and c.relkind = 'S'"
+       " and not exists (select 1 from pg_depend d where d.classid = 'pg_class'::regclass"
+       " and d.objid = c.oid and d.refclassid = 'pg_class'::regclass and d.deptype in ('a', 'i'))"
+       (not-extension "pg_class" "c")
+       " order by c.relname"))
+
+(defmethod meta/sequences :postgres [_ db schema]
+  (mapv #(select-keys % [:name]) (sql/execute! db [sequences-sql schema])))
+
+;; Under a table: indexes, keys, owned sequences. The object is found by
+;; schema and name ($1, $2).
+
+(def ^:private object-oid
+  (str "(select c2.oid from pg_class c2 join pg_namespace n2 on n2.oid = c2.relnamespace"
+       " where n2.nspname = $1 and c2.relname = $2)"))
+
+(def ^:private indexes-sql
+  (str "select i.relname as name, pg_get_indexdef(i.oid) as def,"
+       " x.indisunique as is_unique, x.indisprimary as is_primary"
+       " from pg_index x join pg_class i on i.oid = x.indexrelid"
+       " where x.indrelid = " object-oid
+       " order by i.relname"))
+
+;; "CREATE UNIQUE INDEX n ON s.t USING btree (a)" -> "btree (a)".
+(defn- index-definition [def]
+  (let [i (str/index-of def " USING ")]
+    (if i (subs def (+ i 7)) def)))
+
+(defmethod meta/indexes :postgres [_ db schema name]
+  (mapv (fn [{:keys [name def is_unique is_primary]}]
+          {:name name :definition (index-definition def)
+           :unique (true? is_unique) :primary (true? is_primary)})
+        (sql/execute! db [indexes-sql schema name])))
+
+;; One row per key column (none for a check over no column), grouped here:
+;; no array_agg on Redshift, and no arrays through the driver.
+(def ^:private constraints-sql
+  (str "select c.conname as name,"
+       " case c.contype when 'p' then 'primary-key' when 'u' then 'unique'"
+       " when 'f' then 'foreign-key' else 'check' end as kind,"
+       " pg_get_constraintdef(c.oid) as definition, a.attname as col"
+       " from pg_constraint c"
+       " left join pg_attribute a on a.attrelid = c.conrelid and a.attnum = any(c.conkey)"
+       " where c.conrelid = " object-oid " and c.contype in ('p', 'u', 'f', 'c')"
+       " order by c.conname, a.attnum"))
+
+(def ^:private kind-order {"primary-key" 0 "unique" 1 "foreign-key" 2 "check" 3})
+
+(defn- constraints* [_ db schema name]
+  (->> (sql/execute! db [constraints-sql schema name])
+       (partition-by :name)
+       (map (fn [rows]
+              (let [{:keys [name kind definition]} (first rows)]
+                {:name name :kind kind :columns (vec (keep :col rows)) :definition definition})))
+       (sort-by (juxt #(kind-order (:kind %)) :name))
+       vec))
+
+(defmethod meta/constraints :postgres [engine db schema name] (constraints* engine db schema name))
+
+(def ^:private owned-sequences-sql
+  (str "select s.relname as name, a.attname as col"
+       " from pg_depend d"
+       " join pg_class s on s.oid = d.objid and s.relkind = 'S'"
+       " join pg_attribute a on a.attrelid = d.refobjid and a.attnum = d.refobjsubid"
+       " where d.classid = 'pg_class'::regclass and d.refclassid = 'pg_class'::regclass"
+       " and d.deptype in ('a', 'i') and d.refobjid = " object-oid
+       " order by s.relname"))
+
+(defmethod meta/owned-sequences :postgres [_ db schema name]
+  (mapv (fn [{:keys [name col]}] {:name name :column col})
+        (sql/execute! db [owned-sequences-sql schema name])))
+
+;; Redshift, unverified against Redshift: functions without prokind
+;; (Postgres 11+) or the extension filter (Redshift has no extensions),
+;; and keys through the Postgres query, which stays in the shared subset.
+;; Redshift has no user types, no indexes (dist and sort keys instead,
+;; backlogged), and IDENTITY columns rather than sequences, so those
+;; methods fall to the [] default.
+
+(def ^:private redshift-functions-sql
+  (str "select p.proname as name, oidvectortypes(p.proargtypes) as args"
+       " from pg_proc p join pg_namespace n on n.oid = p.pronamespace"
+       " where n.nspname = $1"
+       " order by p.proname, args"))
+
+(defmethod meta/functions :redshift [_ db schema]
+  (mapv (fn [{:keys [name args]}] {:name name :kind "function" :args args})
+        (sql/execute! db [redshift-functions-sql schema])))
+
+(defmethod meta/constraints :redshift [engine db schema name] (constraints* engine db schema name))

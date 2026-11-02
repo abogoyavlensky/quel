@@ -1,15 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useIsFetching, useQueries, useQuery } from "@tanstack/react-query";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronRightIcon, DotIcon, EyeIcon, FolderIcon, FolderOpenIcon, LayersIcon, RefreshCwIcon, Table2Icon } from "lucide-react";
+import {
+  BracesIcon,
+  ChevronRightIcon,
+  DotIcon,
+  EyeIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  HashIcon,
+  KeyRoundIcon,
+  LayersIcon,
+  ListIcon,
+  type LucideIcon,
+  RefreshCwIcon,
+  ShapesIcon,
+  SquareFunctionIcon,
+  Table2Icon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import * as api from "@/lib/api";
 import { metaKeys, queryClient } from "@/lib/query";
-import type { ColumnInfo, ObjectInfo } from "@/lib/types";
+import type { ObjectDetails, SchemaContents } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { connectProfile, setTreeExpanded } from "@/state/runner";
 import { type Workspace, selectedWorkspace, useApp } from "@/state/store";
 import {
+  type ItemIcon,
   type Loaded,
   type TreeRow,
   initialExpanded,
@@ -21,8 +38,8 @@ import {
 } from "@/state/tree";
 
 // The selected profile's structure, under the connections: schemas, their
-// tables and views, and their columns, each level read when it is first
-// opened (TanStack Query caches it per connection until the refresh
+// tables, views, functions, types and sequences, and a table's columns,
+// indexes, keys and sequences, each level read when it is first opened (TanStack Query caches it per connection until the refresh
 // button). The rows are a flat, virtualized list (state/tree.ts) with one
 // focused row, walked by the keyboard as an ARIA tree.
 
@@ -92,24 +109,24 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
 
   const schemaList = schemas.data ?? [];
   const shown = openSchemas(schemaList, expanded);
-  const objectQueries = useQueries({
-    queries: shown.map((s) => ({ queryKey: metaKeys.objects(connId, s), queryFn: () => api.listObjects(connId, s) })),
+  const contentQueries = useQueries({
+    queries: shown.map((s) => ({ queryKey: metaKeys.schema(connId, s), queryFn: () => api.describeSchema(connId, s) })),
   });
-  const objects: Record<string, Loaded<ObjectInfo[]>> = {};
-  shown.forEach((s, i) => (objects[s] = loaded(objectQueries[i])));
+  const contents: Record<string, Loaded<SchemaContents>> = {};
+  shown.forEach((s, i) => (contents[s] = loaded(contentQueries[i])));
 
-  // Which objects show their columns follows from the rows without them.
-  const open = openObjects(treeRows({ connId, schemas: schemaList, objects, columns: {} }, expanded));
-  const columnQueries = useQueries({
+  // Which objects show their details follows from the rows without them.
+  const open = openObjects(treeRows({ connId, schemas: schemaList, contents, details: {} }, expanded));
+  const detailQueries = useQueries({
     queries: open.map((o) => ({
-      queryKey: metaKeys.columns(connId, o.schema, o.name),
-      queryFn: () => api.listColumns(connId, o.schema, o.name),
+      queryKey: metaKeys.object(connId, o.schema, o.name),
+      queryFn: () => api.describeObject(connId, o.schema, o.name),
     })),
   });
-  const columns: Record<string, Loaded<ColumnInfo[]>> = {};
-  open.forEach((o, i) => (columns[o.key] = loaded(columnQueries[i])));
+  const details: Record<string, Loaded<ObjectDetails>> = {};
+  open.forEach((o, i) => (details[o.key] = loaded(detailQueries[i])));
 
-  const rows = treeRows({ connId, schemas: schemaList, objects, columns }, expanded);
+  const rows = treeRows({ connId, schemas: schemaList, contents, details }, expanded);
 
   // The focused row. When it goes away (its parent closed, a refresh), the
   // focus falls back to its nearest ancestor still shown, else the first
@@ -254,7 +271,7 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
               aria-expanded={isExpandable(row) ? row.expanded : undefined}
               aria-selected={isFocused}
               tabIndex={isFocused ? 0 : -1}
-              title={"label" in row ? row.label : undefined}
+              title={"label" in row ? ("detail" in row && row.detail ? `${row.label} ${row.detail}` : row.label) : undefined}
               onClick={() => {
                 setFocusKey(row.key);
                 if (isExpandable(row)) flip(row);
@@ -274,6 +291,17 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
     </div>
   );
 }
+
+const ITEM_ICONS: Record<ItemIcon, LucideIcon> = {
+  function: SquareFunctionIcon,
+  procedure: SquareFunctionIcon,
+  domain: ShapesIcon,
+  composite: BracesIcon,
+  sequence: HashIcon,
+  index: ListIcon,
+  key: KeyRoundIcon,
+  value: DotIcon,
+};
 
 function RowBody({ row }: { row: TreeRow }) {
   const chevron = (open: boolean) => (
@@ -316,9 +344,48 @@ function RowBody({ row }: { row: TreeRow }) {
         <>
           <DotIcon className={icon} />
           <span className="min-w-0 truncate font-mono text-xs">{row.label}</span>
+          {row.badges.map((b) => (
+            <span
+              key={b}
+              title={b === "PK" ? "Primary key" : "Foreign key"}
+              className="shrink-0 rounded-sm border px-1 text-[10px] leading-4 font-semibold text-muted-foreground"
+            >
+              {b}
+            </span>
+          ))}
           <span className="ml-auto min-w-0 shrink truncate pl-2 font-mono text-xs text-muted-foreground">{row.detail}</span>
         </>
       );
+    case "section":
+      return (
+        <>
+          {chevron(row.expanded)}
+          <span className="min-w-0 truncate text-muted-foreground">{row.label}</span>
+          <span className="shrink-0 text-xs text-muted-foreground/70 tabular-nums">{row.detail}</span>
+        </>
+      );
+    case "enum":
+      return (
+        <>
+          {chevron(row.expanded)}
+          <ShapesIcon className={icon} />
+          <span className="min-w-0 flex-1 truncate">{row.label}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">enum</span>
+        </>
+      );
+    case "item": {
+      const Icon = ITEM_ICONS[row.icon];
+      return (
+        <>
+          <Icon className={icon} />
+          <span className="min-w-0 truncate font-mono text-xs">{row.label}</span>
+          {row.detail && (
+            // The detail gives way before the name; the row's title has both.
+            <span className="ml-auto min-w-0 shrink-[4] truncate pl-2 font-mono text-xs text-muted-foreground">{row.detail}</span>
+          )}
+        </>
+      );
+    }
     case "loading":
       return <span className="pl-4 text-xs text-muted-foreground">Loading…</span>;
     case "empty":

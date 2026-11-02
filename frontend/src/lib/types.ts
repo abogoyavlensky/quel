@@ -52,9 +52,71 @@ export interface ObjectInfo {
   kind: ObjectKind;
 }
 
+// "pk" and "fk": a primary or foreign key lists the column.
 export interface ColumnInfo {
   name: string;
   type: string;
+  pk: boolean;
+  fk: boolean;
+}
+
+export interface FunctionInfo {
+  name: string;
+  kind: "function" | "procedure";
+  args: string; // the argument types, "x integer, y text"
+}
+
+// "detail" is a domain's base type; "values" an enum's labels, in order.
+export interface TypeInfo {
+  name: string;
+  kind: "enum" | "domain" | "composite";
+  detail: string | null;
+  values: string[];
+}
+
+// A sequence no column owns.
+export interface SequenceInfo {
+  name: string;
+}
+
+// `describe-schema`'s reply: what the tree shows under a schema.
+export interface SchemaContents {
+  objects: ObjectInfo[];
+  functions: FunctionInfo[];
+  types: TypeInfo[];
+  sequences: SequenceInfo[];
+}
+
+// "definition" is the method and columns, "btree (a, b)".
+export interface IndexInfo {
+  name: string;
+  definition: string;
+  unique: boolean;
+  primary: boolean;
+}
+
+export type KeyKind = "primary-key" | "unique" | "foreign-key" | "check";
+
+// "name" is null where the engine has none (SQLite).
+export interface KeyInfo {
+  name: string | null;
+  kind: KeyKind;
+  columns: string[];
+  definition: string;
+}
+
+// A sequence one of the object's columns owns (serial, identity).
+export interface OwnedSequence {
+  name: string;
+  column: string;
+}
+
+// `describe-object`'s reply: what the tree shows under a table or view.
+export interface ObjectDetails {
+  columns: ColumnInfo[];
+  indexes: IndexInfo[];
+  keys: KeyInfo[];
+  sequences: OwnedSequence[];
 }
 
 // `completion-schema`'s reply: schema -> table -> columns, in order.

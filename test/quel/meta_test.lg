@@ -22,7 +22,12 @@
                    "create table g (a int, b int generated always as (a * 2) virtual)"
                    "create table gone (x int)"
                    "create view broken as select x from gone"
-                   "drop table gone"]]
+                   "drop table gone"
+                   "create table child (id integer primary key, t_id int references t(id), code text unique, n int)"
+                   "create index child_n on child (n)"
+                   "create index child_expr on child (n + 1)"
+                   "create index child_partial on child (code) where n > 0"
+                   "create table pair (a int, b int, t_ref int references t, primary key (a, b))"]]
           (sql/execute! db [q]))
         (f db)))))
 
@@ -35,9 +40,11 @@
   (with-db
     (fn [db]
       (is (= [{:name "broken" :kind "view"}
+              {:name "child" :kind "table"}
               {:name "docs" :kind "table"}
               {:name "g" :kind "table"}
               {:name "it's a table" :kind "table"}
+              {:name "pair" :kind "table"}
               {:name "t" :kind "table"}
               {:name "v" :kind "view"}]
              (meta/objects :sqlite db "main"))))))
@@ -61,3 +68,54 @@
         (is (= ["name"] (get-in c [:schemas "main" "v"])))
         (is (= ["x"] (get-in c [:schemas "main" "it's a table"])))
         (is (not (contains? (get-in c [:schemas "main"]) "broken")))))))
+
+(deftest sqlite-describe-schema
+  (with-db
+    (fn [db]
+      (let [d (meta/describe-schema :sqlite db "main")]
+        (is (= (meta/objects :sqlite db "main") (:objects d)))
+        (is (= {:functions [] :types [] :sequences []} (dissoc d :objects)))))))
+
+(deftest sqlite-describe-object
+  (with-db
+    (fn [db]
+      (let [d (meta/describe-object :sqlite db "main" "t")]
+        (is (= ["id" "name"] (mapv :name (:columns d))))
+        (is (every? #(contains? % :pk) (:columns d)))
+        (is (every? #(contains? % :fk) (:columns d)))
+        (is (every? vector? [(:indexes d) (:keys d) (:sequences d)]))))))
+
+(deftest sqlite-indexes
+  (with-db
+    (fn [db]
+      (is (= [{:name "child_expr" :definition "(<expr>)" :unique false :primary false}
+              {:name "child_n" :definition "(n)" :unique false :primary false}
+              {:name "child_partial" :definition "(code) partial" :unique false :primary false}
+              {:name "sqlite_autoindex_child_1" :definition "(code)" :unique true :primary false}]
+             (meta/indexes :sqlite db "main" "child")))
+      (is (= [{:name "sqlite_autoindex_pair_1" :definition "(a, b)" :unique true :primary true}]
+             (meta/indexes :sqlite db "main" "pair")))
+      (is (= [] (meta/indexes :sqlite db "main" "t")) "a rowid primary key has no index")
+      (is (= [] (meta/indexes :sqlite db "main" "nope"))))))
+
+(deftest sqlite-constraints
+  (with-db
+    (fn [db]
+      (is (= [{:name nil :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY (id)"}
+              {:name nil :kind "unique" :columns ["code"] :definition "UNIQUE (code)"}
+              {:name nil :kind "foreign-key" :columns ["t_id"] :definition "FOREIGN KEY (t_id) REFERENCES t(id)"}]
+             (meta/constraints :sqlite db "main" "child")))
+      (is (= [{:name nil :kind "primary-key" :columns ["a" "b"] :definition "PRIMARY KEY (a, b)"}
+              {:name nil :kind "foreign-key" :columns ["t_ref"] :definition "FOREIGN KEY (t_ref) REFERENCES t"}]
+             (meta/constraints :sqlite db "main" "pair")))
+      (is (= [] (meta/constraints :sqlite db "main" "v")))
+      (is (= [] (meta/constraints :sqlite db "main" "nope"))))))
+
+(deftest sqlite-describe-object-marks-keys
+  (with-db
+    (fn [db]
+      (let [cols (:columns (meta/describe-object :sqlite db "main" "child"))
+            by (into {} (map (juxt :name identity) cols))]
+        (is (= [true false] ((juxt :pk :fk) (by "id"))))
+        (is (= [false true] ((juxt :pk :fk) (by "t_id"))))
+        (is (= [false false] ((juxt :pk :fk) (by "code"))))))))

@@ -87,3 +87,33 @@ test("browse the structure, refresh it, and complete its names", async ({ page }
   await expect(page.getByText("Not connected.")).toBeVisible();
   await expect(tree(page)).toHaveCount(0);
 });
+
+test("a table's keys and indexes", async ({ page }) => {
+  const name = `Keys ${Date.now()}`;
+  const table = `child_${Date.now()}`;
+  await page.goto("/");
+  await ensureProfile(page, name, db);
+  await selectAndConnect(page, name);
+  await expect(item(page, "main")).toHaveAttribute("aria-expanded", "true");
+
+  await runText(page, `create table ${table} (id integer primary key, t_id int references t(id), code text unique)`);
+  await runText(page, `create index ${table}_t on ${table} (t_id)`);
+  await page.getByRole("button", { name: "Refresh structure" }).click();
+  await item(page, table).click();
+
+  // Badges follow the column's name.
+  await expect(column(page, "id")).toContainText("PK");
+  await expect(column(page, "t_id")).toContainText("FK");
+  await expect(column(page, "code")).not.toContainText("PK");
+
+  const section = (label: string) => tree(page).getByRole("treeitem", { name: new RegExp(`^${label}\\s*\\d`) });
+  await section("Indexes").click();
+  await expect(tree(page).getByRole("treeitem", { name: new RegExp(`^${table}_t\\s`) })).toBeVisible();
+  await expect(tree(page).getByRole("treeitem", { name: /^sqlite_autoindex_/ })).toBeVisible();
+
+  await section("Keys").click();
+  for (const key of ["Primary key", "Unique", "Foreign key"])
+    await expect(tree(page).getByRole("treeitem", { name: new RegExp(`^${key}\\s`) })).toBeVisible();
+
+  await runText(page, `drop table ${table}`);
+});

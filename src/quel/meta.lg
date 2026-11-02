@@ -1,7 +1,8 @@
 (ns quel.meta)
 
 ;; Introspection: what a database holds, for the structure tree and the
-;; editor's completion. One multimethod per operation, dispatched on the
+;; editor's completion. describe-schema and describe-object gather what
+;; one expand of the tree shows. One multimethod per operation, dispatched on the
 ;; engine (:sqlite, :postgres, :redshift) and given the database's pool as
 ;; a sql.core connectable. The methods live in the engine namespaces
 ;; (quel.meta.sqlite, quel.meta.postgres), which require this one; quel.api
@@ -30,6 +31,72 @@
   "Every column completion offers: [{:schema :tbl :col}], ordered by
    schema, table and column position, at most completion-limit rows."
   (fn [engine _db] engine))
+
+(defmulti functions
+  "The schema's functions and procedures: [{:name :kind :args}], :kind
+   \"function\" or \"procedure\", :args the argument types as text;
+   sorted by name, then args. Extension members are left out."
+  (fn [engine _db _schema] engine))
+
+(defmulti types
+  "The schema's own types: [{:name :kind :detail :values}], :kind
+   \"enum\", \"domain\" or \"composite\"; :detail a domain's base type,
+   else nil; :values an enum's labels in order, else []."
+  (fn [engine _db _schema] engine))
+
+(defmulti sequences
+  "The schema's standalone sequences, the ones no column owns: [{:name}]."
+  (fn [engine _db _schema] engine))
+
+(defmulti indexes
+  "The object's indexes: [{:name :definition :unique :primary}], sorted by
+   name. :definition is the method and columns, \"btree (a, b)\"."
+  (fn [engine _db _schema _name] engine))
+
+(defmulti constraints
+  "The object's keys: [{:name :kind :columns :definition}], :kind
+   \"primary-key\", \"unique\", \"foreign-key\" or \"check\", in that
+   order, then by name. :name is nil where the engine has none."
+  (fn [engine _db _schema _name] engine))
+
+(defmulti owned-sequences
+  "The sequences the object's columns own (serial, identity):
+   [{:name :column}]."
+  (fn [engine _db _schema _name] engine))
+
+;; An engine without the thing answers [].
+(defmethod functions :default [_ _ _] [])
+(defmethod types :default [_ _ _] [])
+(defmethod sequences :default [_ _ _] [])
+(defmethod indexes :default [_ _ _ _] [])
+(defmethod constraints :default [_ _ _ _] [])
+(defmethod owned-sequences :default [_ _ _ _] [])
+
+(defn describe-schema
+  "What the tree shows under a schema: {:objects :functions :types
+   :sequences}, each a vector."
+  [engine db schema]
+  {:objects (vec (objects engine db schema))
+   :functions (vec (functions engine db schema))
+   :types (vec (types engine db schema))
+   :sequences (vec (sequences engine db schema))})
+
+(defn- key-columns [ks kind]
+  (set (mapcat :columns (filter #(= kind (:kind %)) ks))))
+
+(defn describe-object
+  "What the tree shows under a table or view: {:columns :indexes :keys
+   :sequences}. Each column carries :pk and :fk, true when a primary or
+   foreign key lists it."
+  [engine db schema name]
+  (let [ks (vec (constraints engine db schema name))
+        pk (key-columns ks "primary-key")
+        fk (key-columns ks "foreign-key")]
+    {:columns (mapv (fn [c] (assoc c :pk (contains? pk (:name c)) :fk (contains? fk (:name c))))
+                    (columns engine db schema name))
+     :indexes (vec (indexes engine db schema name))
+     :keys ks
+     :sequences (vec (owned-sequences engine db schema name))}))
 
 ;; Past this many columns, completion knows no more of the database.
 (def completion-limit 50000)

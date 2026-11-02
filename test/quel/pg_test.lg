@@ -328,7 +328,8 @@
 (defn- with-meta-schema
   "Run (f db schema) over a pool on Postgres and a fresh schema holding a
    table, a view, a materialized view, a partitioned table with one
-   partition and a mixed-case table."
+   partition, a mixed-case table, keys, an index, sequences, types,
+   functions and the citext extension."
   [f]
   (with-registry
     (fn [registry]
@@ -338,13 +339,25 @@
             q (fn [s] (sql/execute! db [s]))]
         (q (str "create schema " schema))
         (try
-          (doseq [s [(str "create table " schema ".items (id int4, label varchar(20), price numeric(10,2))")
+          (doseq [s [(str "create table " schema ".items (id serial primary key, label varchar(20) unique,"
+                          " price numeric(10,2) check (price >= 0))")
                      (str "create view " schema ".item_labels as select label from " schema ".items")
                      (str "create materialized view " schema ".item_prices as select price from " schema ".items")
                      (str "create table " schema ".events (at date) partition by range (at)")
                      (str "create table " schema ".events_2026 partition of " schema ".events"
                           " for values from ('2026-01-01') to ('2027-01-01')")
-                     (str "create table " schema ".\"MixedCase\" (x int)")]]
+                     (str "create table " schema ".\"MixedCase\" (x int)")
+                     (str "create type " schema ".mood as enum ('sad', 'ok', 'happy')")
+                     (str "create domain " schema ".amount as numeric(12,2)")
+                     (str "create type " schema ".pair as (a int, b text)")
+                     (str "create table " schema ".orders (id int generated always as identity primary key,"
+                          " item_id int references " schema ".items(id), status " schema ".mood)")
+                     (str "create index orders_item on " schema ".orders (item_id)")
+                     (str "create function " schema ".add_one(x int) returns int language sql as 'select x + 1'")
+                     (str "create function " schema ".add_one(x int, y int) returns int language sql as 'select x + y'")
+                     (str "create procedure " schema ".noop() language sql as ''")
+                     (str "create sequence " schema ".invoice_no")
+                     (str "create extension citext with schema " schema)]]
             (q s))
           (f db schema)
           (finally (q (str "drop schema " schema " cascade"))))))))
@@ -361,7 +374,8 @@
                 {:name "events" :kind "table"}
                 {:name "item_labels" :kind "view"}
                 {:name "item_prices" :kind "materialized-view"}
-                {:name "items" :kind "table"}]
+                {:name "items" :kind "table"}
+                {:name "orders" :kind "table"}]
                (meta/objects :postgres db schema)))
         (is (= [{:name "id" :type "integer"}
                 {:name "label" :type "character varying(20)"}
@@ -379,10 +393,73 @@
     (with-meta-schema
       (fn [db schema]
         (is (= (meta/schemas :postgres db) (meta/schemas :redshift db)))
-        (is (= ["MixedCase" "events" "events_2026" "item_labels" "item_prices" "items"]
+        (is (= ["MixedCase" "events" "events_2026" "item_labels" "item_prices" "items" "orders"]
                (mapv :name (meta/objects :redshift db schema)))
             "no relispartition filter: the partition is listed")
         (is (= (meta/columns :postgres db schema "items") (meta/columns :redshift db schema "items")))
         (let [c (meta/completion-schema :redshift db)]
           (is (= "public" (:default-schema c)))
-          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"]))))))))
+          (is (= ["id" "label" "price"] (get-in c [:schemas schema "items"]))))
+        ;; No extension filter on Redshift: citext's functions show here.
+        (is (= [{:name "add_one" :kind "function" :args "integer"}
+                {:name "add_one" :kind "function" :args "integer, integer"}
+                {:name "noop" :kind "function" :args ""}]
+               (filterv #(#{"add_one" "noop"} (:name %)) (meta/functions :redshift db schema))))
+        (is (= (meta/constraints :postgres db schema "orders") (meta/constraints :redshift db schema "orders")))
+        (is (= [] (meta/types :redshift db schema)))
+        (is (= [] (meta/sequences :redshift db schema)))
+        (is (= [] (meta/indexes :redshift db schema "orders")))
+        (is (= [] (meta/owned-sequences :redshift db schema "items")))
+        (let [by (into {} (map (juxt :name identity) (:columns (meta/describe-object :redshift db schema "orders"))))]
+          (is (:pk (by "id")))
+          (is (:fk (by "item_id"))))))))
+
+(deftest postgres-schema-contents
+  (with-pg
+    (with-meta-schema
+      (fn [db schema]
+        (is (= [{:name "add_one" :kind "function" :args "x integer"}
+                {:name "add_one" :kind "function" :args "x integer, y integer"}
+                {:name "noop" :kind "procedure" :args ""}]
+               (meta/functions :postgres db schema))
+            "nothing from citext")
+        (is (= [{:name "amount" :kind "domain" :detail "numeric(12,2)" :values []}
+                {:name "mood" :kind "enum" :detail nil :values ["sad" "ok" "happy"]}
+                {:name "pair" :kind "composite" :detail nil :values []}]
+               (meta/types :postgres db schema))
+            "no table, view, sequence or extension types")
+        (is (= [{:name "invoice_no"}] (meta/sequences :postgres db schema))
+            "serial and identity sequences belong to their tables")))))
+
+(deftest postgres-object-details
+  (with-pg
+    (with-meta-schema
+      (fn [db schema]
+        (is (= [{:name "orders_item" :definition "btree (item_id)" :unique false :primary false}
+                {:name "orders_pkey" :definition "btree (id)" :unique true :primary true}]
+               (meta/indexes :postgres db schema "orders")))
+        (is (= [{:name "items_pkey" :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY (id)"}
+                {:name "items_label_key" :kind "unique" :columns ["label"] :definition "UNIQUE (label)"}
+                {:name "items_price_check" :kind "check" :columns ["price"]
+                 :definition "CHECK ((price >= (0)::numeric))"}]
+               (meta/constraints :postgres db schema "items")))
+        (is (= [{:name "orders_pkey" :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY (id)"}
+                {:name "orders_item_id_fkey" :kind "foreign-key" :columns ["item_id"]
+                 :definition (str "FOREIGN KEY (item_id) REFERENCES " schema ".items(id)")}]
+               (meta/constraints :postgres db schema "orders")))
+        (is (= [{:name "items_id_seq" :column "id"}] (meta/owned-sequences :postgres db schema "items")))
+        (is (= [{:name "orders_id_seq" :column "id"}] (meta/owned-sequences :postgres db schema "orders")))
+        (let [d (meta/describe-object :postgres db schema "orders")
+              by (into {} (map (juxt :name identity) (:columns d)))]
+          (is (= [true false] ((juxt :pk :fk) (by "id"))))
+          (is (= [false true] ((juxt :pk :fk) (by "item_id"))))
+          (is (= [false false] ((juxt :pk :fk) (by "status"))))
+          (is (= (str schema ".mood") (:type (by "status")))))
+        (doseq [f [meta/indexes meta/constraints meta/owned-sequences]]
+          (is (= [] (f :postgres db schema "item_labels")))
+          (is (= [] (f :postgres db schema "nope"))))
+        (is (= {:columns [{:name "label" :type "character varying(20)" :pk false :fk false}]
+                :indexes [] :keys [] :sequences []}
+               (meta/describe-object :postgres db schema "item_labels")))
+        (is (= {:columns [] :indexes [] :keys [] :sequences []}
+               (meta/describe-object :postgres db schema "nope")))))))

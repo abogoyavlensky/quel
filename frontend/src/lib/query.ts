@@ -16,7 +16,7 @@ export const queryClient = new QueryClient({
 export const metaKeys = {
   all: (connId: string) => ["meta", connId] as const,
   schemas: (connId: string) => ["meta", connId, "schemas"] as const,
-  objects: (connId: string, schema: string) => ["meta", connId, "objects", schema] as const,
-  columns: (connId: string, schema: string, name: string) => ["meta", connId, "columns", schema, name] as const,
+  schema: (connId: string, schema: string) => ["meta", connId, "schema", schema] as const,
+  object: (connId: string, schema: string, name: string) => ["meta", connId, "object", schema, name] as const,
   completion: (connId: string) => ["meta", connId, "completion"] as const,
 };

@@ -74,8 +74,10 @@ p3="$(call fetch-page '["q-big"]')"
 [[ "$(json "$p3" "['rows'].__len__()")" == 200 && "$p3" == *'"has-more":false'* ]] || fail "page 3: ${p3:0:200}"
 [[ "$(call fetch-page '["q-big"]')" == *'"closed":true'* ]] || fail "a finished result is closed"
 # The structure handlers see the table the session made.
-objs="$(call list-objects "[\"$conn\",\"main\"]")"
-[[ "$objs" == *'"name":"t"'* ]] || fail "list-objects misses t: $objs"
+objs="$(call describe-schema "[\"$conn\",\"main\"]")"
+[[ "$objs" == *'"name":"t"'* ]] || fail "describe-schema misses t: $objs"
+details="$(call describe-object "[\"$conn\",\"main\",\"t\"]")"
+[[ "$details" == *'"name":"id"'* ]] || fail "describe-object misses id: $details"
 completion="$(call completion-schema "[\"$conn\"]")"
 [[ "$(json "$completion" "['schemas']['main']['t']")" == "['id']" ]] || fail "completion-schema: $completion"
 # A nil reply comes back as {} (the bridge lowers nil that way).
