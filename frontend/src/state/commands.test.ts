@@ -37,6 +37,7 @@ const profile = (id: string): Profile => ({
   "ssl-mode": null,
   path: "/tmp/x.db",
   color: "none",
+  "run-policy": "never",
   "has-password": false,
 });
 

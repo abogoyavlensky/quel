@@ -38,6 +38,7 @@ const p = (id: string, over: Partial<Profile> = {}): Profile => ({
   "ssl-mode": "prefer",
   path: null,
   color: "green",
+  "run-policy": "never",
   "has-password": false,
   ...over,
 });

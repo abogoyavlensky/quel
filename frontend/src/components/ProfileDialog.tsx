@@ -25,11 +25,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { chooseFile } from "@/lib/api";
 import type { Color, Engine, Profile, SslMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import type { RunPolicy } from "@/sql/guard";
 import {
   COLORS,
   DEFAULT_PORT,
   ENGINES,
   type ProfileForm,
+  RUN_POLICIES,
   SSL_MODES,
   emptyForm,
   nameFromPath,
@@ -332,6 +334,23 @@ function ProfileEditor({
               />
             ))}
           </div>
+
+          <Label htmlFor="profile-safety">Safety</Label>
+          <Select value={form.runPolicy} onValueChange={(v) => set({ runPolicy: v as RunPolicy })}>
+            <SelectTrigger id="profile-safety" className="h-9 w-full" aria-describedby="profile-safety-hint">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RUN_POLICIES.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p id="profile-safety-hint" className="col-start-2 -mt-1 text-xs text-muted-foreground">
+            {RUN_POLICIES.find((p) => p.value === form.runPolicy)?.hint}
+          </p>
         </div>
 
         <div aria-live="polite" className="min-h-5 text-xs">

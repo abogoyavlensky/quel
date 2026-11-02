@@ -13,6 +13,7 @@ const saved: Profile = {
   "ssl-mode": "require",
   path: null,
   color: "red",
+  "run-policy": "writes",
   "has-password": true,
 };
 
@@ -20,6 +21,7 @@ describe("profile form", () => {
   it("starts empty with the engine's SSL default", () => {
     expect(emptyForm().sslMode).toBe("prefer");
     expect(emptyForm("redshift").sslMode).toBe("require");
+    expect(emptyForm().runPolicy).toBe("never");
   });
 
   it("round-trips a saved profile, keeping its password", () => {
@@ -35,6 +37,7 @@ describe("profile form", () => {
       "ssl-mode": "require",
       path: null,
       color: "red",
+      "run-policy": "writes",
     });
     expect("password" in input).toBe(false);
   });
@@ -56,14 +59,22 @@ describe("profile form", () => {
   it("a SQLite profile sends its path and no server fields or password", () => {
     const f = { ...emptyForm("sqlite"), name: "f", path: " /x.db ", host: "h", password: "pw" };
     const input = toInput(f);
-    expect(input).toMatchObject({ engine: "sqlite", path: "/x.db", host: null, port: null, "ssl-mode": null });
+    expect(input).toMatchObject({
+      engine: "sqlite",
+      path: "/x.db",
+      host: null,
+      port: null,
+      "ssl-mode": null,
+      "run-policy": "never",
+    });
+    expect(toInput({ ...f, runPolicy: "read-only" })["run-policy"]).toBe("read-only");
     expect("password" in input).toBe(false);
   });
 
   it("switching engine keeps what still applies", () => {
-    const f = { ...emptyForm(), name: "n", color: "blue" as const, host: "h", port: "1" };
+    const f = { ...emptyForm(), name: "n", color: "blue" as const, runPolicy: "always" as const, host: "h", port: "1" };
     const r = withEngine(f, "redshift");
-    expect(r).toMatchObject({ name: "n", color: "blue", host: "h", port: "1", sslMode: "require" });
+    expect(r).toMatchObject({ name: "n", color: "blue", runPolicy: "always", host: "h", port: "1", sslMode: "require" });
     expect(withEngine({ ...f, sslMode: "disable" }, "redshift").sslMode).toBe("disable");
   });
 
