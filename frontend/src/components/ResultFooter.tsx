@@ -22,15 +22,15 @@ function Elapsed({ since }: { since: number }) {
 }
 
 // The strip under the results: what the tab's run is doing, or the shown
-// result's rows and time. 300ms into a run (the Stop button's delay, so a
-// quick query never flashes it) it says "Running…" or "Canceling…" with
-// the time so far, over Messages or a kept result alike; then the run's
-// last result shows and its rows and time take the same places. With no
-// run and no result showing (Messages, the empty tab) there is none. A
-// page load is not a run: the rows text says "loading more…". Keyed by
-// tab in ResultTabs: switching tabs starts the delay over.
+// result's rows or count and time. 300ms into a run (the Stop button's
+// delay, so a quick query never flashes it) it says "Running…" or
+// "Canceling…" with the time so far, whichever tab shows; then the result's
+// rows or count and time take the same places. Otherwise (Messages, the
+// empty tab, an error, a cancel) there is none. A page load is not a run:
+// the rows text says "loading more…". Keyed by tab in ResultTabs: switching
+// tabs starts the delay over.
 export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: ResultTab | undefined }) {
-  const result = shown?.kind === "rows" ? shown : undefined;
+  const result = shown?.kind === "rows" || shown?.kind === "update" ? shown : undefined;
   const busy = useDelayed(isRunning(tab), 300);
   const words = busy ? runWords(tab) : null;
   if (!words && !result) return null;
@@ -53,10 +53,10 @@ export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: R
         result && (
           <>
             <span role="status" className="min-w-0 truncate">
-              {rowsText(result)}
+              {result.kind === "rows" ? rowsText(result) : result.text}
             </span>
             <div className="flex shrink-0 items-center gap-2">
-              <ExportMenu key={result.id} tabId={tab.id} result={result} />
+              {result.kind === "rows" && <ExportMenu key={result.id} tabId={tab.id} result={result} />}
               <span className="tabular-nums">{result.elapsedMs.toLocaleString()} ms</span>
             </div>
           </>

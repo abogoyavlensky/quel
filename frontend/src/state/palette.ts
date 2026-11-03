@@ -60,8 +60,8 @@ export function focusResult(): void {
   document.querySelector<HTMLElement>("[data-result-grid]")?.focus();
 }
 
-// ⌘R: the grid of the result the current tab shows. Nothing on Messages,
-// with no result, or under a dialog. The selected row stays as it is.
+// ⌘R: the grid of the result the current tab shows. Nothing without a grid
+// (Messages, a result with no rows) or under a dialog. The selected row stays as it is.
 export function focusResultKey(): void {
   const s = store.getState();
   if (!modalOpen(s) && showsResult(s)) focusResult();

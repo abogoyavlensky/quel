@@ -6,6 +6,7 @@ import { closeResult, connectProfile, pin, selectResult } from "@/state/runner";
 import { type EditorTab, MESSAGES, selectedWorkspace, useApp } from "@/state/store";
 import { MessagesView } from "./MessagesView";
 import { ResultFooter } from "./ResultFooter";
+import { ResultOutcome } from "./ResultOutcome";
 import { RUN_KEY } from "./keys";
 
 // A result tab is named by its statement, as far as it fits.
@@ -79,7 +80,8 @@ function NotConnected({ banner }: { banner: boolean }) {
   );
 }
 
-// The results of one editor tab: its messages log and one tab per result.
+// The results of one editor tab: its messages log and one tab per
+// statement run, showing its rows or what it came to (a count, the error).
 // A run replaces the results; a kept one ("Keep result", the pin) stays
 // until closed. While the profile is not connected, the empty tab says so
 // instead of the run hint, and a refused run puts a banner above the
@@ -152,6 +154,8 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
           )
         ) : current?.kind === "rows" ? (
           <ResultGrid key={current.id} tabId={tab.id} result={current} />
+        ) : current ? (
+          <ResultOutcome result={current} />
         ) : (
           <MessagesView messages={tab.messages} />
         )}
