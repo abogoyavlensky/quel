@@ -1,5 +1,7 @@
 # Reconnect Lost Sessions Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** When a tab's connection turns out to be dead (laptop sleep, a
@@ -110,8 +112,8 @@ on (`frontend/src/state/runner.ts`, `text.startsWith("Query canceled.")`).
    | run, not sent | `The connection to the database was lost (<e>), so the statement was not run.` |
    | run, maybe sent | `The connection to the database was lost (<e>). The statement may or may not have completed: check before running it again.` |
    | run, canceled | `Query canceled. The connection to the database was lost, so the statement may or may not have completed: check before running it again.` |
-   | page read | `The connection to the database was lost (<e>) while reading rows. Run the query again for the rest.` |
-   | page read, canceled | `Query canceled. The connection to the database was lost while reading rows. Run the query again for the rest.` |
+   | page read | `The connection to the database was lost (<e>) while reading rows. The statement had already run: if it changes data, check before running it again for the rest.` |
+   | page read, canceled | `Query canceled. The connection to the database was lost while reading rows. The statement had already run: if it changes data, check before running it again for the rest.` |
 
    A canceled case omits `<e>`: after a cancel the driver message is
    just `context canceled`.
@@ -191,7 +193,7 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
 - Modify: `src/quel/exec.lg`
 - Test: `test/quel/exec_test.lg`
 
-- [ ] **Step 1: Write the failing tests** in `exec_test.lg`:
+- [x] **Step 1: Write the failing tests** in `exec_test.lg`:
   - `not-sent?` is true for:
     - the user's message,
       `"write failed: write tcp 100.88.215.20:52866->10.20.84.128:5439: write: broken pipe"`;
@@ -219,21 +221,21 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
     - `{:error "dial tcp: no route to host"}`: contains
       `"Could not reconnect (dial tcp: no route to host): the next run tries again."`.
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `lgx test`
   Expected: the new tests fail (`exec/not-sent?` and
   `exec/lost-message` unresolved).
 
-- [ ] **Step 3: Implement `not-sent?` and `lost-message`** in
+- [x] **Step 3: Implement `not-sent?` and `lost-message`** in
   `src/quel/exec.lg`, next to `failure`. Both are public, for the
   tests. The `not-sent?` docstring says why each marker means nothing
   reached the server, or nothing was committed (from the Design).
 
-- [ ] **Step 4: Run the tests.**
+- [x] **Step 4: Run the tests.**
   Run: `lgx test`
   Expected: PASS (the Postgres tests skip).
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Word a lost connection by whether the statement ran"`
 
 ### Task 2: Reconnect in fail!
@@ -242,7 +244,7 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
 - Modify: `src/quel/exec.lg`
 - Test: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Rework the Postgres tests** in `pg_test.lg`:
+- [x] **Step 1: Rework the Postgres tests** in `pg_test.lg`:
   - Rename `a-dead-session-is-reset` to
     `a-dead-session-reconnects-at-once`.
     - Take the pid and the session object
@@ -289,12 +291,12 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
     The old check no longer matches anything the new wording says. The
     test already asserts the same pid throughout.
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `lgx test-pg`
   Expected: the reworked and new tests fail (old wording, no session
   until the next run).
 
-- [ ] **Step 3: Rewire `fail!`.** New signature
+- [x] **Step 3: Rewire `fail!`.** New signature
   `[conns conn-id session-id kind canceled? query-id e]`.
   - When `dead?`: `conn/reset-session!`, then reconnect (Design, step
     1), then throw `(ex-info (lost-message {...}) {:query-id query-id})`.
@@ -304,12 +306,18 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
   - Update the docstrings of `fail!`, `run!` and `fetch-page!` that say
     "the error then says so" or "The session was reset".
 
-- [ ] **Step 4: Run all backend tests.**
+- [x] **Step 4: Run all backend tests.**
   Run: `lgx test && lgx test-pg`
   Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Reconnect a tab whose connection was lost, and say what it lost"`
+
+> Deviation: the branch review noted that paged results include
+> `INSERT/UPDATE … RETURNING` and `CALL`, which may have committed before
+> the page read failed. The page-read text no longer says plainly "Run
+> the query again for the rest"; it says the statement had already run,
+> and to check first if it changes data (fixup commit).
 
 ### Task 3: Docs and backlog
 
@@ -318,7 +326,7 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
 - Create: `docs/backlog/check-sessions-after-wake.md`
 - Modify: `docs/backlog/open-transaction-indicator.md`
 
-- [ ] **Step 1: Rewrite DESIGN.md's paragraph** under Query execution →
+- [x] **Step 1: Rewrite DESIGN.md's paragraph** under Query execution →
   Running, starting "After any failed run". Keep the probe and the
   25P02 rule. Replace "the next run takes a fresh one, and the error
   ends 'The session was reset.'" with:
@@ -330,10 +338,10 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
 
   Use /writing-clearly.
 
-- [ ] **Step 2: Commit.**
+- [x] **Step 2: Commit.**
   `git commit -am "Document reconnecting a lost session"`
 
-- [ ] **Step 3: Backlog entries,** using /backlog:
+- [x] **Step 3: Backlog entries,** using /backlog:
   - New `docs/backlog/check-sessions-after-wake.md`:
     - `**Status: open**`.
     - **Problem:** after sleep, every tab with a session fails its
@@ -351,5 +359,29 @@ On Linux without GTK4/WebKitGTK headers, run the test tasks as
     transaction, …". Read the status before each statement: after some
     failures `database/sql` has already closed the `Conn`.
 
-- [ ] **Step 4: Commit them on their own,** as AGENTS.md asks:
+- [x] **Step 4: Commit them on their own,** as AGENTS.md asks:
   `git add docs/backlog && git commit -m "Backlog: check tab sessions after a wake; refine the lost-connection message"`
+
+## Completion summary
+
+Implemented as planned, on `reconnect-lost-sessions`:
+- `quel.exec/not-sent?` and `lost-message`;
+- `fail!` reconnecting a dead session at once and throwing the new
+  message;
+- DESIGN.md updated, and backlog entries `check-sessions-after-wake.md`
+  (new) and `open-transaction-indicator.md` (note added).
+
+Verified with `lgx test-pg` (173 tests, against Postgres 17), the
+frontend tests and `lgx smoke-pg`. An end-to-end check drove the app in
+server mode over the HTTP bridge:
+- a tab whose backend was terminated from another tab got the "may or
+  may not have completed … Reconnected" error, and its next run worked
+  on a new backend;
+- an idle-session timeout got "so the statement was not run".
+
+Deviations:
+- The page-read wording, as noted under Task 2.
+
+What the plan could have specified better: the page-read wording
+assumed that paged results only read, but `RETURNING` and `CALL` also
+page.

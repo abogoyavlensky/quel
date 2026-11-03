@@ -287,7 +287,8 @@
         opening (cond
                   (= :page kind)
                   (str (when canceled? "Query canceled. ")
-                       lost cause " while reading rows. Run the query again for the rest.")
+                       lost cause " while reading rows. The statement had already run:"
+                       " if it changes data, check before running it again for the rest.")
 
                   canceled?
                   (str "Query canceled. " lost ", so the statement may or may not have completed:"

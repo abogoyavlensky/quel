@@ -482,6 +482,7 @@
     (is (str/ends-with? m gone)))
   (let [m (lost {:kind :page :error "unexpected EOF" :sent? true})]
     (is (str/includes? m "while reading rows"))
+    (is (str/includes? m "if it changes data, check before running it again"))
     (is (str/includes? m "unexpected EOF")))
   (let [m (lost {:kind :page :canceled? true :error "context canceled" :sent? true})]
     (is (str/starts-with? m "Query canceled."))
