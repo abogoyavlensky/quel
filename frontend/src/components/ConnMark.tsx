@@ -6,7 +6,7 @@ import { engineText, tagText } from "./colors";
 // A connection's dot, in the profile's colour tag when it has one, else one
 // colour per engine; grey for no profile. Filled when connected, a hollow
 // ring when not, pulsing while it connects or disconnects. Decoration only:
-// the words for the state are on the row or the status bar.
+// the words for the state are on the row and in the top strip.
 export function ConnMark({
   engine,
   color = "none",

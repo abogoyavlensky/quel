@@ -1,4 +1,5 @@
 import * as api from "@/lib/api";
+import { notify } from "@/lib/notify";
 import type { SavedTab, WorkspaceInput } from "@/lib/types";
 import { currentInput } from "@/editor/states";
 import { type Workspace, store, workspaceOfTab } from "./store";
@@ -24,6 +25,7 @@ function errorText(e: unknown): string {
 }
 
 const SAVE_FAILED = "Could not save tabs: ";
+const saveFailedId = (profileId: string) => `save-failed-${profileId}`;
 
 // Run op after the profile's queued operations. Its result (or failure)
 // is the caller's; a failure does not stop the queue.
@@ -85,12 +87,12 @@ function enqueueSave(profileId: string): Promise<void> {
     if (!w || w.loadError) return;
     try {
       await api.saveWorkspace(profileId, snapshot(w));
-      saveErrors.delete(profileId);
-      if (store.getState().notice?.startsWith(SAVE_FAILED)) store.setState({ notice: null });
+      if (saveErrors.delete(profileId)) notify.dismiss(saveFailedId(profileId));
     } catch (e) {
-      // Shown in the status bar; the next change tries again.
+      // A toast that stays until a save of this profile works; the next
+      // change tries again, and its failure replaces the toast.
       saveErrors.set(profileId, errorText(e));
-      store.setState({ notice: SAVE_FAILED + errorText(e) });
+      notify.error(SAVE_FAILED + errorText(e), { id: saveFailedId(profileId), duration: Infinity });
     }
   });
 }
@@ -140,7 +142,7 @@ export async function flushAllAndWait(): Promise<string | null> {
 export function cancelSave(profileId: string): void {
   clearTimeout(timers.get(profileId));
   timers.delete(profileId);
-  saveErrors.delete(profileId);
+  if (saveErrors.delete(profileId)) notify.dismiss(saveFailedId(profileId));
 }
 
 // The selected profile, saved for the next launch. Bridge calls run

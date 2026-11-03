@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ExportMenu } from "@/components/ExportMenu";
 import { cn } from "@/lib/utils";
 import type { ResultTab } from "@/state/store";
 import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
@@ -13,14 +12,16 @@ import { initialWidths, numberWidth } from "./widths";
 // row numbers to the left. Scrolling near the end loads the next page.
 // A click selects a row (the result keeps it, for the row details panel),
 // ↑/↓ move the selection while the grid has focus, and a double-click
-// also opens the panel.
+// also opens the panel. The rows and time are in the results footer
+// (components/ResultFooter.tsx).
 
 const ROW_H = 34;
 const HEAD_H = 48;
 const MIN_COL = 40;
 const LOAD_AHEAD = 50; // rows from the end at which the next page loads
 
-function footer(r: ResultTab): string {
+// What the results footer says about a result's rows.
+export function rowsText(r: ResultTab): string {
   const n = r.rows.length.toLocaleString();
   switch (r.cursor) {
     case "done":
@@ -207,13 +208,6 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab
               </div>
             );
           })}
-        </div>
-      </div>
-      <div className="flex h-9 shrink-0 items-center justify-between border-t px-3.5 text-xs text-muted-foreground">
-        <span aria-live="polite">{footer(result)}</span>
-        <div className="flex items-center gap-2">
-          <ExportMenu tabId={tabId} result={result} />
-          <span className="tabular-nums">{result.elapsedMs.toLocaleString()} ms</span>
         </div>
       </div>
     </div>

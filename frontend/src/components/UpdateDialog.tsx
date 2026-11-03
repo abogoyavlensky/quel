@@ -14,7 +14,7 @@ const close = () => store.setState({ updateDialogOpen: false });
 // The update found by state/updates.ts: skip it, leave it, or download it
 // and restart into it. Where this copy can't replace itself (dev or server
 // mode, an ad-hoc build, a folder it can't write), it points to Homebrew.
-// It can close while a download runs; the status bar keeps the progress.
+// It can close while a download runs; the top strip's button keeps the progress.
 export function UpdateDialog() {
   const u = useApp((s) => s.update);
   const open = useApp((s) => s.updateDialogOpen) && u.phase !== "idle";

@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { JsonCode } from "@/grid/JsonCode";
 import { jsonText, rowAsJson } from "@/grid/json";
 import { copyText } from "@/lib/clipboard";
+import { notify } from "@/lib/notify";
 import type { Cell, Engine } from "@/lib/types";
 import { toggleRowDetails } from "@/state/runner";
-import { MESSAGES, activeTabOf, selectedWorkspace, store, useApp } from "@/state/store";
+import { MESSAGES, activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 
 // The row details panel: every value of the active result's selected row,
 // read-only, one block per column. JSON values are formatted and
@@ -41,7 +42,7 @@ function CopyButton({
   const onClick = async () => {
     if (text === null) return;
     if (await copyText(text())) setCopied(true);
-    else store.setState({ notice: "Could not copy." });
+    else notify.error("Could not copy.");
   };
   return (
     <Button

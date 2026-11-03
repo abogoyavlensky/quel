@@ -19,7 +19,6 @@ import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { RunButton } from "./RunButton";
 import { RowDetails } from "./RowDetails";
-import { StatusBar } from "./StatusBar";
 import { StructureTree } from "./StructureTree";
 import { TitleBar } from "./TitleBar";
 import { UpdateDialog } from "./UpdateDialog";
@@ -28,8 +27,10 @@ import { UpdateDialog } from "./UpdateDialog";
 // connections on the left, the selected profile's
 // structure under them; on the right that profile's workspace: its editor
 // tabs, the active tab's editor above its results; on the far right,
-// while open, the row details panel; the status bar below all. The left
-// column can be hidden (⌘B, state/layout.ts); it then leaves the window.
+// while open, the row details panel. There is no status bar: the top strip
+// says how the connection is, the results footer what a run is doing, and
+// notices are toasts. The left column can be hidden (⌘B,
+// state/layout.ts); it then leaves the window.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
@@ -105,7 +106,6 @@ export function AppShell() {
           </>
         )}
       </ResizablePanelGroup>
-      <StatusBar />
       <CommandPalette />
       <GoToConnection />
       <ProfileDialog />

@@ -14,7 +14,7 @@ import {
 import { tags as t } from "@lezer/highlight";
 import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
-import { clearNotice, runCurrent } from "@/state/runner";
+import { runCurrent } from "@/state/runner";
 import { columnCompletionSource } from "./columns";
 import { statementHighlight } from "./statementHighlight";
 import type { Seed } from "./states";
@@ -169,9 +169,7 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       ]),
       language.of(languageFor(engine, null)),
       EditorView.contentAttributes.of({ "aria-label": "SQL editor" }),
-      // An edit clears the status bar's notice.
       EditorView.updateListener.of((u) => {
-        if (u.docChanged) clearNotice();
         if (tabId && (u.docChanged || u.selectionSet)) onEdit(tabId);
       }),
     ],

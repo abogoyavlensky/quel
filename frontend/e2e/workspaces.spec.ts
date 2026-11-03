@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { ensureProfile, profileRow, selectAndConnect } from "./connect";
+import { ensureProfile, expectConnected, expectNotConnected, profileRow, selectAndConnect } from "./connect";
 
 // A workspace per profile: two SQLite profiles (the fixture file and a
 // second one with table t2, both made by scripts/e2e.sh) connected at
@@ -9,7 +9,6 @@ const db = process.env.QUEL_E2E_DB ?? "/tmp/quel-e2e.db";
 const db2 = process.env.QUEL_E2E_DB2 ?? "/tmp/quel-e2e2.db";
 
 const editor = (page: Page) => page.getByLabel("SQL editor");
-const status = (page: Page) => page.getByRole("status");
 const messages = (page: Page) => page.getByRole("log", { name: "Messages" });
 const editorTabs = (page: Page) => page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab");
 
@@ -29,7 +28,7 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
 
   // A: a second tab, a temp table, and a result.
   await profileRow(page, "WS A").click();
-  await expect(status(page)).toHaveText("Ready");
+  await expectConnected(page);
   await page.getByRole("button", { name: "New tab" }).click();
   await write(page, "create temp table only_a (x int); select count(*) as n from t;");
   await page.keyboard.press("ControlOrMeta+Shift+Enter");
@@ -55,9 +54,9 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
   // Disconnecting B from its row leaves A connected and B's tab in place.
   await page.getByRole("button", { name: "Disconnect WS B" }).click();
   await expect(page.getByRole("button", { name: "Connect WS B" })).toBeEnabled();
-  await expect(status(page)).toHaveText("Ready");
+  await expectConnected(page);
   await profileRow(page, "WS B").click();
-  await expect(status(page)).toHaveText("Not connected");
+  await expectNotConnected(page);
   await expect(editor(page)).toHaveText("select count(*) as n from t2;");
 
   // A run on B is refused and the results say so; connect it from there,
@@ -69,7 +68,7 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
   await expect(banner).toBeVisible();
   await expect(toast).toBeVisible();
   await page.getByRole("button", { name: "Connect to WS B" }).click();
-  await expect(status(page)).toHaveText("Ready");
+  await expectConnected(page);
   await expect(banner).toHaveCount(0);
   await expect(toast).toHaveCount(0);
   await write(page, "select max(id) as m from t2;");
