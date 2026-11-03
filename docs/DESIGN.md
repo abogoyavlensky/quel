@@ -261,13 +261,32 @@ the tab's session (its temp tables, `SET`s, open transaction). Quel opens
 pools with `{:postgres/cancel :request}` (letgo-packages `postgres-v0.4.0`),
 which keeps the connection, as `psql` does after Ctrl+C.
 
-After any failed run, Quel probes the session with `select 1` (bounded by
-5 s). A dead connection - a dropped network, a restarted server - is then
-dropped, the next run takes a fresh one, and the error ends "The session
-was reset." The failed run's own error cannot be trusted to say so: pgx
-may report a server `FATAL` or an EOF first. Any other probe failure,
+After any failed run or page read, Quel probes the session with
+`select 1` (bounded by 5 s). The failed call's own error cannot be
+trusted to say whether the connection survived: pgx may report a server
+`FATAL` or an EOF first. Any probe failure other than a dead connection,
 such as an aborted transaction's SQLSTATE 25P02, keeps the session, since
 the user still has to `ROLLBACK`.
+
+A dead connection (laptop sleep, a dropped network, a server timeout or
+restart) is replaced at once: Quel takes a new session for the tab
+before it replies. Connecting is bounded by pgx's connect timeout,
+10 s unless the profile sets `connect_timeout`. The error then says:
+
+- whether the statement ran. It was not run when the driver's message
+  shows nothing took effect on the server: a failed write (`write
+  failed:`), `driver: bad connection`, `sql: connection is already
+  closed`, or the server ending an idle session (SQLSTATE 57P05, 25P03).
+  A partial write could deliver pgx's `Execute` without its `Sync`, but
+  Postgres commits an implicit transaction only at `Sync` and aborts it
+  when the connection drops. Anything else, and any cancel, may or may
+  not have completed;
+- whether Quel reconnected, or why not (the next run then tries again);
+- that any open transaction, `SET` values and temp tables are gone.
+
+Quel never runs the statement again by itself. The new session has lost
+the old one's settings, `search_path` among them, so a re-run could
+quietly query another schema (`quel.exec/lost-message` builds the text).
 
 ### Cursor lifetime
 
