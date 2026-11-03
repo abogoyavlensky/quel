@@ -288,6 +288,17 @@ Quel never runs the statement again by itself. The new session has lost
 the old one's settings, `search_path` among them, so a re-run could
 quietly query another schema (`quel.exec/lost-message` builds the text).
 
+The error's data says the same as `:lost` (`not-run`, `reconnected`,
+`page`, `canceled`, the driver's message), and the wails bridge sends
+ex-data to the frontend as the error's `cause` (from `wails-v0.8.0`).
+A loss Quel recovered from is then a calm notice in the tab's messages,
+not a red error: what happened, that the session's state was reset, and
+the driver's message under Details. A toast says the same. When the
+statement was not run, both offer Run again, for that statement and the
+rest of its script. That is a normal run, so the profile's run policy
+judges it again, and it does nothing once the tab has run something
+since. A failed reconnect stays an error, and a cancel stays a cancel.
+
 ### Cursor lifetime
 
 An open cursor holds its session's connection, cluster resources on

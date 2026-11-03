@@ -1,5 +1,7 @@
 # Lost Connection Notice Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** When Quel reconnects a tab whose connection was lost, the user
@@ -233,9 +235,9 @@ Quel work continues on the branch `reconnect-lost-sessions`.
 - Modify: `wails/README.md`
 - Test: `wails/test/wails/bridge_test.lg`
 
-- [ ] **Step 1: Branch.** `git switch master && git pull && git switch -c wails-error-data`
+- [x] **Step 1: Branch.** `git switch master && git pull && git switch -c wails-error-data`
 
-- [ ] **Step 2: Write the failing tests** in `bridge_test.lg`.
+- [x] **Step 2: Write the failing tests** in `bridge_test.lg`.
   `t/call` returns `:status`, `:body` and `:json`; check `:json` holds
   the error reply, or parse `:body`.
   - `a-thrown-ex-info-carries-its-data`: the handler throws
@@ -250,13 +252,13 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   - `nil-data-is-an-empty-cause`: `(ex-info "x" nil)` (or `{}`) gives
     `cause` `{}`.
 
-- [ ] **Step 3: Run them to see them fail.**
+- [x] **Step 3: Run them to see them fail.**
   Run: `cd wails && lgx test` (on Linux without GTK, with the
   package's server-mode tag if its tests need one: see the package
   README).
   Expected: the new tests fail (`cause` is `{}`).
 
-- [ ] **Step 4: Implement.** In `shim.go`:
+- [x] **Step 4: Implement.** In `shim.go`:
   - `type handlerErr struct { msg string; data vm.Value }`;
   - `Error()` returns `msg`;
   - `MarshalJSON()` returns `{}` for nil data, else marshals
@@ -267,9 +269,9 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   `*vm.ExInfo` (find its data accessor in let-go's `vm` package). Update
   the doc comment.
 
-- [ ] **Step 5: Run the tests.** Expected: PASS, the old ones included.
+- [x] **Step 5: Run the tests.** Expected: PASS, the old ones included.
 
-- [ ] **Step 6: Document.** In `wails/README.md`, where handlers and
+- [x] **Step 6: Document.** In `wails/README.md`, where handlers and
   errors are described, add a short section:
   - a thrown `ex-info`'s message is the rejected promise's message, and
     its data is the error's `cause`, converted as results are;
@@ -278,7 +280,7 @@ Quel work continues on the branch `reconnect-lost-sessions`.
 
   Use /writing-clearly.
 
-- [ ] **Step 7: Commit, push, PR.**
+- [x] **Step 7: Commit, push, PR.**
   ```bash
   git add wails && git commit -m "wails: a thrown ex-info's data reaches the frontend as the error's cause"
   git push -u origin wails-error-data
@@ -286,7 +288,7 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   ```
   Link the PR (`link_pull_request`) and watch it (`watch_pull_request`).
 
-- [ ] **Step 8: Merge and tag** once the checks pass:
+- [x] **Step 8: Merge and tag** once the checks pass:
   ```bash
   gh pr merge --merge --delete-branch
   git switch master && git pull
@@ -301,11 +303,11 @@ Quel work continues on the branch `reconnect-lost-sessions`.
 - Modify: `src/quel/exec.lg`
 - Test: `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Bump** the wails dep in `lgx.edn` to `wails-v0.8.0`.
+- [x] **Step 1: Bump** the wails dep in `lgx.edn` to `wails-v0.8.0`.
   Check `docs/` and `README.md` for a pinned `wails-v0.7.0` that
   describes the current version (not history) and update those.
 
-- [ ] **Step 2: Extend the Postgres tests.** Add a `thrown-of-run`
+- [x] **Step 2: Extend the Postgres tests.** Add a `thrown-of-run`
   helper returning the exception. Then:
   - `a-dead-session-reconnects-at-once`: `(:lost (ex-data e))` is
     `{:not-run false :reconnected true :page false :canceled false :error <string>}`;
@@ -313,21 +315,21 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   - `a-failed-reconnect-is-reported`: `:reconnected false`;
   - `a-page-read-on-a-lost-connection-is-reported`: `:page true`.
 
-- [ ] **Step 3: Run them to see them fail.**
+- [x] **Step 3: Run them to see them fail.**
   Run: `lgx test-pg`. Expected: those assertions fail.
 
-- [ ] **Step 4: Implement** the `:lost` map in `fail!`, as in the
+- [x] **Step 4: Implement** the `:lost` map in `fail!`, as in the
   Design. Coerce `:reconnected` to a boolean.
 
-- [ ] **Step 5: Run all backend tests.**
+- [x] **Step 5: Run all backend tests.**
   Run: `lgx test-pg`. Expected: PASS.
 
-- [ ] **Step 6: Check the reply in server mode.** Run the e2e check from
+- [x] **Step 6: Check the reply in server mode.** Run the e2e check from
   the previous plan (`.tmp/e2e/lost.sh` under
   `scripts/with-postgres.sh`, or write it again): the error reply's
   `cause` holds `lost`.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
   `git commit -am "Pin wails-v0.8.0 and describe a lost connection in the error's data"`
 
 ### Task 3: The notice (Quel frontend)
@@ -338,17 +340,17 @@ Quel work continues on the branch `reconnect-lost-sessions`.
 - Modify: `frontend/src/state/runner.ts`, `frontend/src/state/runner.test.ts`
 - Modify: `frontend/src/components/MessagesView.tsx`
 
-- [ ] **Step 1: Write the failing tests:** `lostOf` in `api.test.ts`,
+- [x] **Step 1: Write the failing tests:** `lostOf` in `api.test.ts`,
   and the runner cases in `runner.test.ts` (Design → Testing). Mock
   `api.run` with `Object.assign(new Error(text), { cause: { lost: {...} } })`.
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `npm --prefix frontend test`. Expected: the new tests fail.
 
-- [ ] **Step 3: Implement** `Lost` and `lostOf`, the `Message` fields,
+- [x] **Step 3: Implement** `Lost` and `lostOf`, the `Message` fields,
   the two catches, the toast and its dismissal, as in the Design.
 
-- [ ] **Step 4: Render it** in `MessagesView.tsx`: the icon, headline,
+- [x] **Step 4: Render it** in `MessagesView.tsx`: the icon, headline,
   muted line, `<details>`, and the Run again button with its
   visibility rule. The button and the toast's action both call one
   runner function, `rerunLost(tabId, messageId)`, not `runStatements`
@@ -356,11 +358,11 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   has `rerun`, and the tab is not running, so a stale toast click after
   another run does nothing. Use /frontend-design for the tone.
 
-- [ ] **Step 5: Run the tests and the type check.**
+- [x] **Step 5: Run the tests and the type check.**
   Run: `npm --prefix frontend test && npm --prefix frontend run build`
   (or the repo's typecheck script). Expected: PASS.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
   `git commit -am "Show a lost connection as a notice with Run again"`
 
 ### Task 4: End to end, and docs
@@ -369,17 +371,17 @@ Quel work continues on the branch `reconnect-lost-sessions`.
 - Create: `frontend/e2e/lost-connection.spec.ts`
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Write the spec** as in the Design → Testing. Use
+- [x] **Step 1: Write the spec** as in the Design → Testing. Use
   `e2e/connect.ts` helpers where they fit, and add a Postgres-profile
   helper there if the dialog needs more than the SQLite one. Skip with
   `test.skip(!process.env.QUEL_PG_URL, ...)`.
 
-- [ ] **Step 2: Run it.**
+- [x] **Step 2: Run it.**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/with-postgres.sh bash scripts/e2e.sh lost-connection.spec.ts`
   Expected: PASS. Then `lgx e2e` (without Postgres) still passes, with
   this spec skipped.
 
-- [ ] **Step 3: DESIGN.md.** After the "After any failed run" text, add
+- [x] **Step 3: DESIGN.md.** After the "After any failed run" text, add
   a paragraph:
   - the error's data carries `:lost`;
   - the frontend shows a notice and a toast, with Run again only for a
@@ -387,5 +389,45 @@ Quel work continues on the branch `reconnect-lost-sessions`.
   - Run again goes through the run policy;
   - a failed reconnect stays an error.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   `git commit -am "Test the lost-connection notice end to end, and document it"`
+
+## Completion summary
+
+What shipped:
+- **letgo-packages `wails`:** a thrown `ex-info`'s data now reaches the
+  frontend as the call error's `cause` (`handlerErr` with `MarshalJSON`).
+  It went in through PR #18
+  (https://github.com/abogoyavlensky/letgo-packages/pull/18), merged and
+  tagged `wails-v0.8.0`.
+- **Quel backend:** pins `wails-v0.8.0`, and `fail!` adds `:lost` to the
+  lost-connection error's data.
+- **Quel frontend:**
+  - a `"lost"` message kind, shown as an amber notice with Details and
+    Run again;
+  - a toast with the same action;
+  - `rerunLost`, which ignores stale clicks.
+
+Verified:
+- the bridge tests (47);
+- `lgx test-pg` (173), against Postgres 17;
+- the frontend tests (477), typecheck and lint;
+- `lgx e2e` (29 passed; the new spec is skipped without Postgres);
+- the new `lost-connection.spec.ts` under `scripts/with-postgres.sh`,
+  which drives a real idle-session timeout and clicks Run again;
+- a server-mode check that the error reply's `cause` carries `lost`.
+
+Deviations:
+- `lostOf` lives in `frontend/src/lib/lost.ts`, with tests in
+  `lost.test.ts`, not in `api.ts`: `runner.test.ts` mocks all of
+  `@/lib/api`.
+- `(ex-info "x" nil)` throws in let-go (it needs a map), so the
+  empty-data bridge test uses `{}`.
+- `addMessage` now returns the new message's id, so Run again can tell
+  whether its message is still the tab's newest.
+- In Task 3, the runner tests were written alongside the code rather
+  than run to fail first.
+
+What the plan could have specified better: it put `lostOf` in a module
+the runner tests mock. Checking the test file's mocks before choosing
+where a helper lives would have caught that.
