@@ -241,13 +241,10 @@
       (finally (.Cancel ctx)))))
 
 (defn- failure
-  "The error a failed run throws: \"Query canceled.\" for a cancel, else
-   the driver's error; either way noting a reset session."
-  [e canceled? reset? query-id]
-  (let [msg (if canceled? "Query canceled." (ex-message e))]
-    (if reset?
-      (ex-info (str msg " The session was reset.") {:query-id query-id})
-      (if canceled? (ex-info msg {:query-id query-id}) e))))
+  "The error a failed run throws while its session lives: \"Query
+   canceled.\" for a cancel, else the driver's error."
+  [e canceled? query-id]
+  (if canceled? (ex-info "Query canceled." {:query-id query-id}) e))
 
 (def ^:private not-sent-markers
   ["write failed:" "bad connection" "connection is already closed"
@@ -308,15 +305,34 @@
     (str opening again
          " Any open transaction, SET values and temp tables in this tab are gone.")))
 
+(defn- reconnect!
+  "Take a new session for the tab in place of a dead one. {:ok true}, or
+   {:error msg} with anything password-like masked. Bounded by the
+   driver's connect timeout (10 s on Postgres unless the DSN sets
+   connect_timeout). A tab or database closed meanwhile makes session!
+   close the new connection and throw, which reads as a failure here."
+  [conns conn-id session-id]
+  (try
+    (conn/session! conns conn-id session-id)
+    {:ok true}
+    (catch e {:error (conn/redact {} (ex-message e))})))
+
 (defn- fail!
-  "Throw for a failed run or page read. The failure's own error cannot say
-   whether the session survived, so probe it, and drop a dead one so the
-   next run takes a fresh connection."
-  [conns conn-id session-id canceled? query-id e]
-  (let [session (conn/current-session conns conn-id session-id)
-        reset? (and session (dead? session))]
-    (when reset? (conn/reset-session! conns conn-id session-id))
-    (throw (failure e canceled? reset? query-id))))
+  "Throw for a failed run (kind :run) or page read (kind :page). The
+   failure's own error cannot say whether the session survived, so probe
+   it. A dead one is replaced at once, and the error says what was lost
+   (see lost-message). The statement is never run again: a new session
+   has lost the old one's SET values, search_path among them."
+  [conns conn-id session-id kind canceled? query-id e]
+  (let [session (conn/current-session conns conn-id session-id)]
+    (if (and session (dead? session))
+      (do (conn/reset-session! conns conn-id session-id)
+          (let [error (ex-message e)]
+            (throw (ex-info (lost-message {:kind kind :canceled? canceled? :error error
+                                           :sent? (not (not-sent? error))
+                                           :reconnect (reconnect! conns conn-id session-id)})
+                            {:query-id query-id}))))
+      (throw (failure e canceled? query-id)))))
 
 (defn- open-cursor!
   "Turn the query's :running entry into an :open cursor. False when the
@@ -338,8 +354,8 @@
     :elapsed-ms}. With :has-more true the cursor stays open under the
    query-id, for fetch-page!. A run first closes the session's open
    cursor. A cancelled query throws \"Query canceled.\". After any failure
-   the session is probed, and a dead one is dropped so the next run takes
-   a fresh connection; the error then says so."
+   the session is probed, and a dead one is replaced at once; the error
+   then says whether the statement ran and what the session lost."
   [execs conns {:keys [conn-id session-id query-id sql page-size]
                 :or {page-size default-page-size}}]
   (when (str/blank? query-id)
@@ -372,7 +388,7 @@
               (dispose! {:engine engine :ctx ctx :rows rows})))
           (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
         (catch e
-          (fail! conns conn-id session-id (.Canceled ctx) query-id e))
+          (fail! conns conn-id session-id :run (.Canceled ctx) query-id e))
         (finally
           (when-not @kept
             (.Cancel ctx)
@@ -408,7 +424,7 @@
                         ;; Before dispose!, which cancels the ctx itself.
                         (let [canceled? (.Canceled ctx)]
                           (dispose! e)
-                          (fail! conns conn-id session-id canceled? query-id err)))))]
+                          (fail! conns conn-id session-id :page canceled? query-id err)))))]
          (cond
            (nil? page) closed-page
 
