@@ -101,6 +101,9 @@
         (is (= 0 (first-cell execs conns id "select count(*) from kept"))
             "the temp table survived, so the session did")))))
 
+(defn- thrown-of-run [execs conns id q]
+  (try (run execs conns id q) nil (catch e e)))
+
 (defn- message-of-run [execs conns id q]
   (try (run execs conns id q) nil (catch e (ex-message e))))
 
@@ -114,7 +117,12 @@
         (let [pid (first-cell execs conns id "select pg_backend_pid()")
               old (conn/current-session conns id "s1")]
           (terminate! conns id pid)
-          (let [msg (str (message-of-run execs conns id "select 1"))]
+          (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (= {:not-run false :reconnected true :page false :canceled false} (dissoc lost :error)))
+            (is (string? (:error lost)))
+            
             (is (str/includes? msg "The connection to the database was lost") (str "got " (pr-str msg)))
             (is (str/includes? msg "may or may not have completed"))
             (is (str/includes? msg "Reconnected")))
@@ -131,7 +139,12 @@
       (fn [execs conns id]
         (run execs conns id "set idle_session_timeout = '500ms'")
         (sleep 1500)
-        (let [msg (str (message-of-run execs conns id "select 1"))]
+        (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (true? (:not-run lost)))
+            (is (true? (:reconnected lost)))
+            
           (is (str/includes? msg "so the statement was not run.") (str "got " (pr-str msg)))
           (is (str/includes? msg "Reconnected")))
         (is (= "0" (first-cell execs conns id "show idle_session_timeout"))
@@ -150,7 +163,11 @@
               pid (first-cell execs conns id "select pg_backend_pid()")]
           (admin "alter database quel_lost allow_connections false")
           (terminate! conns main pid)
-          (let [msg (str (message-of-run execs conns id "select 1"))]
+          (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (false? (:reconnected lost)))
+            
             (is (str/includes? msg "Could not reconnect (") (str "got " (pr-str msg)))
             (is (str/includes? msg "the next run tries again.")))
           (is (nil? (conn/current-session conns id "s1")))
@@ -295,9 +312,10 @@
           ;; Rows already in the client's buffer read fine first.
           (let [msg (loop [n 0]
                       (let [r (try (exec/fetch-page! execs conns "lost" 1000)
-                                   (catch e (ex-message e)))]
+                                   (catch e e))]
                         (cond
-                          (string? r) r
+                          (not (map? r)) (do (is (true? (:page (:lost (ex-data r)))))
+                                             (ex-message r))
                           (or (:closed r) (not (:has-more r)) (>= n 100000)) nil
                           :else (recur (inc n)))))]
             (is (str/includes? (str msg) "while reading rows") (str "got " (pr-str msg)))

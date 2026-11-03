@@ -328,11 +328,19 @@
   (let [session (conn/current-session conns conn-id session-id)]
     (if (and session (dead? session))
       (do (conn/reset-session! conns conn-id session-id)
-          (let [error (ex-message e)]
+          (let [error (ex-message e)
+                sent? (not (not-sent? error))
+                reconnect (reconnect! conns conn-id session-id)]
+            ;; :lost is the same story as data, for the frontend's notice
+            ;; (the bridge sends ex-data as the error's cause).
             (throw (ex-info (lost-message {:kind kind :canceled? canceled? :error error
-                                           :sent? (not (not-sent? error))
-                                           :reconnect (reconnect! conns conn-id session-id)})
-                            {:query-id query-id}))))
+                                           :sent? sent? :reconnect reconnect})
+                            {:query-id query-id
+                             :lost {:not-run (not sent?)
+                                    :reconnected (boolean (:ok reconnect))
+                                    :page (= :page kind)
+                                    :canceled (boolean canceled?)
+                                    :error error}}))))
       (throw (failure e canceled? query-id)))))
 
 (defn- open-cursor!
