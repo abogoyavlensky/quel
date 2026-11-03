@@ -22,12 +22,23 @@ export async function ensureProfile(page: Page, name: string, db: string) {
   await expect(dialog).toHaveCount(0);
 }
 
+// The top strip says how the selected connection is: words for every state
+// but connected. Before a connect it says "Not connected", so waiting for
+// the words to go cannot pass early.
+export async function expectConnected(page: Page) {
+  await expect(page.getByRole("banner")).not.toContainText(/Not connected|Connecting…|Disconnecting…/);
+}
+
+export async function expectNotConnected(page: Page) {
+  await expect(page.getByRole("banner")).toContainText("Not connected");
+}
+
 // Select the profile and connect it from its row: its workspace shows, ready to run.
 export async function selectAndConnect(page: Page, name: string) {
   await profileRow(page, name).click();
   await saved(page).getByRole("button", { name: `Connect ${name}` }).click();
   await expect(page.getByRole("banner")).toContainText(name);
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
 }
 
 // Connect the fixture SQLite file through a saved profile, creating the

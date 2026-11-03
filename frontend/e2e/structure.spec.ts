@@ -21,7 +21,8 @@ async function write(page: Page, sql: string) {
 async function runText(page: Page, sql: string) {
   await write(page, sql);
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  // Done when its message is in the log (each statement here is unique).
+  await expect(page.getByRole("log", { name: "Messages" })).toContainText(sql);
 }
 
 // The completion options offered with the cursor after `before`.

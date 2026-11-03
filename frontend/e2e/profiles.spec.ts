@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { expectConnected, expectNotConnected } from "./connect";
 
 // Saved connections through the UI: create a SQLite profile in the dialog,
 // test it before saving, connect it, run, rename and delete it. The app
@@ -45,19 +46,19 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   // The top strip names it, with its engine.
   await expect(page.getByRole("banner")).toContainText("E2E file");
   await expect(page.getByRole("banner")).toContainText("SQLite");
-  await expect(page.getByRole("status")).toHaveText("Not connected");
+  await expectNotConnected(page);
   await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
   await write(page, "select count(*) as n from t;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("gridcell", { name: "2000", exact: true })).toBeVisible();
 
   // Disconnect: the profile stays selected with its tab; connect again.
   await saved(page).getByRole("button", { name: "Disconnect E2E file" }).click();
-  await expect(page.getByRole("status")).toHaveText("Not connected");
+  await expectNotConnected(page);
   await expect(page.getByLabel("SQL editor")).toHaveText("select count(*) as n from t;");
   await saved(page).getByRole("button", { name: "Connect E2E file" }).click();
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
 
   // Renamed: the list and the top strip follow.
   await saved(page).getByRole("button", { name: "Edit E2E file" }).click();

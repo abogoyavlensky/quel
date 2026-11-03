@@ -407,11 +407,11 @@ export function togglePin(tabId: string): void {
       tabs: [...others.filter((t) => t.pinned), { ...tab, pinned: !tab.pinned }, ...others.filter((t) => !t.pinned)],
     };
   });
-  if (tab.pinned && store.getState().notice === "Unpin the tab to close it.") store.setState({ notice: null });
+  if (tab.pinned) notify.dismiss("unpin-to-close");
   scheduleSave(w.profileId);
 }
 
-// Close an editor tab. A pinned one stays (the status bar says so). Its
+// Close an editor tab. A pinned one stays (a toast says so). Its
 // title and text are taken first, then it leaves the store, so its runner
 // stops; a workspace's last tab is replaced by a fresh one. Then, on the
 // profile's queue after any pending save, the backend keeps it in the
@@ -424,7 +424,7 @@ export async function closeTab(tabId: string): Promise<void> {
   const tab = w?.tabs.find((t) => t.id === tabId);
   if (!w || !tab || w.loadError) return;
   if (tab.pinned) {
-    store.setState({ notice: "Unpin the tab to close it." });
+    notify.info("Unpin the tab to close it.", { id: "unpin-to-close" });
     return;
   }
   const { profileId } = w;
@@ -495,7 +495,7 @@ export async function closeTab(tabId: string): Promise<void> {
       const activeTab = wasActive || !tabs.some((t) => t.id === w.activeTab) ? tabId : w.activeTab;
       return { ...w, tabs, activeTab };
     });
-    store.setState({ notice: `Could not close the tab: ${errorText(e)}` });
+    notify.error(`Could not close the tab: ${errorText(e)}`);
     scheduleSave(profileId);
     return;
   }
@@ -537,7 +537,7 @@ export async function reopenTab(closedId?: string): Promise<void> {
         closed: [lost, ...w.closed].sort((a, b) => b["closed-at"] - a["closed-at"]).slice(0, MAX_CLOSED),
       }));
     }
-    store.setState({ notice: `Could not reopen the tab: ${errorText(e)}` });
+    notify.error(`Could not reopen the tab: ${errorText(e)}`);
   }
 }
 
@@ -710,7 +710,7 @@ export async function retryLoad(profileId: string): Promise<void> {
 // remember: save it as the selection for the next launch (a user's click;
 // not the start-up fallback, which must not overwrite the saved choice).
 export async function selectProfile(id: string, { remember = true } = {}): Promise<void> {
-  store.setState({ selected: id, notice: null });
+  store.setState({ selected: id });
   if (remember) rememberSelection(id);
   await ensureWorkspace(id);
 }
@@ -726,7 +726,6 @@ export async function connectProfile(id: string): Promise<void> {
   await ensureWorkspace(id);
   if (store.getState().workspaces[id]?.status !== "disconnected") return;
   updateWorkspace(id, (w) => ({ ...w, status: "connecting", error: null }));
-  store.setState({ notice: null });
   try {
     const opened = await api.connect(id);
     if (!store.getState().workspaces[id]) {
@@ -767,10 +766,6 @@ export function setTreeExpanded(profileId: string, keys: string[]): void {
   updateWorkspace(profileId, (w) => ({ ...w, treeExpanded: keys }));
 }
 
-// The status bar's notice goes away on the next edit.
-export function clearNotice(): void {
-  if (store.getState().notice !== null) store.setState({ notice: null });
-}
 
 // The selected workspace's active tab, for the menu actions.
 export function selectedTabId(): string | null {

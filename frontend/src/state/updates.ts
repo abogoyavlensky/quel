@@ -6,8 +6,8 @@ import { flushAllAndWait } from "./persist";
 import { store } from "./store";
 
 // New versions: a check 10 s after the app opens and every 6 hours after,
-// and Help → Check for Updates…. A found release shows as a button in the
-// status bar, which opens the update dialog: skip it, leave it for later,
+// and Help → Check for Updates…. A found release shows as a button at the
+// right end of the top strip, which opens the update dialog: skip it, leave it for later,
 // or download, verify and restart into it (quel.updates; Wails' updater
 // does the work). Where this copy can't replace itself, the dialog points
 // to Homebrew instead.
@@ -126,7 +126,7 @@ export function startUpdateChecks(): () => void {
   };
 }
 
-// The status bar button's label for each phase; idle has none.
+// The top strip's update button label for each phase; idle has none.
 export function updateLabel(u: UpdateState): string | null {
   switch (u.phase) {
     case "available":

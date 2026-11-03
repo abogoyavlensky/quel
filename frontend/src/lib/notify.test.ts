@@ -20,6 +20,11 @@ describe("notify", () => {
     expect(toast).toHaveBeenCalledWith("FYI", { id: "y" });
   });
 
+  it("passes a duration through", () => {
+    notify.error("Stuck", { id: "z", duration: Infinity });
+    expect(toast.error).toHaveBeenCalledWith("Stuck", { id: "z", duration: Infinity });
+  });
+
   it("dismisses one notice by id, or all of them", () => {
     notify.dismiss("x");
     notify.dismiss();

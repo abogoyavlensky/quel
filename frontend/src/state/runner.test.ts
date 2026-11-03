@@ -19,7 +19,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api", () => api);
 
-const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), dismiss: vi.fn() }));
+const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), info: vi.fn(), dismiss: vi.fn() }));
 vi.mock("@/lib/notify", () => ({ notify: toasts }));
 
 const clipboard = vi.hoisted(() => ({ copyText: vi.fn() }));
@@ -90,6 +90,8 @@ beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
   toasts.error.mockReset();
   toasts.success.mockReset();
+  toasts.info.mockReset();
+  toasts.dismiss.mockReset();
   clipboard.copyText.mockReset();
   save.saveText.mockReset();
   api.closeResult.mockResolvedValue(undefined);
@@ -407,7 +409,6 @@ describe("runCurrent", () => {
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
     expect(ws().runRefused).toBe(true);
-    expect(store.getState().notice).toBeNull();
     expect(toasts.error).toHaveBeenCalledWith(
       "The profile isn't connected.",
       expect.objectContaining({ id: "not-connected" }),
@@ -427,7 +428,6 @@ describe("runCurrent", () => {
     editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
     await runner.runCurrent("statement");
     expect(api.run).not.toHaveBeenCalled();
-    expect(store.getState().notice).toBeNull();
     expect(ws().runRefused).toBe(false);
     expect(toasts.error).not.toHaveBeenCalled();
     opening.resolve({ "conn-id": "c3", engine: "sqlite", label: "P1" });
@@ -799,13 +799,11 @@ describe("workspaces", () => {
   });
 
   it("selecting a profile loads its workspace, remembers it, and never connects", async () => {
-    store.setState({ notice: "Not connected." });
     await runner.selectProfile("p3");
     expect(store.getState().selected).toBe("p3");
     expect(api.loadWorkspace).toHaveBeenCalledWith("p3");
     expect(api.selectProfile).toHaveBeenCalledWith("p3");
     expect(ws("p3")).toMatchObject({ status: "disconnected", connId: null });
-    expect(store.getState().notice).toBeNull();
     expect(api.connect).not.toHaveBeenCalled();
   });
 
@@ -1022,7 +1020,7 @@ describe("closing and reopening", () => {
     await runner.closeTab(id);
     expect(ws().tabs.map((t) => t.id)[1]).toBe(id);
     expect(editor.seeds[id]).toMatchObject({ text: "keep me" });
-    expect(store.getState().notice).toBe("Could not close the tab: disk full");
+    expect(toasts.error).toHaveBeenCalledWith("Could not close the tab: disk full");
     expect(api.closeSession).not.toHaveBeenCalled();
     api.closeTab.mockResolvedValueOnce(closedTab(id, 9));
     await runner.closeTab(id);
@@ -1103,7 +1101,7 @@ describe("closing and reopening", () => {
     updateTab(id, (t) => ({ ...t, pinned: true }));
     await runner.closeTab(id);
     expect(ws().tabs.map((t) => t.id)).toEqual([id]);
-    expect(store.getState().notice).toBe("Unpin the tab to close it.");
+    expect(toasts.info).toHaveBeenCalledWith("Unpin the tab to close it.", { id: "unpin-to-close" });
     expect(api.closeTab).not.toHaveBeenCalled();
   });
 
@@ -1132,7 +1130,7 @@ describe("closing and reopening", () => {
     api.reopenTab.mockRejectedValueOnce(new Error("gone"));
     await runner.reopenTab("y");
     expect(ws().closed.map((c) => c.id)).toEqual(["x", "y"]);
-    expect(store.getState().notice).toBe("Could not reopen the tab: gone");
+    expect(toasts.error).toHaveBeenCalledWith("Could not reopen the tab: gone");
     api.reopenTab.mockResolvedValueOnce(savedTab("n", "select y"));
     await runner.reopenTab("y");
     expect(ws().closed.map((c) => c.id)).toEqual(["x"]);
@@ -1167,10 +1165,9 @@ describe("rename and pin", () => {
     runner.togglePin(c);
     expect(ws().tabs.map((t) => t.id)).toEqual([a, c, b, d]);
     expect(ws().tabs.map((t) => t.pinned)).toEqual([true, false, false, false]);
-    // Unpinning clears the hint to unpin.
-    store.setState({ notice: "Unpin the tab to close it." });
+    // Unpinning takes the hint to unpin away.
     runner.togglePin(a);
-    expect(store.getState().notice).toBeNull();
+    expect(toasts.dismiss).toHaveBeenCalledWith("unpin-to-close");
     runner.togglePin(a);
     // A new tab goes last, after the pinned ones.
     runner.newTab();

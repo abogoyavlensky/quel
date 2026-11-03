@@ -1,7 +1,7 @@
 import { type Page, expect, test } from "@playwright/test";
 
 // A newer version from the stub GitHub that scripts/e2e.sh starts: the
-// status bar offers it, the dialog explains that server mode can't
+// top strip offers it, the dialog explains that server mode can't
 // install it (the brew command), and a skip lasts across a reload. Each
 // run serves a version of its own, so a retry isn't hidden by an earlier
 // run's skip.
@@ -16,7 +16,7 @@ const nextCheck = (page: Page) =>
     { timeout: 20_000 },
   );
 
-const updateButton = (page: Page) => page.getByRole("contentinfo").getByRole("button");
+const updateButton = (page: Page) => page.getByRole("banner").getByRole("button");
 
 test("a newer version is offered, explained and skipped", async ({ page, request }) => {
   test.setTimeout(60_000);

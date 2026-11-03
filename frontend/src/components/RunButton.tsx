@@ -1,6 +1,6 @@
 import { Play, Square } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useDelayed } from "@/lib/useDelayed";
 import { cancel, runCurrent } from "@/state/runner";
 import { type EditorTab, isRunning } from "@/state/store";
 import { RUN_KEY, SCRIPT_KEY, STOP_KEY } from "./keys";
@@ -12,20 +12,6 @@ import { RUN_KEY, SCRIPT_KEY, STOP_KEY } from "./keys";
 // run, so it never shows Stop. A press does not take focus, so the editor
 // keeps its caret. Keyed by tab in AppShell: switching tabs starts the
 // delay over.
-
-// True once value has been true for ms; false at once when it is not.
-function useDelayed(value: boolean, ms: number): boolean {
-  const [elapsed, setElapsed] = useState(false);
-  useEffect(() => {
-    if (!value) return;
-    const id = setTimeout(() => setElapsed(true), ms);
-    return () => {
-      clearTimeout(id);
-      setElapsed(false);
-    };
-  }, [value, ms]);
-  return value && elapsed;
-}
 
 export function RunButton({ tab }: { tab: EditorTab }) {
   const stop = useDelayed(isRunning(tab), 300);

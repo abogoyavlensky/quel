@@ -19,10 +19,9 @@ async function write(page: Page, sql: string) {
 }
 
 const resultTabs = (page: Page) => page.getByRole("tablist", { name: "Results" }).getByRole("tab");
-// The grid's footer: how many rows, and whether more can load. Scoped to
-// the grid's container (CodeMirror has a live region of its own).
-const footer = (page: Page) =>
-  page.getByRole("grid", { name: "Result" }).locator("xpath=..").locator('[aria-live="polite"]');
+// The results footer: how many rows and whether more can load, or what a
+// run is doing and for how long.
+const footer = (page: Page) => page.getByRole("group", { name: "Result footer" });
 
 test("runs the statement under the cursor and pages as it scrolls", async ({ page }) => {
   await open(page);
@@ -34,7 +33,7 @@ test("runs the statement under the cursor and pages as it scrolls", async ({ pag
   const grid = page.getByRole("grid", { name: "Result" });
   await expect(async () => {
     await grid.evaluate((el) => el.scrollTo(0, el.scrollHeight));
-    await expect(footer(page)).toHaveText("2,000 rows", { timeout: 500 });
+    await expect(footer(page).getByRole("status")).toHaveText("2,000 rows", { timeout: 500 });
   }).toPass({ timeout: 20_000 });
   // The last page made the grid taller: scroll to its new end.
   await grid.evaluate((el) => el.scrollTo(0, el.scrollHeight));
@@ -70,13 +69,15 @@ test("Stop cancels a runaway query", async ({ page }) => {
   await open(page);
   await write(page, `${runaway};`);
   await page.getByRole("button", { name: "Run" }).click();
-  // The Run button turns to Stop after a moment of a run, and the status
-  // bar counts the time.
-  await expect(page.getByRole("contentinfo")).toContainText(/\d+s/);
+  // The Run button turns to Stop after a moment of a run, and the results
+  // footer says so and counts the time.
+  await expect(footer(page).getByRole("status")).toHaveText("Running…");
+  await expect(footer(page)).toContainText(/\d+s/);
   await page.getByRole("button", { name: "Stop" }).click();
   await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
   await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  // The canceled run left Messages showing: no result, so no footer.
+  await expect(footer(page)).toHaveCount(0);
 });
 
 test("the Stop key cancels", async ({ page }) => {

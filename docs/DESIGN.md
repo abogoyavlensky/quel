@@ -465,7 +465,7 @@ Layout, in resizable panes (shadcn `Resizable`):
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ ● ● ●                     ( ● Prod  Redshift )                          │
+│ ● ● ●                     ( ● Prod  Redshift )             [Update]     │
 ├──────────────┬───────────────────────────────────────────┬──────────────┤
 │ ● Prod   🔌  │ [Query 1 ×] [Query 2 ×] [+]          [◫]  │ Row 3 of 500 │
 │ ○ Local  🔌  │  CodeMirror editor                         │ [filter]     │
@@ -473,25 +473,31 @@ Layout, in resizable panes (shadcn `Resizable`):
 │  its tabs →) │ [Messages] [select … 📌 ×] [select … ×]    │ 3            │
 │ structure    │  virtualized grid                          │ doc  jsonb ⧉ │
 │ tree         │                                           │ { … }        │
+│              │ 500 rows              Export ▾   12 ms    │              │
 └──────────────┴───────────────────────────────────────────┴──────────────┘
- status bar: state (Ready / Running… 12s / Not connected)
 ```
 
-The strip across the top names the selected connection; the status bar
-says only what is happening. The editor has a Run/Stop button at its
-bottom right, and the grid footer has the rows and the time.
+There is no status bar: each state shows where it belongs. The strip
+across the top names the selected connection and, unless it is
+connected, says how it is ("Not connected", "Connecting…"); a newer
+version shows as a button at its right end. The editor has a Run/Stop
+button at its bottom right. The results footer has the rows and the time,
+and while a run lasts "Running…" and the time so far. Notices are toasts
+at the bottom right.
 
 ### Look
 
 - **Layout.** The workspace (tabs, editor, results) is white. The
-  sidebar, the top strip and the status bar share one light grey,
+  sidebar and the top strip share one light grey,
   `--chrome`, with hairlines between them. There are no cards; rounding
   is for small pieces: the editor tabs' track, the result chips, the
   statement block, the Run button, the selected connection.
 - **One accent.** Indigo is `--primary`. It marks selection, focus, the
   caret, the active result chip, the selected row and connection, and
   Run, a soft indigo tint like the active chip. Toasts, dialogs and menus
-  share the same card shape and the soft accent for their actions.
+  share the same card shape and the soft accent for their actions. The
+  Update button in the top strip is the one solid use: it is the one
+  thing asking for action, and a soft tint gets lost on a tag's tint.
 - **Tag colours.** A profile's tag shows as its dot everywhere, and as a
   tint only in the top strip, where it also colours the name. Text uses
   the tag's ink token (`--color-tag-*-ink`, about L 0.5), because the
@@ -505,12 +511,16 @@ bottom right, and the grid footer has the rows and the time.
   a grey stop to disconnect (play is Run's icon, so it is not reused). The pencil shows on hover, and a
   right-click offers Connect or Disconnect, Edit… and Delete….
 - **The window.** On macOS the title bar is hidden (`:mac-title-bar
-  :hidden`): the top strip is the drag area
+  :hidden-inset-compact`): the top strip is the drag area
   (`--wails-draggable: drag`) and the traffic lights float over its left
-  end. The strip is 36px, the status bar's height, so the tint shows
-  around the connection pill; the standard title bar's lights sit a few
-  pixels above its centre. Its content is centred, so it needs no room for them, and
-  fullscreen needs nothing.
+  end. That preset (the wails package's, from `wails-v0.7.0`) adds an
+  empty toolbar in AppKit's compact style, and macOS centres the lights in
+  its 38px band; the strip is 38px to match, so the lights sit on its
+  centre line. Wails cannot place the lights itself. Its
+  content is centred with the same wide padding on both sides, so the
+  pill clears the lights and the Update button at the right end, and
+  fullscreen needs nothing. The button opts out of the drag area
+  (`--wails-draggable: no-drag`), so a click on it is a click.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
   mix of a tag into the cool grey swings the hue through blue.
@@ -744,8 +754,9 @@ workspace shows, disconnected (the first profile when that one is gone).
   reopen) that run in order, one at a time. An edit, a selection change
   or any tab change schedules a save 800 ms later; the save is built from
   the state when it runs. Pending saves go out at once when the window
-  hides or the page goes away. A failed save shows in the status bar and
-  is retried on the next change. The selected profile is written only on
+  hides or the page goes away. A failed save shows as a toast that stays
+  until a save of that profile works (one per profile), and is retried
+  on the next change. The selected profile is written only on
   a user's click, never by the start-up fallback.
 - **Closing** sends the tab's title and text as they are at that moment
   (`close-tab`), after any pending save, so the text typed just before
@@ -757,7 +768,8 @@ workspace shows, disconnected (the first profile when that one is gone).
   the tab. The backend gives the tab a new id: the old one is a retired
   session id on a connection that may still be open.
 - **Pinned** tabs come first and cannot be closed (⌘W, the middle click
-  and Close say "Unpin the tab to close it."). Tabs are renamed by a
+  and Close show a toast, "Unpin the tab to close it.", which unpinning
+  takes away). Tabs are renamed by a
   double-click or the tab's context menu; names need not be unique.
 
 ### Diagrams
@@ -855,7 +867,7 @@ Intel or universal build, DMG or App Store.
 
 Quel checks GitHub Releases for a newer version 10 s after the window
 opens and every 6 hours, and on Help → Check for Updates…. A newer one
-shows as a button at the right end of the status bar; its dialog skips
+shows as a button at the right end of the top strip; its dialog skips
 the version, leaves it for later, or downloads it and restarts into it.
 The tabs are saved first; a failed save stops the restart unless the
 user restarts anyway.

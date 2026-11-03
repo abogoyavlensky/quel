@@ -116,7 +116,7 @@
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
-    /* The window's frame: the sidebar, the top strip and the status bar. */
+    /* The window's frame: the sidebar and the top strip. */
     --chrome: oklch(0.972 0.003 265);
     /* Every other grid row; opaque, as cells scroll under the row numbers. */
     --row-alt: oklch(0.986 0.002 265);

@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { closeResult, connectProfile, pin, selectResult } from "@/state/runner";
 import { type EditorTab, MESSAGES, selectedWorkspace, useApp } from "@/state/store";
 import { MessagesView } from "./MessagesView";
+import { ResultFooter } from "./ResultFooter";
 import { RUN_KEY } from "./keys";
 
 // A result tab is named by its statement, as far as it fits.
@@ -82,7 +83,8 @@ function NotConnected({ banner }: { banner: boolean }) {
 // A run replaces the results; a kept one ("Keep result", the pin) stays
 // until closed. While the profile is not connected, the empty tab says so
 // instead of the run hint, and a refused run puts a banner above the
-// results.
+// results. The footer under them says what a run is doing, or the shown
+// result's rows and time.
 export function ResultTabs({ tab }: { tab: EditorTab }) {
   const current = tab.results.find((r) => r.id === tab.active);
   const empty = tab.results.length === 0 && tab.messages.length === 0;
@@ -154,6 +156,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
           <MessagesView messages={tab.messages} />
         )}
       </div>
+      <ResultFooter key={tab.id} tab={tab} result={current} />
     </div>
   );
 }

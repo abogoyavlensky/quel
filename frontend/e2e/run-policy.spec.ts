@@ -1,4 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
+import { expectConnected } from "./connect";
 
 // Run policies on a SQLite profile: Read-only refuses a write before it is
 // sent, Ask before changes asks first, and reads run straight away. The
@@ -37,7 +38,7 @@ test("read-only refuses writes; ask before changes asks", async ({ page }) => {
   await expect(page.getByRole("banner")).toContainText("Read-only");
 
   await saved(page).getByRole("button", { name: "Connect E2E guarded" }).click();
-  await expect(page.getByRole("status")).toHaveText("Ready");
+  await expectConnected(page);
 
   // Read-only: the write is refused, with no question, and nothing ran.
   await write(page, "create table rp (a int)");
