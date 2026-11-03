@@ -8,7 +8,7 @@ import { copyText } from "@/lib/clipboard";
 import { notify } from "@/lib/notify";
 import type { Cell, Engine } from "@/lib/types";
 import { toggleRowDetails } from "@/state/runner";
-import { MESSAGES, activeTabOf, selectedWorkspace, useApp } from "@/state/store";
+import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 
 // The row details panel: every value of the active result's selected row,
 // read-only, one block per column. JSON values are formatted and
@@ -99,7 +99,8 @@ export function RowDetails() {
   const result = useApp((s) => {
     const w = selectedWorkspace(s);
     const tab = w && activeTabOf(w);
-    return tab && tab.active !== MESSAGES ? tab.results.find((r) => r.id === tab.active) : undefined;
+    const shown = tab?.results.find((r) => r.id === tab.active);
+    return shown?.kind === "rows" ? shown : undefined;
   });
   const engine = useApp((s) => s.profiles.find((p) => p.id === s.selected)?.engine ?? null);
   const [filter, setFilter] = useState("");

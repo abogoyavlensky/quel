@@ -87,11 +87,11 @@ describe("modalOpen", () => {
 
 describe("focusResultKey", () => {
   // The current tab with one result, r1, shown or not.
-  function withResult(active: string) {
+  function withResult(active: string, kind = "rows") {
     seed();
     store.setState((s) => {
       const w = s.workspaces.p;
-      const tab = { ...w.tabs[0], results: [{ id: "r1" } as (typeof w.tabs)[0]["results"][number]], active };
+      const tab = { ...w.tabs[0], results: [{ id: "r1", kind } as (typeof w.tabs)[0]["results"][number]], active };
       return { workspaces: { p: { ...w, tabs: [tab] } } };
     });
   }
@@ -106,6 +106,13 @@ describe("focusResultKey", () => {
     const el = grid();
     focusResultKey();
     expect(el.focus).toHaveBeenCalledOnce();
+  });
+
+  it("does nothing on a result with no rows", () => {
+    const el = grid();
+    withResult("r1", "update");
+    focusResultKey();
+    expect(el.focus).not.toHaveBeenCalled();
   });
 
   it("does nothing on Messages, with no such result, or under a dialog", () => {

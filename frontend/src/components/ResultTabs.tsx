@@ -150,7 +150,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
               Run the statement under the cursor with {RUN_KEY}. Its rows show here.
             </p>
           )
-        ) : current ? (
+        ) : current?.kind === "rows" ? (
           <ResultGrid key={current.id} tabId={tab.id} result={current} />
         ) : (
           <MessagesView messages={tab.messages} />

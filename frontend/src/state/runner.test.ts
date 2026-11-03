@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClosedTab, FetchResult, RunResult, SavedTab, SavedWorkspace } from "@/lib/types";
 import type { RunPolicy } from "@/sql/guard";
+import type { RowsResult } from "./store";
 
 const api = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -85,6 +86,12 @@ const ws = (id = "p1") => store.getState().workspaces[id];
 const tab = (id = "p1") => activeTabOf(ws(id));
 const tabId = (id = "p1") => ws(id).activeTab;
 const stmts = (sql: string) => split(sql);
+// The tab's i-th result, which must have rows.
+function rowsAt(i: number, t = tab()): RowsResult {
+  const r = t.results[i];
+  if (r?.kind !== "rows") throw new Error(`result ${i} has no rows: ${r?.kind}`);
+  return r;
+}
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
@@ -126,8 +133,8 @@ describe("runStatements", () => {
     await runner.runStatements(tabId(), stmts("select 1"));
     const t = tab();
     expect(t.results).toHaveLength(1);
-    expect(t.results[0].cursor).toBe("open");
-    expect(t.results[0].rows).toHaveLength(500);
+    expect(rowsAt(0, t).cursor).toBe("open");
+    expect(rowsAt(0, t).rows).toHaveLength(500);
     expect(t.active).toBe(t.results[0].id);
     expect(t.runningQueryId).toBeNull();
     expect(api.run).toHaveBeenCalledWith("c1", tabId(), t.results[0].id, "select 1");
@@ -142,7 +149,7 @@ describe("runStatements", () => {
     await runner.runStatements(tabId(), stmts("select 1; update t set x = 1; select 2"));
     const t = tab();
     expect(t.results).toHaveLength(2);
-    expect(t.results.map((r) => r.cursor)).toEqual(["done", "done"]);
+    expect([rowsAt(0, t).cursor, rowsAt(1, t).cursor]).toEqual(["done", "done"]);
     expect(t.messages.map((m) => m.kind)).toEqual(["rows", "update", "rows"]);
     expect(t.messages[1].text).toBe("3 rows affected");
     expect(t.active).toBe(t.results[1].id);
@@ -165,7 +172,7 @@ describe("runStatements", () => {
     const t = tab();
     expect(t.results.map((r) => r.id)).toEqual([pinned, t.results[1].id]);
     expect(t.results[1].id).not.toBe(unpinned);
-    expect(t.results[0].cursor).toBe("closed");
+    expect(rowsAt(0, t).cursor).toBe("closed");
     expect(api.closeResult).toHaveBeenCalledWith(unpinned);
     expect(api.closeResult).not.toHaveBeenCalledWith(pinned);
   });
@@ -213,7 +220,7 @@ describe("runStatements", () => {
   it("closes an earlier result's cursor when the script runs on", async () => {
     api.run.mockResolvedValueOnce(rowsResult(500, true)).mockResolvedValueOnce(update(1));
     await runner.runStatements(tabId(), stmts("select 1; delete from t"));
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("does not open a cursor for a profile disconnected meanwhile", async () => {
@@ -223,7 +230,7 @@ describe("runStatements", () => {
     await runner.disconnectProfile("p1");
     first.resolve(rowsResult(500, true));
     await running;
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("does not activate a result closed while the script ran on", async () => {
@@ -345,10 +352,10 @@ describe("row details", () => {
   it("selects a row on one result only", async () => {
     api.run.mockResolvedValueOnce(rowsResult(3, false)).mockResolvedValueOnce(rowsResult(3, false));
     await runner.runStatements(tabId(), stmts("select 1; select 2"));
-    const [r1, r2] = tab().results;
+    const [r1, r2] = [rowsAt(0), rowsAt(1)];
     expect(r1.selectedRow).toBeNull();
     runner.selectRow(tabId(), r1.id, 2);
-    expect(tab().results.map((r) => r.selectedRow)).toEqual([2, null]);
+    expect([rowsAt(0).selectedRow, rowsAt(1).selectedRow]).toEqual([2, null]);
     expect(r2.selectedRow).toBeNull();
   });
 
@@ -361,7 +368,7 @@ describe("row details", () => {
     await runner.runStatements(tabId(), stmts("select 2"));
     runner.selectRow(tabId(), tab().results[1].id, 0);
     await runner.runStatements(tabId(), stmts("select 3"));
-    expect(tab().results.map((r) => r.selectedRow)).toEqual([1, null]);
+    expect([rowsAt(0).selectedRow, rowsAt(1).selectedRow]).toEqual([1, null]);
   });
 
   it("toggles the panel, and opening leaves it open", () => {
@@ -446,11 +453,11 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockResolvedValueOnce(page(200, false));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].rows).toHaveLength(1000);
-    expect(tab().results[0].cursor).toBe("open");
+    expect(rowsAt(0).rows).toHaveLength(1000);
+    expect(rowsAt(0).cursor).toBe("open");
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
     await runner.fetchMore(tabId(), id);
     expect(api.fetchPage).toHaveBeenCalledTimes(2);
   });
@@ -459,14 +466,14 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue(page(0, false, true));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("caps the rows it loads and closes the cursor", async () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue(page(500, true));
     await runner.fetchMore(tabId(), id, 800);
-    const r = tab().results[0];
+    const r = rowsAt(0);
     expect(r.rows).toHaveLength(800);
     expect(r.cursor).toBe("capped");
     expect(api.closeResult).toHaveBeenCalledWith(id);
@@ -476,7 +483,7 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue({ ...page(400, false) });
     await runner.fetchMore(tabId(), id, 800);
-    const r = tab().results[0];
+    const r = rowsAt(0);
     expect(r.rows).toHaveLength(800);
     expect(r.cursor).toBe("capped");
   });
@@ -489,7 +496,7 @@ describe("fetchMore", () => {
     await runner.disconnectProfile("p1");
     p.resolve(page(500, true));
     await fetching;
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("reads one page at a time", async () => {
@@ -497,13 +504,13 @@ describe("fetchMore", () => {
     const p = deferred<FetchResult>();
     api.fetchPage.mockReturnValueOnce(p.promise);
     const first = runner.fetchMore(tabId(), id);
-    expect(tab().results[0].fetching).toBe(true);
+    expect(rowsAt(0).fetching).toBe(true);
     expect(tab().runningQueryId).toBe(id);
     await runner.fetchMore(tabId(), id);
     expect(api.fetchPage).toHaveBeenCalledTimes(1);
     p.resolve(page(10, true));
     await first;
-    expect(tab().results[0].fetching).toBe(false);
+    expect(rowsAt(0).fetching).toBe(false);
     expect(tab().runningQueryId).toBeNull();
   });
 
@@ -511,7 +518,7 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockRejectedValue(new Error("Query canceled."));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
     expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
   });
 });
@@ -527,8 +534,8 @@ describe("loadAll", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockResolvedValueOnce(page(200, false));
     expect(await runner.loadAll(tabId(), id)).toBe(true);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
     expect(api.fetchPage).toHaveBeenCalledTimes(2);
   });
 
@@ -543,7 +550,7 @@ describe("loadAll", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockRejectedValueOnce(new Error("boom"));
     expect(await runner.loadAll(tabId(), id)).toBe(false);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("is false, without spinning, when another statement is running in the tab", async () => {
@@ -578,8 +585,8 @@ describe("loadAll", () => {
     p.resolve(page(500, true));
     await inFlight;
     expect(await loading).toBe(true);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
   });
 
   it("is true when the cursor ends capped", async () => {
@@ -587,7 +594,7 @@ describe("loadAll", () => {
     api.fetchPage.mockResolvedValue(page(500, true));
     expect(await runner.loadAll(tabId(), id, 800)).toBe(true);
     expect(tab().results[0]).toMatchObject({ cursor: "capped" });
-    expect(tab().results[0].rows).toHaveLength(800);
+    expect(rowsAt(0).rows).toHaveLength(800);
   });
 
   it("is false when the result is closed while loading", async () => {
@@ -598,7 +605,7 @@ describe("loadAll", () => {
     await runner.disconnectProfile("p1");
     p.resolve(page(500, true));
     expect(await loading).toBe(false);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 });
 
@@ -793,9 +800,9 @@ describe("workspaces", () => {
     expect(api.closeDb).toHaveBeenCalledTimes(1);
     expect(ws("p1")).toMatchObject({ status: "disconnected", connId: null, error: null });
     expect(tabId("p1")).toBe(p1Tab);
-    expect(tab("p1").results[0].cursor).toBe("closed");
+    expect(rowsAt(0, tab("p1")).cursor).toBe("closed");
     expect(ws("p2")).toMatchObject({ status: "connected", connId: "c2" });
-    expect(tab("p2").results[0].cursor).toBe("open");
+    expect(rowsAt(0, tab("p2")).cursor).toBe("open");
   });
 
   it("selecting a profile loads its workspace, remembers it, and never connects", async () => {
@@ -1069,8 +1076,8 @@ describe("closing and reopening", () => {
     expect(api.closeResult).toHaveBeenCalledWith(resultId);
     page.resolve({ rows: rows(500, 501), "has-more": true, closed: false });
     await loading;
-    expect(tab().results[0].rows).toHaveLength(500);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).rows).toHaveLength(500);
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("a save before the close has run still lists the tab, with its last text", async () => {

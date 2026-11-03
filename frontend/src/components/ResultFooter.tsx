@@ -29,7 +29,8 @@ function Elapsed({ since }: { since: number }) {
 // run and no result showing (Messages, the empty tab) there is none. A
 // page load is not a run: the rows text says "loading more…". Keyed by
 // tab in ResultTabs: switching tabs starts the delay over.
-export function ResultFooter({ tab, result }: { tab: EditorTab; result: ResultTab | undefined }) {
+export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: ResultTab | undefined }) {
+  const result = shown?.kind === "rows" ? shown : undefined;
   const busy = useDelayed(isRunning(tab), 300);
   const words = busy ? runWords(tab) : null;
   if (!words && !result) return null;

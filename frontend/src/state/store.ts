@@ -21,19 +21,32 @@ import type { ConfirmReason } from "@/sql/guard";
 // capped: MAX_ROWS loaded, closed by us.
 export type CursorState = "open" | "done" | "closed" | "capped";
 
-export interface ResultTab {
+interface ResultBase {
   id: string; // the query-id, which is also the backend's result id
   sql: string;
+  pinned: boolean;
+}
+
+// A statement's rows.
+export interface RowsResult extends ResultBase {
+  kind: "rows";
   columns: Column[];
   rows: Cell[][];
   cursor: CursorState;
   fetching: boolean;
-  pinned: boolean;
   elapsedMs: number;
   // The row the details panel shows, by index; in memory only. A new run
   // makes new results, so it starts over.
   selectedRow: number | null;
 }
+
+// One statement of a run: running until its reply comes, then what it
+// returned. All kinds are tabs alike (pin, close, replaced by the next run).
+export type ResultTab =
+  | RowsResult
+  | (ResultBase & { kind: "running" })
+  | (ResultBase & { kind: "update"; text: string; elapsedMs: number })
+  | (ResultBase & { kind: "error" | "canceled"; text: string });
 
 export interface Message {
   id: string;
@@ -57,7 +70,7 @@ export interface EditorTab {
 }
 
 // A statement or script is running, not just a page loading.
-export const isRunning = (t: EditorTab) => t.runningQueryId !== null && !t.results.some((r) => r.fetching);
+export const isRunning = (t: EditorTab) => t.runningQueryId !== null && !t.results.some((r) => r.kind === "rows" && r.fetching);
 
 // A workspace's connection: connecting and disconnecting are in flight
 // while the backend opens or closes the database.
@@ -188,13 +201,13 @@ export function activeTabOf(w: Workspace): EditorTab {
   return w.tabs.find((t) => t.id === w.activeTab) ?? w.tabs[0];
 }
 
-// The selected workspace's current tab shows one of its results, not its
-// messages.
+// The selected workspace's current tab shows a result with rows: a grid,
+// not its messages or a statement's outcome.
 export function showsResult(s: AppState): boolean {
   const w = selectedWorkspace(s);
   if (!w || w.loadError) return false;
   const tab = activeTabOf(w);
-  return tab.active !== MESSAGES && tab.results.some((r) => r.id === tab.active);
+  return tab.results.some((r) => r.id === tab.active && r.kind === "rows");
 }
 
 export function updateWorkspace(profileId: string, f: (w: Workspace) => Workspace): void {
@@ -223,6 +236,21 @@ export function updateResult(tabId: string, resultId: string, f: (r: ResultTab) 
   updateTab(tabId, (t) => ({ ...t, results: t.results.map((r) => (r.id === resultId ? f(r) : r)) }));
 }
 
+// The tab's result by id, when it has rows.
+export function findRows(tabId: string, resultId: string): RowsResult | undefined {
+  const r = findTab(tabId)?.results.find((x) => x.id === resultId);
+  return r?.kind === "rows" ? r : undefined;
+}
+
+export function updateRows(tabId: string, resultId: string, f: (r: RowsResult) => RowsResult): void {
+  updateResult(tabId, resultId, (r) => (r.kind === "rows" ? f(r) : r));
+}
+
+// The result with its cursor closed, if it had one open.
+export function closedCursor(r: ResultTab): ResultTab {
+  return r.kind === "rows" && r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r;
+}
+
 export function addMessage(tabId: string, m: Omit<Message, "id" | "at">): void {
   updateTab(tabId, (t) => ({
     ...t,
@@ -237,7 +265,7 @@ export function closeCursors(profileId: string): void {
     ...w,
     tabs: w.tabs.map((t) => ({
       ...t,
-      results: t.results.map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
+      results: t.results.map(closedCursor),
     })),
   }));
 }
