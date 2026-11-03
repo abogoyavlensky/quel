@@ -12,6 +12,7 @@ const dialog = (page: Page) => page.getByRole("dialog");
 const confirm = (page: Page) => page.getByRole("alertdialog");
 const saved = (page: Page) => page.getByRole("list", { name: "Saved connections" });
 const log = (page: Page) => page.getByRole("log", { name: "Messages" });
+const outcome = (page: Page) => page.getByRole("region", { name: "Statement outcome" });
 
 async function write(page: Page, sql: string) {
   await page.getByLabel("SQL editor").click();
@@ -43,6 +44,7 @@ test("read-only refuses writes; ask before changes asks", async ({ page }) => {
   // Read-only: the write is refused, with no question, and nothing ran.
   await write(page, "create table rp (a int)");
   await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByText(/E2E guarded is read-only/).and(page.locator("[data-sonner-toast] *"))).toBeVisible();
   await expect(log(page)).toContainText("E2E guarded is read-only");
   await expect(confirm(page)).toHaveCount(0);
 
@@ -64,7 +66,7 @@ test("read-only refuses writes; ask before changes asks", async ({ page }) => {
   await page.getByLabel("SQL editor").click();
   await page.keyboard.press("ControlOrMeta+Enter");
   await confirm(page).getByRole("button", { name: "Run" }).click();
-  await expect(log(page)).toContainText("Done");
+  await expect(outcome(page)).toHaveText("Done");
 
   // A read runs without asking.
   await write(page, "select count(*) as n from rp");

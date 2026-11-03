@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { CsvSeparator, ExportFormat } from "@/grid/export";
 import { exportResult, setExport } from "@/state/runner";
-import { type ResultTab, useApp } from "@/state/store";
+import { type RowsResult, useApp } from "@/state/store";
 
 // The results footer's Export button: a popover to pick the format (and, for
 // CSV, the separator), then copy the result or save it to a file. The
@@ -25,7 +25,7 @@ const SEPARATORS: { value: CsvSeparator; label: string }[] = [
   { value: "\t", label: "Tab" },
 ];
 
-export function ExportMenu({ tabId, result }: { tabId: string; result: ResultTab }) {
+export function ExportMenu({ tabId, result }: { tabId: string; result: RowsResult }) {
   const { format, separator } = useApp((s) => s.export);
   const [open, setOpen] = useState(false);
   // The export is loading the rest of an open result (the results footer shows

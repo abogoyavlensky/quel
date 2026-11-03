@@ -302,16 +302,24 @@ cancelled at once.
 
 ### Results and pinning
 
-Each row-returning statement of a run gets its own result tab. A run
-first drops the editor tab's unpinned results, so a script's results are
-replaced together. A **pinned** tab is never replaced and keeps its rows
-until closed; its cursor closes on the next run in its tab, as above.
-Every statement's outcome (rows, rows affected, or the error) goes to the
-tab's Messages log. An update count shows only for statements that write
-rows: SQLite leaves its change counter alone for DDL, and Postgres answers
-0. Others say "Done". The first error, or a cancel, stops a script. A
-result loads at most 100,000 rows; past that, its cursor is closed and the
-result says so.
+Each statement of a run gets its own result tab when it starts. The tab
+stays empty while the statement runs (the footer says "Running…"), then
+shows what it came to: its rows, the rows affected, the error, or "Query
+canceled." All kinds of tab pin and close alike; closing a running one
+cancels the run. A run first drops the editor tab's unpinned results, so a
+script's results are replaced together. A **pinned** tab is never replaced
+and keeps its rows until closed; its cursor closes on the next run in its
+tab, as above.
+
+A run's first statement takes focus, from a pinned tab too. A later one
+takes it only from the statement before it, so a user who picked another
+tab mid-script stays there, until an error or a cancel takes focus. Every
+statement's outcome also goes to the tab's Messages log, the history of
+what ran there. An update count shows only for statements that write rows:
+SQLite leaves its change counter alone for DDL, and Postgres answers 0.
+Others say "Done". The first error, or a cancel, stops a script. A result
+loads at most 100,000 rows; past that, its cursor is closed and the result
+says so.
 
 ### Cell encoding
 
@@ -423,7 +431,8 @@ The frontend decides, before anything is sent. `runStatements`
 (`state/runner.ts`) is the one place every run goes through, and it
 judges the run as a whole: the statement under the cursor, the selection
 or the script gets one question, and a refused script never half-runs.
-A refusal is an error in the tab's messages. The question is an alert
+A refusal is a toast and an error in the tab's messages; the results stay
+as they are, as nothing ran. The question is an alert
 dialog naming the profile, listing up to five statements, with Cancel
 focused, so a reflexive Enter runs nothing. While it is open, other runs
 and the global shortcuts are held off. The policy is read from the
@@ -481,8 +490,8 @@ There is no status bar: each state shows where it belongs. The strip
 across the top names the selected connection and, unless it is
 connected, says how it is ("Not connected", "Connecting…"); a newer
 version shows as a button at its right end. The editor has a Run/Stop
-button at its bottom right. The results footer has the rows and the time,
-and while a run lasts "Running…" and the time so far. Notices are toasts
+button at its bottom right. The results footer has the rows or the rows
+affected and the time, and while a run lasts "Running…" and the time so far. Notices are toasts
 at the bottom right.
 
 ### Look
@@ -646,7 +655,7 @@ name is `result-YYYY-MM-DD-HHMM.<ext>` in local time.
 | ⇧⌘P / Ctrl+Shift+P | Opens the **Command Palette** |
 | ⌘P / Ctrl+P | Opens **Go to Connection** |
 | ⌘E / Ctrl+E | Focuses the current tab's editor, wherever focus is |
-| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows (nothing on Messages); the selected row stays |
+| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows (nothing on Messages or a result with no rows); the selected row stays |
 | ⌘B / Ctrl+B | Hides or shows the sidebar |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |

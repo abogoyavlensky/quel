@@ -3,6 +3,7 @@ import { connectionWords, runWords } from "./status";
 import { type EditorTab, type ResultTab, newWorkspace } from "./store";
 
 const result = (fetching: boolean): ResultTab => ({
+  kind: "rows",
   id: "r1",
   sql: "select 1",
   columns: [],

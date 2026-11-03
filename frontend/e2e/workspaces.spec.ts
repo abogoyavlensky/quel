@@ -9,7 +9,7 @@ const db = process.env.QUEL_E2E_DB ?? "/tmp/quel-e2e.db";
 const db2 = process.env.QUEL_E2E_DB2 ?? "/tmp/quel-e2e2.db";
 
 const editor = (page: Page) => page.getByLabel("SQL editor");
-const messages = (page: Page) => page.getByRole("log", { name: "Messages" });
+const outcome = (page: Page) => page.getByRole("region", { name: "Statement outcome" });
 const editorTabs = (page: Page) => page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab");
 
 // Replace the active editor's text (see query-loop.spec.ts).
@@ -40,7 +40,7 @@ test("two profiles keep their own tabs, results and sessions", async ({ page }) 
   await expect(editor(page)).toHaveText("");
   await write(page, "select * from only_a;");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(messages(page)).toContainText("no such table: only_a");
+  await expect(outcome(page)).toContainText("no such table: only_a");
   await write(page, "select count(*) as n from t2;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("gridcell", { name: "10", exact: true })).toBeVisible();

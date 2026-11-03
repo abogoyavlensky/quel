@@ -134,12 +134,13 @@ describe("commands", () => {
 
   it("offers Focus Result only while the tab shows a result, after Focus Editor", () => {
     expect(ids(state())).not.toContain("focus-result");
-    const withResult = (active: string) =>
+    const withResult = (active: string, kind = "rows") =>
       state("connected", (w) => {
-        w.tabs[0].results = [{ id: "r1" } as (typeof w.tabs)[0]["results"][number]];
+        w.tabs[0].results = [{ id: "r1", kind } as (typeof w.tabs)[0]["results"][number]];
         w.tabs[0].active = active;
       });
     expect(ids(withResult("messages"))).not.toContain("focus-result");
+    expect(ids(withResult("r1", "update"))).not.toContain("focus-result");
     const got = ids(withResult("r1"));
     expect(got.slice(got.indexOf("focus-editor"), got.indexOf("focus-editor") + 2)).toEqual(["focus-editor", "focus-result"]);
     const entry = commands(withResult("r1")).find((c) => c.id === "focus-result")!;

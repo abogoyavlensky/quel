@@ -22,6 +22,7 @@ const resultTabs = (page: Page) => page.getByRole("tablist", { name: "Results" }
 // The results footer: how many rows and whether more can load, or what a
 // run is doing and for how long.
 const footer = (page: Page) => page.getByRole("group", { name: "Result footer" });
+const outcome = (page: Page) => page.getByRole("region", { name: "Statement outcome" });
 
 test("runs the statement under the cursor and pages as it scrolls", async ({ page }) => {
   await open(page);
@@ -40,11 +41,23 @@ test("runs the statement under the cursor and pages as it scrolls", async ({ pag
   await expect(page.getByRole("gridcell", { name: "customer 2000", exact: true })).toBeVisible();
 });
 
-test("a script gives each row-returning statement its own tab", async ({ page }) => {
+test("a script gives each statement its own tab", async ({ page }) => {
   await open(page);
   await write(page, "select id from t limit 3; update t set name = name where id = 1; select name from t limit 2;");
   await page.keyboard.press("ControlOrMeta+Shift+Enter");
-  await expect(resultTabs(page)).toHaveText(["Messages", "select id from t limit 3", "select name from t limit 2"]);
+  await expect(resultTabs(page)).toHaveText([
+    "Messages",
+    "select id from t limit 3",
+    "update t set name = name where …",
+    "select name from t limit 2",
+  ]);
+  await expect(page.getByRole("columnheader", { name: /name/ })).toBeVisible();
+
+  await resultTabs(page).nth(2).click();
+  await expect(outcome(page)).toHaveText("1 row affected");
+  await expect(footer(page).getByRole("status")).toHaveText("1 row affected");
+  await expect(footer(page).getByRole("button", { name: /Export/ })).toHaveCount(0);
+
   await resultTabs(page).first().click();
   await expect(page.getByRole("log", { name: "Messages" })).toContainText("1 row affected");
 });
@@ -73,10 +86,16 @@ test("Stop cancels a runaway query", async ({ page }) => {
   // footer says so and counts the time.
   await expect(footer(page).getByRole("status")).toHaveText("Running…");
   await expect(footer(page)).toContainText(/\d+s/);
+  // It runs in its own tab, empty until the reply comes.
+  await expect(page.getByRole("tablist", { name: "Results" }).getByRole("tab", { selected: true })).toHaveAttribute(
+    "title",
+    runaway,
+  );
+  await expect(outcome(page)).toBeEmpty();
   await page.getByRole("button", { name: "Stop" }).click();
-  await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
+  await expect(outcome(page)).toHaveText("Query canceled.");
   await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
-  // The canceled run left Messages showing: no result, so no footer.
+  // A canceled tab has no rows or time to show: no footer.
   await expect(footer(page)).toHaveCount(0);
 });
 
@@ -87,7 +106,7 @@ test("the Stop key cancels", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
   // Server mode has no native menu: this is the page's own key.
   await page.keyboard.press("ControlOrMeta+.");
-  await expect(page.getByRole("log", { name: "Messages" })).toContainText("Query canceled.");
+  await expect(outcome(page)).toHaveText("Query canceled.");
 });
 
 test("the Run button runs and keeps the editor focused", async ({ page }) => {
@@ -102,12 +121,12 @@ test("each editor tab is its own session", async ({ page }) => {
   await open(page);
   await write(page, "create temp table only_here (x int);");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.getByRole("log", { name: "Messages" })).toContainText("Done");
+  await expect(outcome(page)).toHaveText("Done");
 
   await page.getByRole("button", { name: "New tab" }).click();
   await write(page, "select * from only_here;");
   await page.keyboard.press("ControlOrMeta+Enter");
-  await expect(page.getByRole("log", { name: "Messages" })).toContainText("no such table: only_here");
+  await expect(outcome(page)).toContainText("no such table: only_here");
 
   await page.getByRole("tab", { name: /Query 1/ }).click();
   await expect(page.getByLabel("SQL editor")).toHaveText("create temp table only_here (x int);");

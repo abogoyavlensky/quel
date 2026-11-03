@@ -21,8 +21,13 @@ async function write(page: Page, sql: string) {
 async function runText(page: Page, sql: string) {
   await write(page, sql);
   await page.keyboard.press("ControlOrMeta+Enter");
-  // Done when its message is in the log (each statement here is unique).
-  await expect(page.getByRole("log", { name: "Messages" })).toContainText(sql);
+  // Its tab first: the last statement's tab says "Done" too. Each statement
+  // here is unique.
+  await expect(page.getByRole("tablist", { name: "Results" }).getByRole("tab", { selected: true })).toHaveAttribute(
+    "title",
+    sql,
+  );
+  await expect(page.getByRole("region", { name: "Statement outcome" })).toHaveText("Done");
 }
 
 // The completion options offered with the cursor after `before`.
