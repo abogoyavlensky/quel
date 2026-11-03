@@ -167,17 +167,17 @@ Run commands from the repo root, on a feature branch.
 - Modify: `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`, `frontend/src/components/ResultTabs.tsx`, `frontend/src/components/ResultFooter.tsx`, `frontend/src/components/RowDetails.tsx`, `frontend/src/components/ExportMenu.tsx`, `frontend/src/grid/ResultGrid.tsx`
 - Test: `frontend/src/state/store.test.ts`, `frontend/src/state/status.test.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/state/palette.test.ts`, `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write implementation**
+- [x] **Step 1: Write implementation**
   Add the types and helpers from Design > Model. `isRunning` checks `r.kind === "rows" && r.fetching`. `showsResult` requires a `rows` result. `ResultGrid`, `rowsText` and `ExportMenu` take `RowsResult`. `RowDetails`'s selector returns only a `rows` result. `ResultTabs` renders the grid only for `current?.kind === "rows"`, otherwise `MessagesView`; `ResultFooter` treats a non-rows result as no result (Task 4 fills in both). In `runner.ts`, `runStatements` builds results with `kind: "rows"`, and `fetchMore`, `loadAll`, `exportResult` and `selectRow` use `findRows`/`updateRows`; `closeResult` and the failed-close path in `closeTab` narrow on `kind`. Use `closedCursor` for the three maps.
 
-- [ ] **Step 2: Add `kind: "rows"` to the test fixtures**
+- [x] **Step 2: Add `kind: "rows"` to the test fixtures**
   Fixtures in `store.test.ts` and `status.test.ts`, and the `{ id: "r1" }` casts in `palette.test.ts` and `commands.test.ts`. Add one test in each of `palette.test.ts` and `commands.test.ts`: an active `update` result gives no ⌘R focus and no Focus Result command.
 
-- [ ] **Step 3: Run tests and the type check**
+- [x] **Step 3: Run tests and the type check**
   Run: `npm --prefix frontend run build && npm --prefix frontend test`
   Expected: PASS, with no change to run behavior.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Model result tabs as a union on kind"`
 
 ### Task 2: A tab for every statement
