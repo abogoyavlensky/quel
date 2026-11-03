@@ -249,6 +249,65 @@
       (ex-info (str msg " The session was reset.") {:query-id query-id})
       (if canceled? (ex-info msg {:query-id query-id}) e))))
 
+(def ^:private not-sent-markers
+  ["write failed:" "bad connection" "connection is already closed"
+   "sqlstate 57p05" "sqlstate 25p03"])
+
+(defn not-sent?
+  "Does a lost connection's error show that the statement never took
+   effect on the server? Matched on the driver's message, lower-cased:
+
+   - \"write failed:\" is pgx failing to send (pgproto3's writeError).
+     A write into a socket the peer already closed or reset sends
+     nothing. A partial write could deliver a buffered batch's Execute
+     without its Sync, but Postgres commits an implicit transaction only
+     at Sync and aborts it when the connection drops, so nothing the
+     statement did is committed. A simple-protocol Query cut short never
+     runs at all.
+   - \"bad connection\" is driver.ErrBadConn, which pgx's stdlib returns
+     only for a connection it knows is closed, or for an error it marks
+     safe to retry (nothing sent).
+   - \"connection is already closed\" is database/sql's ErrConnDone.
+   - SQLSTATE 57P05 (idle_session_timeout) and 25P03
+     (idle_in_transaction_session_timeout): the server ended the session
+     for being idle, before this statement.
+
+   Anything else (57P01 from pg_terminate_backend, an EOF) may have hit
+   a running statement."
+  [msg]
+  (let [m (str/lower-case (str msg))]
+    (boolean (some #(str/includes? m %) not-sent-markers))))
+
+(defn lost-message
+  "The error for a run (:kind :run) or page read (:kind :page) whose
+   session turned out dead. :error is the driver's message (left out
+   after a cancel, where it is just \"context canceled\"), :sent? whether
+   the statement may have reached the server, and :reconnect the result
+   of taking a new session: {:ok true} or {:error msg}."
+  [{:keys [kind canceled? error sent? reconnect]}]
+  (let [lost "The connection to the database was lost"
+        cause (if canceled? "" (str " (" error ")"))
+        opening (cond
+                  (= :page kind)
+                  (str (when canceled? "Query canceled. ")
+                       lost cause " while reading rows. Run the query again for the rest.")
+
+                  canceled?
+                  (str "Query canceled. " lost ", so the statement may or may not have completed:"
+                       " check before running it again.")
+
+                  (not sent?)
+                  (str lost cause ", so the statement was not run.")
+
+                  :else
+                  (str lost cause ". The statement may or may not have completed:"
+                       " check before running it again."))
+        again (if (:ok reconnect)
+                " Reconnected: the next run uses a new connection."
+                (str " Could not reconnect (" (:error reconnect) "): the next run tries again."))]
+    (str opening again
+         " Any open transaction, SET values and temp tables in this tab are gone.")))
+
 (defn- fail!
   "Throw for a failed run or page read. The failure's own error cannot say
    whether the session survived, so probe it, and drop a dead one so the
