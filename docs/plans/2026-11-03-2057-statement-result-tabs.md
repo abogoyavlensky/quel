@@ -1,5 +1,7 @@
 # Statement Result Tabs Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Every statement a run sends gets its own result tab, created when the statement starts and filled in with its rows, its update count, or its error, so a run no longer jumps to Messages.
@@ -186,7 +188,7 @@ Run commands from the repo root, on a feature branch.
 - Modify: `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   In `describe("runStatements")`:
   - A run shows a `running` tab, active, while `api.run` is pending, and it keeps its id when filled.
   - A statement with no rows ends as an `update` tab with its text and time, active (replaces "shows messages for a run with no rows"). A DDL reply says "Done".
@@ -204,18 +206,18 @@ Run commands from the repo root, on a feature branch.
 
   In `describe("closing and reopening")`, "a failed close of a running tab": after the close, the restored tab's result for the cancelled statement is `canceled`, the earlier results are as they were, and the late reply changes nothing.
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
   Run: `npm --prefix frontend test -- src/state/runner.test.ts`
   Expected: the new tests FAIL.
 
-- [ ] **Step 3: Implement the run flow**
+- [x] **Step 3: Implement the run flow**
   As in Design > Run flow. In the failed-close path of `closeTab`, map a `running` result to `{ ...r, kind: "canceled", text: "Query canceled." }`. Update the comment above `runStatements`.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
   Run: `npm --prefix frontend test`
   Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Give every statement of a run its own result tab"`
 
 ### Task 3: A read-only refusal is a toast
@@ -224,17 +226,17 @@ Run commands from the repo root, on a feature branch.
 - Modify: `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
   Change "read-only refuses a script with a write, sending nothing": run a `select` first and select its result. The refused run leaves `results` and `active` as they were, adds the error to `messages`, and calls `notify.error` with the text and the id `run-refused`.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
   In the `refuse` branch of `runStatements`, keep `addMessage`, add `notify.error(text, { id: "run-refused" })`, and drop the `active: MESSAGES` update.
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
   Run: `npm --prefix frontend test -- src/state/runner.test.ts`
   Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Show a read-only refusal as a toast"`
 
 ### Task 4: Show the outcome in the tab
@@ -243,18 +245,20 @@ Run commands from the repo root, on a feature branch.
 - Create: `frontend/src/components/ResultOutcome.tsx`
 - Modify: `frontend/src/components/ResultTabs.tsx`, `frontend/src/components/ResultFooter.tsx`, `frontend/src/state/palette.ts`
 
-- [ ] **Step 1: Write `ResultOutcome`**
+- [x] **Step 1: Write `ResultOutcome`**
   Takes a non-rows result. Renders `<div role="region" aria-label="Statement outcome" className="h-full overflow-auto p-4 text-sm">`, empty for `running`, otherwise the text in a `<p className="break-words whitespace-pre-wrap">`: `text-destructive` for `error`, `text-muted-foreground` for `canceled`.
 
-- [ ] **Step 2: Wire it up**
+- [x] **Step 2: Wire it up**
   `ResultTabs`: a `rows` result gets `ResultGrid`, any other result gets `ResultOutcome`, and no selected result gets `MessagesView`. Update its comment. `ResultFooter`: `words` as before; otherwise `rows` as today; `update` shows its text and `{elapsedMs.toLocaleString()} ms`, in the same places; every other kind has no footer. Update its comment, which still says the footer shows over Messages. Reword the ⌘R comment in `palette.ts`: nothing without a grid.
 
-- [ ] **Step 3: Type check, tests, lint**
+- [x] **Step 3: Type check, tests, lint**
   Run: `npm --prefix frontend run build && npm --prefix frontend test && npm --prefix frontend run lint`
   Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Show updates and errors in their result tab"`
+
+> Deviation: Tasks 3 and 4 were reviewed together as one codex pass, and Tasks 5 and 6 as another. The session had no TaskCreate tool, so the plan document was the only tracker.
 
 ### Task 5: End-to-end specs
 
@@ -263,24 +267,24 @@ Run commands from the repo root, on a feature branch.
 
 Where a spec needs the body: `const outcome = (page: Page) => page.getByRole("region", { name: "Statement outcome" });`
 
-- [ ] **Step 1: `query-loop.spec.ts`**
+- [x] **Step 1: `query-loop.spec.ts`**
   - The script test is now "a script gives each statement its own tab": `resultTabs` has `Messages` and the three statements. The update's tab shows "1 row affected" in `outcome`. Selecting Messages still shows the log with that text.
   - "Stop cancels a runaway query": while running, the selected result tab is the statement and the footer says "Running…". After Stop, `outcome` shows "Query canceled.", and the footer has count 0 (reword the comment: a canceled tab has no footer).
   - "the Stop key cancels": read `outcome`.
   - "each editor tab is its own session": read "Done" and "no such table: only_here" from `outcome`.
 
-- [ ] **Step 2: `structure.spec.ts`, `workspaces.spec.ts`**
+- [x] **Step 2: `structure.spec.ts`, `workspaces.spec.ts`**
   - `runText` waits for the selected result tab to have `title` equal to the SQL, then for `outcome` to contain "Done". The order matters: the old tab's "Done" would pass on its own, and the new running tab's body is empty.
   - `workspaces.spec.ts`: read "no such table: only_a" from `outcome`; drop the `messages` helper if nothing else uses it.
 
-- [ ] **Step 3: `run-policy.spec.ts`**
+- [x] **Step 3: `run-policy.spec.ts`**
   The refusal: expect the toast text to be visible, and the log still contains it (a fresh tab stays on Messages). After Run on the confirmed statement, expect "Done" in `outcome`, not `log`.
 
-- [ ] **Step 4: Run them**
+- [x] **Step 4: Run them**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`
   Expected: all PASS. If a spec not listed here fails because it read Messages after a run, fix it the same way.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Update e2e specs for statement result tabs"`
 
 ### Task 6: Design doc
@@ -288,11 +292,26 @@ Where a spec needs the body: `const outcome = (page: Page) => page.getByRole("re
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Update the text**
+- [x] **Step 1: Update the text**
   - Results and pinning (around line 305): every statement gets a tab, from when it starts, and what it holds. Replace "Each row-returning statement of a run gets its own result tab". Say Messages is the history, focus follows the running statement, and a failed statement's tab takes focus.
   - Run policy (line 426): a refusal is a toast and a line in the messages; the results do not change.
   - No status bar (line 484): the footer also has an update's count and time.
   - Keys (line 649): ⌘R does nothing on Messages or on a result with no rows.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
   `git commit -m "Design: a result tab per statement"`
+
+## Summary
+
+Every statement of a run now has a result tab from the moment it starts: `ResultTab` is a union on `kind` (`running`, `rows`, `update`, `error`, `canceled`), `runStatements` fills the tab in place, and the new `ResultOutcome` shows anything that is not rows. Messages stays as the history and is no longer selected by a run. A read-only refusal is a toast and a Messages line, and leaves the results alone.
+
+Verified: frontend 477 tests, backend 168 tests, `lgx smoke`, and all 29 e2e specs in server mode. `lgx test-pg` and `lgx smoke-pg` were not run: nothing in the backend changed. The native Wails window was not driven; e2e covers the same frontend in server mode.
+
+Issues met: a full e2e run failed two specs (`export.spec.ts`, `run-policy.spec.ts`) while a codex review was running Playwright at the same time; run alone, all 29 pass. Keep e2e runs from overlapping. The first e2e run had two wrong spec expectations of mine (the tab label's trailing space before `…`, and a statement's `title` has no semicolon), both fixed.
+
+Deviations:
+- The specs ran through `mise exec -- lgx e2e`, as the shell's `lgx` is older than the pinned version.
+- Tasks 3 and 4 shared one codex pass, and Tasks 5 and 6 another.
+- No TaskCreate tool in the session: the plan document was the only tracker.
+
+What the plan could have specified better: that `lgx` must come from mise here, and that codex reviews can run the e2e suite, so they should not overlap a local run.
