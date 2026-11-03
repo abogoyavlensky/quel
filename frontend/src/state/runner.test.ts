@@ -405,12 +405,19 @@ describe("run policy", () => {
 
   it("read-only refuses a script with a write, sending nothing", async () => {
     withPolicy("read-only");
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const before = tab();
+    api.run.mockClear();
     await runner.runStatements(tabId(), stmts("select 1; delete from t"));
     expect(api.run).not.toHaveBeenCalled();
     const t = tab();
     expect(t.messages.at(-1)).toMatchObject({ kind: "error", sql: "delete from t" });
-    expect(t.messages.at(-1)?.text).toContain("Prod is read-only");
-    expect(t.active).toBe(MESSAGES);
+    const text = t.messages.at(-1)?.text;
+    expect(text).toContain("Prod is read-only");
+    expect(toasts.error).toHaveBeenCalledWith(text, { id: "run-refused" });
+    expect(t.results).toEqual(before.results);
+    expect(t.active).toBe(before.active);
     expect(t.runningQueryId).toBeNull();
     expect(store.getState().runConfirm).toBeNull();
   });

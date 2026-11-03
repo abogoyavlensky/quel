@@ -128,9 +128,9 @@ export function answerRunConfirm(ok: boolean): void {
 // there, until an error or a cancel takes focus.
 //
 // First the profile's run policy judges the run as a whole (sql/guard.ts):
-// a refused run sends nothing and says why in the messages; a run that
-// asks waits for the dialog, and runs only if the tab is still ready on
-// the same connection. While a question is open every other run is
+// a refused run sends nothing, changes no result, and says why in a toast
+// and the messages; a run that asks waits for the dialog, and runs only if
+// the tab is still ready on the same connection. While a question is open every other run is
 // dropped, as a second run in flight is.
 export async function runStatements(tabId: string, statements: Statement[]): Promise<void> {
   if (pendingAnswer || statements.length === 0) return;
@@ -140,13 +140,9 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   const profile = store.getState().profiles.find((p) => p.id === profileId);
   const decision = gate(profile?.["run-policy"] ?? "never", statements);
   if (decision.action === "refuse") {
-    addMessage(tabId, {
-      sql: decision.statement.text,
-      kind: "error",
-      text: `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`,
-      elapsedMs: null,
-    });
-    updateTab(tabId, (t) => ({ ...t, active: MESSAGES }));
+    const text = `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`;
+    addMessage(tabId, { sql: decision.statement.text, kind: "error", text, elapsedMs: null });
+    notify.error(text, { id: "run-refused" });
     return;
   }
   if (decision.action === "confirm") {
