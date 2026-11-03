@@ -1,11 +1,39 @@
+import { Lock, ShieldAlert } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { RunPolicy } from "@/sql/guard";
+import { RUN_POLICIES } from "@/state/profileForm";
 import { connectionWords } from "@/state/status";
 import { selectedWorkspace, store, useApp } from "@/state/store";
 import { updateLabel } from "@/state/updates";
 import { engineLabel, tagInk } from "./colors";
 import { ConnMark } from "./ConnMark";
+
+// A run policy other than Never ask, at the end of the connection pill.
+// Neutral ink: colour belongs to the tag.
+const policyMark: Record<Exclude<RunPolicy, "never">, { icon: typeof Lock; text: string }> = {
+  writes: { icon: ShieldAlert, text: "Asks before changes" },
+  always: { icon: ShieldAlert, text: "Asks before every query" },
+  "read-only": { icon: Lock, text: "Read-only" },
+};
+
+function PolicyMark({ policy }: { policy: RunPolicy }) {
+  if (policy === "never") return null;
+  const { icon: Icon, text } = policyMark[policy];
+  return (
+    <>
+      <span aria-hidden className="h-3 w-px shrink-0 bg-border" />
+      <span
+        className="flex shrink-0 items-center gap-1 text-muted-foreground"
+        title={RUN_POLICIES.find((p) => p.value === policy)?.hint}
+      >
+        <Icon aria-hidden className="size-3" />
+        {text}
+      </span>
+    </>
+  );
+}
 
 // The strip across the top of the window: the selected connection, or
 // "Quel" with none. The pill names it, its engine, and, unless it is
@@ -25,6 +53,8 @@ import { ConnMark } from "./ConnMark";
 // with the same wide padding on both sides so the pill never runs under
 // the button or the lights; fullscreen, where the lights go away, needs
 // nothing. Server mode and Linux have no traffic lights; it reads the same.
+// The pill ends with the profile's run policy, unless it is Never ask
+// (PolicyMark).
 export function TitleBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
@@ -58,6 +88,7 @@ export function TitleBar() {
           </span>
           <span className="shrink-0 text-muted-foreground">{engineLabel[profile.engine]}</span>
           {words && <span className="shrink-0 text-muted-foreground">· {words}</span>}
+          <PolicyMark policy={profile["run-policy"]} />
         </span>
       ) : (
         <span className="text-muted-foreground">Quel</span>

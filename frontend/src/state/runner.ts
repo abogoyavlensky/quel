@@ -6,6 +6,7 @@ import { metaKeys, queryClient } from "@/lib/query";
 import { saveText } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
+import { gate } from "@/sql/guard";
 import type { Statement } from "@/sql/split";
 import { type RunMode, toRun } from "@/sql/target";
 import {
@@ -22,6 +23,7 @@ import {
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
+  type RunConfirm,
   type Workspace,
   activeTabOf,
   addMessage,
@@ -81,16 +83,72 @@ function aliveFn(tabId: string): () => boolean {
   return () => epochOf(tabId) === epoch && findTab(tabId) !== undefined;
 }
 
+// Whether the tab can start a run: its workspace connected and no run in
+// flight there. Its profile and connection, or null.
+function readyToRun(tabId: string): { profileId: string; connId: string; tab: EditorTab } | null {
+  const w = workspaceOfTab(tabId);
+  const tab = findTab(tabId);
+  if (!w || w.status !== "connected" || !w.connId || !tab || tab.runningQueryId) return null;
+  return { profileId: w.profileId, connId: w.connId, tab };
+}
+
+// The answer a run waits for (store's runConfirm), while one does.
+let pendingAnswer: ((ok: boolean) => void) | null = null;
+
+function askToRun(question: RunConfirm): Promise<boolean> {
+  return new Promise((resolve) => {
+    pendingAnswer = resolve;
+    store.setState({ runConfirm: question });
+  });
+}
+
+// The run confirmation dialog's answer: run (true) or not.
+export function answerRunConfirm(ok: boolean): void {
+  const answer = pendingAnswer;
+  pendingAnswer = null;
+  store.setState({ runConfirm: null });
+  answer?.(ok);
+}
+
 // Run statements one after another in the tab's session. Each one that
 // returns rows gets its own result tab; the run first drops the tab's
 // unpinned results, and the open cursors of the pinned ones are closed by
 // the backend as soon as the session runs again. The first error or a
 // cancel stops the script.
+//
+// First the profile's run policy judges the run as a whole (sql/guard.ts):
+// a refused run sends nothing and says why in the messages; a run that
+// asks waits for the dialog, and runs only if the tab is still ready on
+// the same connection. While a question is open every other run is
+// dropped, as a second run in flight is.
 export async function runStatements(tabId: string, statements: Statement[]): Promise<void> {
-  const w = workspaceOfTab(tabId);
+  if (pendingAnswer || statements.length === 0) return;
+  const ready = readyToRun(tabId);
+  if (!ready) return;
+  const { profileId, connId } = ready;
+  const profile = store.getState().profiles.find((p) => p.id === profileId);
+  const decision = gate(profile?.["run-policy"] ?? "never", statements);
+  if (decision.action === "refuse") {
+    addMessage(tabId, {
+      sql: decision.statement.text,
+      kind: "error",
+      text: `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`,
+      elapsedMs: null,
+    });
+    updateTab(tabId, (t) => ({ ...t, active: MESSAGES }));
+    return;
+  }
+  if (decision.action === "confirm") {
+    const ok = await askToRun({
+      profileId,
+      reason: decision.reason,
+      statements: decision.statements.map((s) => s.text),
+      total: statements.length,
+    });
+    if (!ok || readyToRun(tabId)?.connId !== connId) return;
+  }
   const tab = findTab(tabId);
-  if (!w || w.status !== "connected" || !w.connId || !tab || tab.runningQueryId || statements.length === 0) return;
-  const { profileId, connId } = w;
+  if (!tab) return;
   const alive = aliveFn(tabId);
 
   const firstId = newId();

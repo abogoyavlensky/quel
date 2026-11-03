@@ -1,4 +1,5 @@
 import type { Color, Engine, Profile, ProfileInput, SslMode } from "@/lib/types";
+import type { RunPolicy } from "@/sql/guard";
 
 // The profile dialog's form, as plain functions over a plain object: what
 // the inputs hold (strings, so a half-typed port stays as typed), and how
@@ -18,6 +19,7 @@ export interface ProfileForm {
   sslMode: SslMode;
   path: string;
   color: Color;
+  runPolicy: RunPolicy;
   hasPassword: boolean; // a password is saved for this profile
 }
 
@@ -30,6 +32,19 @@ export const ENGINES: { value: Engine; label: string }[] = [
 export const SSL_MODES: SslMode[] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
 
 export const COLORS: Color[] = ["none", "red", "orange", "yellow", "green", "blue", "purple"];
+
+// The run policies, in the order the Safety select lists them; hint is
+// the line under it, and the title bar's tooltip.
+export const RUN_POLICIES: { value: RunPolicy; label: string; hint: string }[] = [
+  { value: "never", label: "Never ask", hint: "Statements run as soon as you run them." },
+  { value: "writes", label: "Ask before changes", hint: "Quel asks before a statement that may change data or structure." },
+  { value: "always", label: "Ask before every query", hint: "Quel asks before every run." },
+  {
+    value: "read-only",
+    label: "Read-only",
+    hint: "Quel refuses statements that change data or structure. The database itself is not told.",
+  },
+];
 
 export const DEFAULT_PORT: Record<Engine, number | null> = { postgres: 5432, redshift: 5439, sqlite: null };
 
@@ -51,6 +66,7 @@ export function emptyForm(engine: Engine = "postgres"): ProfileForm {
     sslMode: defaultSslMode(engine),
     path: "",
     color: "none",
+    runPolicy: "never",
     hasPassword: false,
   };
 }
@@ -80,11 +96,12 @@ export function fromProfile(p: Profile): ProfileForm {
     sslMode: p["ssl-mode"] ?? defaultSslMode(p.engine),
     path: p.path ?? "",
     color: p.color,
+    runPolicy: p["run-policy"],
     hasPassword: p["has-password"],
   };
 }
 
-// Switch the engine, keeping what still applies: the name, the colour,
+// Switch the engine, keeping what still applies: the name, the colour, the run policy,
 // and the server fields between PostgreSQL and Redshift. An SSL mode left
 // at the old engine's default moves to the new one's.
 export function withEngine(form: ProfileForm, engine: Engine): ProfileForm {
@@ -117,6 +134,7 @@ export function toInput(form: ProfileForm): ProfileInput {
     "ssl-mode": server ? form.sslMode : null,
     path: server ? null : orNull(form.path),
     color: form.color,
+    "run-policy": form.runPolicy,
   };
   if (form.id) input.id = form.id;
   if (server && form.forgetPassword) input["forget-password"] = true;

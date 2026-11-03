@@ -20,8 +20,9 @@ in `docs/plans/`.
 - **Structure export**: the DDL of one object or a whole schema, viewed or
   saved to a file.
 - **Diagrams**: ER diagrams of a schema's tables, exportable.
-- **Safety**: an optional confirmation before a statement that changes
-  data or structure, and read-only connection profiles.
+- **Safety**: a run policy per connection profile: never ask, ask before
+  a statement that changes data or structure, ask before every query, or
+  read-only.
 - **Robust**: a runaway query can always be cancelled, a huge result never
   freezes the app, and a lost connection is reported, not fatal.
 
@@ -130,7 +131,6 @@ waiting on the network inside Go, not in bytecode.
 | `quel.conn` | Opens a pool per connected profile, hands out sessions, tracks connection state. |
 | `quel.exec` | Runs statements, owns the result registry, paging and cancellation. |
 | `quel.cells` | Converts driver values into the cell encoding the grid renders. |
-| `quel.classify` | Decides whether a statement reads or writes. |
 | `quel.meta` | The introspection protocol: a multimethod per operation, dispatched on `:engine`. |
 | `quel.meta.redshift`, `.sqlite`, `.postgres`, `.duckdb` | Catalog SQL and DDL generation per engine. `quel.meta.postgres` covers Redshift too until Redshift-only catalog work (dist and sort keys, external schemas) needs `quel.meta.redshift`. |
 | `quel.export` | Writing DDL and results to files. |
@@ -151,12 +151,13 @@ order: closing a session that is still running a query waits for it.
 
 A **profile** is the saved description of a database: name, engine, host
 / port / database / user or a file path, SSL mode, a colour tag
-(e.g. red for production), `:read-only?` and the confirm policy. The
+(e.g. red for production) and the run policy (see [Write
+safety](#write-safety)). The
 password lives in the Keychain under the profile id: the item's service is
 `Quel` and its account the profile id. The profile row keeps only
 `has_password`, so a profile without one never asks the Keychain, and a
-SQLite profile never has one. Names are unique, ignoring case. Read-only
-and the confirm policy arrive with milestone 2, in their own migration.
+SQLite profile never has one. Names are unique, ignoring case. The run
+policy arrived in migration 003 (`run_policy`, default `never`).
 
 A Postgres or Redshift profile connects through a key/value DSN built
 from its fields, every value quoted (`quel.conn/dsn-quote`), so no URL
@@ -241,9 +242,9 @@ of a run.
 `run` takes the tab's session-id and a frontend-generated `query-id`, so
 the query can be cancelled before its first row arrives:
 
-1. `quel.classify` checks the statement. On a read-only profile a write is
-   refused; with confirmation on, the frontend has already shown the
-   dialog (it calls `classify` first).
+1. The frontend has already checked the run against the profile's run
+   policy, asked or refused (see [Write safety](#write-safety)). The
+   backend does not classify statements.
 2. A cancellable context is created and stored under `query-id`.
 3. The statement runs on the tab's session. Row-returning statements open
    a cursor; others return an update count. `quel.exec/rows?` decides:
@@ -404,22 +405,53 @@ the tree's refresh button: running DDL does not refresh anything.
 
 ## Write safety
 
-`quel.classify` returns `:read`, `:write` or `:unknown`. It reads the
-first keyword past comments: `SELECT`, `SHOW`, `EXPLAIN`, `VALUES`,
-`TABLE`, `DESCRIBE` are reads; a `WITH` is a read unless an `INSERT`,
-`UPDATE`, `DELETE` or `MERGE` appears outside literals; SQLite `PRAGMA x`
-is a read and `PRAGMA x = y` a write; everything else is a write.
-`:unknown` is treated as a write.
+Each profile has a **run policy**, stored in the app database
+(`run_policy`) and set in the profile dialog's Safety select:
 
-Per profile:
+| Policy | Before a run |
+|---|---|
+| `never` (Never ask, the default) | Runs. |
+| `writes` (Ask before changes) | Asks if a statement is `write` or `unknown`. |
+| `always` (Ask before every query) | Asks, listing every statement, `SET` and `BEGIN` included. |
+| `read-only` | Refuses the run if a statement is `write`, naming it; asks if one is `unknown`. |
 
-- **Confirm policy**: `:never`, `:writes` (the default for profiles tagged
-  production) or `:always`. The dialog shows the statement and the
-  profile's name and colour.
-- **Read-only**: writes are refused before they are sent. Where the
-  engine can enforce it too, it does: `default_transaction_read_only` on
-  Postgres, `mode=ro` for SQLite, `access_mode=READ_ONLY` for DuckDB.
-  Redshift relies on the client check and on the user's grants.
+The colour tag implies no policy. The title bar's connection pill shows a
+policy other than Never ask (an icon and a word, in neutral ink: colour
+belongs to the tag).
+
+The frontend decides, before anything is sent. `runStatements`
+(`state/runner.ts`) is the one place every run goes through, and it
+judges the run as a whole: the statement under the cursor, the selection
+or the script gets one question, and a refused script never half-runs.
+A refusal is an error in the tab's messages. The question is an alert
+dialog naming the profile, listing up to five statements, with Cancel
+focused, so a reflexive Enter runs nothing. While it is open, other runs
+and the global shortcuts are held off. The policy is read from the
+profile at run time, so a change applies to the next run, with no
+reconnect.
+
+`frontend/src/sql/classify.ts` classifies a statement from its words
+(`tokens` in `split.ts`, which skips literals, comments and dollar
+bodies like the splitter) as `read`, `session` (`SET`, `BEGIN`, `COMMIT`,
+...), `write` or `unknown` (`CALL`, `DO`, `COPY`, ...). `SELECT ... INTO`
+writes; a `WITH` writes if an `INSERT`, `UPDATE`, `DELETE` or `MERGE`
+appears in it (`FOR UPDATE` aside); `EXPLAIN` is a read unless it
+analyzes, when it is what it explains; SQLite `PRAGMA x = y`, `PRAGMA
+x(y)` (other than the reading ones such as `table_info`) and the acting
+pragmas (`optimize`, ...) write. `guard.ts` turns the policy and the
+classes into run, ask or refuse.
+
+Read-only is a seatbelt against one's own mistakes, not a lock: Quel
+refuses before sending, and the connection itself is unchanged. It
+misses writes it cannot see, such as `select f()` where `f` writes. The
+real lock is a database role without write grants. Engine-level
+read-only was considered and left out:
+`default_transaction_read_only` as a startup parameter makes connections
+through PgBouncer fail (it refuses unknown ones), a `SET` after
+connecting leaks into other clients' sessions under transaction pooling,
+Redshift may not take it, and SQLite's `mode=ro` fails to open some WAL
+databases. And a `SET` from the editor would turn the Postgres setting
+off again anyway.
 
 ## Frontend
 
@@ -758,7 +790,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
 | Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
 | Structure | `list-schemas`, `describe-schema` (a schema's tables, views, functions, types and sequences), `describe-object` (an object's columns, indexes, keys and sequences), `completion-schema`; later `object-ddl`, `schema-ddl`, `diagram-model` |
-| Execution | `classify`, `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
+| Execution | `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-result` (the format, a suggested file name and the text; a save dialog; the path, or nil when canceled); `export-ddl` is planned and will open a save dialog too |
 | History | `list-history`, `clear-history` |
 | Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
@@ -940,6 +972,7 @@ package feature, not app glue.
    procedures, table info; DDL view and export; write confirmation and
    read-only profiles; `Cmd+K`. Indexes, keys, functions, types and
    sequences in the tree done 2026-11-02; dist and sort keys backlogged.
+   Run policies (confirmation and read-only) done 2026-11-02.
 3. **PostgreSQL and DuckDB.**
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
    JSON; copy-as formats. Results to CSV, JSON and Markdown (copy or save)
@@ -984,7 +1017,7 @@ settles them; update this section when it does.
   cancel can arrive before the first row. The session stays usable.
 - `sql.core/returns-rows?` misroutes two SQLite cases: `PRAGMA` returns
   rows, and a `WITH` whose outer statement writes does not.
-  `quel.exec/rows?` handles both; `quel.classify` will build on it.
+  `quel.exec/rows?` handles both.
 - let-go 1.13.0's `(str (random-uuid))` is the tagged `#uuid "..."` form,
   unlike Clojure's; `quel.conn` extracts the bare UUID.
 - The native macOS window (macOS 26.7.1, arm64; 2026-10-21): the wails

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { split } from "./split";
+import { split, tokens } from "./split";
 
 const texts = (sql: string) => split(sql).map((s) => s.text);
 
@@ -133,5 +133,28 @@ describe("split", () => {
   it("handles empty input", () => {
     expect(split("")).toEqual([]);
     expect(split("   \n")).toEqual([]);
+  });
+});
+
+describe("tokens", () => {
+  it("keeps words, parentheses and = outside literals and comments", () => {
+    expect(tokens("Select a, 'x;y' /* c */ from \"T\" -- z\n where b = $q$ drop $q$")).toEqual([
+      "select",
+      "a",
+      "from",
+      '"t',
+      "where",
+      "b",
+      "=",
+    ]);
+  });
+
+  it("skips E-strings with escaped quotes and nested comments", () => {
+    expect(tokens("select E'it\\'s delete' /* a /* b */ drop */ (x)")).toEqual(["select", "(", "x", ")"]);
+  });
+
+  it("collapses a doubled quote in a quoted identifier", () => {
+    expect(tokens('pragma "Opt""imize"')).toEqual(["pragma", '"opt"imize']);
+    expect(tokens("select `Del`")).toEqual(["select", '"del']);
   });
 });

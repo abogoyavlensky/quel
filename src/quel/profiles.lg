@@ -11,16 +11,24 @@
 ;;
 ;;   {:id "6f1c…" :name "Warehouse" :engine "redshift"
 ;;    :host "wh.example.com" :port 5439 :database "dev" :user "admin"
-;;    :ssl-mode "require" :path nil :color "red" :has-password true}
+;;    :ssl-mode "require" :path nil :color "red" :run-policy "writes"
+;;    :has-password true}
 ;;
 ;; The password is not part of it: it lives in the Keychain (quel.secrets)
 ;; under the profile's id, and has-password says whether one is saved. A
 ;; profile from the frontend arrives as a map with string keys and may
 ;; carry a "password" and "forget-password"; normalize reads both.
+;;
+;; :run-policy is what the editor does before a run on the profile:
+;; "never" runs, "writes" asks before statements that may change data or
+;; structure, "always" asks before every run, and "read-only" refuses
+;; writes. The frontend classifies and decides (frontend/src/sql/guard.ts);
+;; the backend only stores it.
 
 (def engines #{"sqlite" "postgres" "redshift"})
 (def ssl-modes ["disable" "allow" "prefer" "require" "verify-ca" "verify-full"])
 (def colors ["none" "red" "orange" "yellow" "green" "blue" "purple"])
+(def run-policies ["never" "writes" "always" "read-only"])
 (def default-ports {"postgres" 5432 "redshift" 5439})
 
 (defn- field
@@ -66,6 +74,7 @@
      :ssl-mode (text (field m :ssl-mode))
      :path (text (field m :path))
      :color (text (field m :color))
+     :run-policy (text (field m :run-policy))
      :password (when (string? pw) pw)
      :forget-password? (true? (field m :forget-password))}))
 
@@ -86,14 +95,14 @@
     :else [:keep]))
 
 (def ^:private columns
-  "id, name, engine, host, port, database, user_name, ssl_mode, path, color, has_password")
+  "id, name, engine, host, port, database, user_name, ssl_mode, path, color, run_policy, has_password")
 
 (defn- row->profile [r]
   (when r
     {:id (:id r) :name (:name r) :engine (:engine r)
      :host (:host r) :port (:port r) :database (:database r)
      :user (:user_name r) :ssl-mode (:ssl_mode r) :path (:path r)
-     :color (:color r) :has-password (= 1 (:has_password r))}))
+     :color (:color r) :run-policy (:run_policy r) :has-password (= 1 (:has_password r))}))
 
 (defn list-all
   "Every profile, by name."
@@ -116,18 +125,20 @@
    With :unique? (the default), the name must not be another profile's,
    ignoring case."
   ([db p] (validate db p {:unique? true}))
-  ([db {:keys [id name engine port ssl-mode color] :as p} {:keys [unique?]}]
+  ([db {:keys [id name engine port ssl-mode color run-policy] :as p} {:keys [unique?]}]
    (when-not name
      (throw (ex-info "A name is required." {})))
    (when-not (contains? engines engine)
      (throw (ex-info "Choose a database type: SQLite, PostgreSQL or Redshift." {:engine engine})))
    (when (and color (not (some #{color} colors)))
      (throw (ex-info (str "Unknown colour " color ".") {:color color})))
+   (when (and run-policy (not (some #{run-policy} run-policies)))
+     (throw (ex-info (str "Unknown run policy " run-policy ".") {:run-policy run-policy})))
    (when (and unique?
               (sql/execute-one! db ["select id from profiles where name = ? collate nocase and id <> ?"
                                     name (or id "")]))
      (throw (duplicate-name name)))
-   (let [p (assoc p :color (or color "none"))]
+   (let [p (assoc p :color (or color "none") :run-policy (or run-policy "never"))]
      (if (= "sqlite" engine)
        (do (when-not (:path p)
              (throw (ex-info "A file path is required." {})))
@@ -163,16 +174,16 @@
 (defn- unique-violation? [e]
   (str/includes? (str (ex-message e)) "UNIQUE constraint failed: profiles.name"))
 
-(defn- write-row! [db new? {:keys [id name engine host port database user ssl-mode path color]} has-password]
-  (let [vals [name engine host port database user ssl-mode path color (if has-password 1 0)]]
+(defn- write-row! [db new? {:keys [id name engine host port database user ssl-mode path color run-policy]} has-password]
+  (let [vals [name engine host port database user ssl-mode path color run-policy (if has-password 1 0)]]
     (if new?
       (sql/execute! db (into [(str "insert into profiles (name, engine, host, port, database, user_name,"
-                                   " ssl_mode, path, color, has_password, id)"
-                                   " values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")]
+                                   " ssl_mode, path, color, run_policy, has_password, id)"
+                                   " values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")]
                              (conj vals id)))
       (sql/execute! db (into [(str "update profiles set name = ?, engine = ?, host = ?, port = ?,"
                                    " database = ?, user_name = ?, ssl_mode = ?, path = ?, color = ?,"
-                                   " has_password = ? where id = ?")]
+                                   " run_policy = ?, has_password = ? where id = ?")]
                              (conj vals id))))))
 
 (defn- restore-password!

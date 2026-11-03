@@ -1,6 +1,8 @@
 // The shapes the backend handlers return (quel.api). Keys are let-go
 // keywords on the backend; the bridge lowers them to these strings.
 
+import type { RunPolicy } from "@/sql/guard";
+
 export type Cell = string | number | boolean | null;
 
 export interface Column {
@@ -143,6 +145,9 @@ export interface Profile {
   "ssl-mode": SslMode | null;
   path: string | null; // SQLite only
   color: Color;
+  // What the editor does before a run here: runs, asks, or refuses
+  // writes (sql/guard.ts). The backend only stores it.
+  "run-policy": RunPolicy;
   "has-password": boolean;
 }
 
@@ -160,6 +165,7 @@ export interface ProfileInput {
   "ssl-mode": SslMode | null;
   path: string | null;
   color: Color;
+  "run-policy": RunPolicy;
   password?: string;
   "forget-password"?: boolean;
 }

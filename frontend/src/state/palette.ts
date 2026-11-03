@@ -8,7 +8,7 @@ import { store, selectedWorkspace, showsResult, type AppState } from "@/state/st
 
 // A dialog has the keyboard: the editor and tab keys leave it alone.
 export function modalOpen(s: AppState): boolean {
-  return s.profileDialog !== null || s.updateDialogOpen || s.palette !== null;
+  return s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null || s.palette !== null;
 }
 
 // Where focus was before the first palette opened. A Radix dialog only
@@ -19,7 +19,7 @@ let before: HTMLElement | null = null;
 // and update dialogs, whether the key or the native menu asks.
 export function openPalette(kind: "commands" | "connections"): void {
   const s = store.getState();
-  if (s.profileDialog !== null || s.updateDialogOpen) return;
+  if (s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null) return;
   if (s.palette === null) {
     before = document.activeElement as HTMLElement | null;
   }
