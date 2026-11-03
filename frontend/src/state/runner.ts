@@ -1,6 +1,7 @@
 import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
 import * as api from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
+import { type Lost, lostOf } from "@/lib/lost";
 import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
 import { saveText } from "@/lib/save";
@@ -150,6 +151,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   const tab = findTab(tabId);
   if (!tab) return;
   const alive = aliveFn(tabId);
+  notify.dismiss(lostToastId(tabId));
 
   const firstId = newId();
   for (const r of tab.results) {
@@ -223,12 +225,17 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       } catch (e) {
         if (!alive()) return;
         const text = errorText(e);
-        addMessage(tabId, {
-          sql: stmt.text,
-          kind: text.startsWith("Query canceled.") ? "canceled" : "error",
-          text,
-          elapsedMs: null,
-        });
+        const lost = lostOf(e);
+        if (lost?.reconnected && !lost.canceled) {
+          addLost(tabId, stmt.text, text, lost, lost.notRun ? statements.slice(i) : undefined);
+        } else {
+          addMessage(tabId, {
+            sql: stmt.text,
+            kind: text.startsWith("Query canceled.") ? "canceled" : "error",
+            text,
+            elapsedMs: null,
+          });
+        }
         failed = true;
         break;
       }
@@ -245,6 +252,40 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       }));
     }
   }
+}
+
+// A tab's lost-connection toast: one per tab, replaced by the next loss and
+// dismissed by the next run.
+const lostToastId = (tabId: string) => `lost-${tabId}`;
+
+// The connection under a statement or page read was lost, and the backend
+// reconnected the tab. A notice in the messages, and a toast; both offer
+// Run again when nothing was run (rerun: that statement and the rest of
+// its script).
+function addLost(tabId: string, sql: string, text: string, lost: Lost, rerun?: Statement[]): void {
+  const messageId = addMessage(tabId, { sql, kind: "lost", text, elapsedMs: null, lost, rerun });
+  const title = findTab(tabId)?.title ?? "Query";
+  notify.info(`${title}: connection restored.`, {
+    id: lostToastId(tabId),
+    action: rerun ? { label: "Run again", onClick: () => void rerunLost(tabId, messageId) } : undefined,
+  });
+}
+
+// Whether a lost-connection message can still be run again: it is the
+// tab's newest message, it has statements to rerun, and nothing runs.
+export function canRerunLost(t: EditorTab, messageId: string): boolean {
+  const last = t.messages.at(-1);
+  return last?.id === messageId && !!last.rerun?.length && t.runningQueryId === null;
+}
+
+// Run again what a lost connection kept from running. A normal run: the
+// run policy judges it again. A stale click (a run since, the tab busy)
+// does nothing.
+export async function rerunLost(tabId: string, messageId: string): Promise<void> {
+  const t = findTab(tabId);
+  if (!t || !canRerunLost(t, messageId)) return;
+  const m = t.messages.at(-1);
+  if (m?.rerun) await runStatements(tabId, m.rerun);
 }
 
 // Run from the selected workspace's active editor: the statement under the
@@ -308,12 +349,17 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
     if (!alive()) return;
     const text = errorText(e);
     updateResult(tabId, resultId, (r) => (r.cursor === "open" ? { ...r, cursor: "closed" } : r));
-    addMessage(tabId, {
-      sql: result.sql,
-      kind: text.startsWith("Query canceled.") ? "canceled" : "error",
-      text,
-      elapsedMs: null,
-    });
+    const lost = lostOf(e);
+    if (lost?.reconnected && !lost.canceled) {
+      addLost(tabId, result.sql, text, lost);
+    } else {
+      addMessage(tabId, {
+        sql: result.sql,
+        kind: text.startsWith("Query canceled.") ? "canceled" : "error",
+        text,
+        elapsedMs: null,
+      });
+    }
   } finally {
     if (alive()) {
       updateResult(tabId, resultId, (r) => ({ ...r, fetching: false }));
