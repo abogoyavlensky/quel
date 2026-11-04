@@ -981,6 +981,26 @@ describe("exportResult", () => {
     expect(tab().exporting).toBeNull();
   });
 
+  it("a tab back from a failed close can export again", async () => {
+    const id = await openResult();
+    const tid = tabId();
+    runner.newTab();
+    runner.selectTab(tid);
+    const saved = deferred<string>();
+    save.saveChunks.mockReturnValue(saved.promise);
+    const exporting = runner.exportResult(tid, id, "save");
+    await vi.waitFor(() => expect(save.saveChunks).toHaveBeenCalled());
+    const closed = deferred<null>();
+    api.closeTab.mockReturnValueOnce(closed.promise);
+    const closing = runner.closeTab(tid);
+    // The export ends while the tab is gone, then the close fails.
+    saved.resolve("/tmp/result.csv");
+    await exporting;
+    closed.reject(new Error("no"));
+    await closing;
+    expect(ws().tabs.find((t) => t.id === tid)?.exporting).toBeNull();
+  });
+
   it("exports one result of a tab at a time, from the click on", async () => {
     const id = await openResult(500, true);
     const p = deferred<ReturnType<typeof page>>();

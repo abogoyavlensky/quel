@@ -517,7 +517,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   Expected: only `exportResult` in `state/runner.ts`, `state/runner.test.ts` and `ExportMenu.tsx`, which is the runner's own function.
 
 - [ ] **Step 3: Manual check on a Mac**
-  This cannot run here, so hand it to the user and say so. Run `lgx run`, connect to a SQLite database, and run:
+  This cannot run here, so hand it to the user and say so. It must use the shipped build: `lgx package-macos`, then `lgx verify-macos`, then open the ad-hoc signed copy of `dist/Quel.app`. `lgx run` uses the VM and would miss a failure in the native build. Connect to a SQLite database and run:
   ```sql
   with recursive c(x) as (select 1 union all select x + 1 from c where x < 25000)
   select x, printf('%.*c', 4000, 'x') as payload from c
@@ -530,9 +530,13 @@ Saving a result no longer fails at Wails' 64 MiB cap on one runtime call. The fr
 
 Verified: 183 backend tests, 509 frontend tests, `lgx smoke` (over 70 MiB through the real transport, size and SHA-256 compared; sent as one call the same step fails with "assembled body too large"), and `lgx e2e` (30 passed, the Postgres-only spec skipped). One-off, not kept: in Chromium against server mode, with the webview check spoofed and `export-begin` redefined over the nREPL to skip the dialog, a 40,000-row, 106 MB CSV saved through `saveChunks` and the real bridge with a matching SHA-256 and the footer counting up.
 
-Not verified: the native dialog and WKWebView, which need the Mac check in Task 8.
+`lgx build` passes, with `quel.export` lowered. Its production binary has no nREPL to start an export, so a small native program built at the same let-go commit ran the same calls (`spit`, `open` with `:append`, `with-open`, `write!`, `os/rename`, `delete-file`, `swap-vals!`) and they behave as they do on the VM.
+
+Not verified: the native dialog and WKWebView, and the export code itself in the native binary, which need the Mac check in Task 8.
 
 Issues: the first backend commit leaves the frontend calling a removed handler until Task 4, as the plan's task order implies (Codex flagged it, and Task 4 resolves it).
+
+The whole-branch Codex review found one bug, fixed with a test: a tab restored after a failed close kept its `exporting` mark from the snapshot, which disabled Copy and Save for good.
 
 Deviations:
 - The plan was already committed on master (`b790a91`), so the branch starts from it.
@@ -542,4 +546,4 @@ Deviations:
 - The smoke step has its own `if` on the nREPL client, with its own skip message, rather than sitting inside the redefinition's branch.
 - `lgx e2e` takes no arguments, so Task 5's new test was confirmed in the full run.
 
-What the plan could have specified better: `formatResult` blocking the main thread should have been caught in the first design, since it made any progress UI impossible without chunking, and the 300 ms `useDelayed` hides the status for the first moments of an export, which a test has to allow for.
+What the plan could have specified better: `formatResult` blocking the main thread should have been caught in the first design, since it made any progress UI impossible without chunking, and the plan should have checked its new let-go calls against the native build, which runs differently from every test task, and listed `closeTab`'s tab snapshot among the places a new `EditorTab` field must be handled.

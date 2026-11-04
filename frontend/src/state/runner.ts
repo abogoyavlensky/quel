@@ -509,7 +509,8 @@ export async function closeTab(tabId: string): Promise<void> {
     seed(tabId, text, selection);
     // As it was, less the run: cancelled above, and ended by the epoch, so
     // its statement shows as canceled. A result whose page was in flight is
-    // closed: that page is dropped, so reading on would skip its rows.
+    // closed: that page is dropped, so reading on would skip its rows. Less
+    // the export too: while the tab was gone it could not clear its own mark.
     for (const r of tab.results) {
       if (r.kind === "rows" && r.fetching && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
     }
@@ -518,6 +519,7 @@ export async function closeTab(tabId: string): Promise<void> {
       runningQueryId: null,
       stopping: false,
       runStartedAt: null,
+      exporting: null,
       results: tab.results.map((r): ResultTab => {
         if (r.kind === "running") return { ...resultBase(r), kind: "canceled", text: "Query canceled." };
         return r.kind === "rows" && r.fetching

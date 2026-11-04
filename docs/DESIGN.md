@@ -141,10 +141,10 @@ waiting on the network inside Go, not in bytecode.
 | `quel.dev` | nREPL and the window reload on frontend rebuilds, under `lgx run` only. |
 
 Integrant components: `:quel.store/db`, `:quel.conn/registry`,
-`:quel.exec/registry`, `:quel.api/handlers`, `:quel.shell/app`,
+`:quel.exec/registry`, `:quel.export/registry`, `:quel.api/handlers`, `:quel.shell/app`,
 `:quel.shell/window`, `:quel.menu/menu`, `:quel.updates/updater`, `:quel.dev/loop`. Halting the system
-cancels running queries, closes open cursors, closes every pool, then the
-app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
+cancels running queries, closes open cursors, drops unfinished exports' part
+files, closes every pool, then the app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
 order: closing a session that is still running a query waits for it.
 
 ## Connections and sessions
