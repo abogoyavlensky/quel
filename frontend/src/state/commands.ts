@@ -5,6 +5,7 @@ import {
   NEW_TAB_KEY,
   REOPEN_KEY,
   RESULT_KEY,
+  RESULTS_PANE_KEY,
   ROW_KEY,
   RUN_KEY,
   SCRIPT_KEY,
@@ -12,7 +13,7 @@ import {
   STOP_KEY,
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
-import { sidebarShown, toggleSidebar } from "./layout";
+import { sidebarShown, toggleResults, toggleSidebar } from "./layout";
 import { focusResult, openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
@@ -202,6 +203,16 @@ export function commands(s: AppState): Command[] {
       title: sidebarShown(s) ? "Hide Sidebar" : "Show Sidebar",
       keys: SIDEBAR_KEY,
       run: toggleSidebar,
+    },
+  );
+  add(
+    loaded && {
+      id: "results",
+      keepsFocus: true,
+      group: "View",
+      title: s.resultsHidden ? "Show Results" : "Hide Results",
+      keys: RESULTS_PANE_KEY,
+      run: toggleResults,
     },
   );
 
