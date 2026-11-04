@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HistoryIcon, PanelLeft, PanelRight, Pin, Plus, X } from "lucide-react";
+import { HistoryIcon, PanelBottom, PanelLeft, PanelRight, Pin, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ClosedTab } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { sidebarShown, toggleSidebar } from "@/state/layout";
+import { sidebarShown, toggleResults, toggleSidebar } from "@/state/layout";
 import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin, toggleRowDetails } from "@/state/runner";
 import { type EditorTab, type Workspace, useApp } from "@/state/store";
-import { ROW_KEY, SIDEBAR_KEY } from "./keys";
+import { RESULTS_PANE_KEY, ROW_KEY, SIDEBAR_KEY } from "./keys";
 
 // The selected workspace's editor tabs. Each is its own database session:
 // SET, temp tables and an open transaction stay in the tab they were made in.
@@ -122,6 +122,7 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
       <div className="flex-1" />
       <ClosedTabsMenu closed={closed} />
       <SidebarToggle />
+      <ResultsToggle />
       <RowDetailsToggle />
     </div>
   );
@@ -179,8 +180,8 @@ function firstLine(body: string): string {
   );
 }
 
-// Hides and shows the sidebar on the left. It sits by the row details
-// toggle so the panel buttons are together.
+// Hides and shows the sidebar on the left. The three panel toggles sit
+// together, in the order of their panels: left, bottom, right.
 function SidebarToggle() {
   const shown = useApp(sidebarShown);
   return (
@@ -194,6 +195,24 @@ function SidebarToggle() {
       className={cn(shown && "bg-muted text-foreground")}
     >
       <PanelLeft />
+    </Button>
+  );
+}
+
+// Hides and shows the results under the editor.
+function ResultsToggle() {
+  const shown = useApp((s) => !s.resultsHidden);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Results"
+      aria-pressed={shown}
+      title={`Results (${RESULTS_PANE_KEY})`}
+      onClick={toggleResults}
+      className={cn(shown && "bg-muted text-foreground")}
+    >
+      <PanelBottom />
     </Button>
   );
 }

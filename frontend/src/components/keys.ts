@@ -12,3 +12,4 @@ export const GOTO_KEY = isMac ? "⌘P" : "Ctrl+P";
 export const FOCUS_KEY = isMac ? "⌘E" : "Ctrl+E";
 export const RESULT_KEY = isMac ? "⌘R" : "Ctrl+R";
 export const SIDEBAR_KEY = isMac ? "⌘B" : "Ctrl+B";
+export const RESULTS_PANE_KEY = isMac ? "⌘J" : "Ctrl+J";

@@ -4,8 +4,9 @@ const focusEditor = vi.hoisted(() => vi.fn());
 vi.mock("@/editor/states", () => ({ focusEditor }));
 const selectTab = vi.hoisted(() => vi.fn());
 vi.mock("@/state/runner", () => ({ selectTab }));
-const toggleSidebar = vi.hoisted(() => vi.fn());
-vi.mock("./layout", () => ({ toggleSidebar }));
+const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn(), toggleResults: vi.fn(), showResults: vi.fn() }));
+vi.mock("./layout", () => layout);
+const { toggleSidebar, toggleResults, showResults } = layout;
 
 import {
   closePalette,
@@ -15,6 +16,7 @@ import {
   modalOpen,
   openPalette,
   restoreFocus,
+  toggleResultsKey,
   toggleSidebarKey,
 } from "./palette";
 import { MESSAGES, initialState, newTabState, newWorkspace, store } from "./store";
@@ -35,6 +37,8 @@ beforeEach(() => {
   focusEditor.mockReset();
   selectTab.mockReset();
   toggleSidebar.mockReset();
+  toggleResults.mockReset();
+  showResults.mockReset().mockImplementation(() => store.setState({ resultsHidden: false }));
   vi.stubGlobal("document", { activeElement: null });
   store.setState(initialState(), true);
 });
@@ -108,6 +112,25 @@ describe("focusResultKey", () => {
     expect(el.focus).toHaveBeenCalledOnce();
   });
 
+  it("shows hidden results first, and focuses on the next tick", () => {
+    withResult("r1");
+    store.setState({ resultsHidden: true });
+    const el = grid();
+    focusResultKey();
+    expect(store.getState().resultsHidden).toBe(false);
+    expect(el.focus).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(el.focus).toHaveBeenCalledOnce();
+  });
+
+  it("leaves results hidden where there is no grid to focus", () => {
+    withResult(MESSAGES);
+    store.setState({ resultsHidden: true });
+    focusResultKey();
+    expect(store.getState().resultsHidden).toBe(true);
+    expect(showResults).not.toHaveBeenCalled();
+  });
+
   it("does nothing on a result with no rows", () => {
     const el = grid();
     withResult("r1", "update");
@@ -139,6 +162,19 @@ describe("toggleSidebarKey", () => {
     store.setState({ palette: null, profileDialog: { mode: "new" } });
     toggleSidebarKey();
     expect(toggleSidebar).toHaveBeenCalledOnce();
+  });
+});
+
+describe("toggleResultsKey", () => {
+  it("toggles the results, not under a dialog or palette", () => {
+    seed();
+    toggleResultsKey();
+    expect(toggleResults).toHaveBeenCalledOnce();
+    store.setState({ palette: "connections" });
+    toggleResultsKey();
+    store.setState({ palette: null, profileDialog: { mode: "new" } });
+    toggleResultsKey();
+    expect(toggleResults).toHaveBeenCalledOnce();
   });
 });
 

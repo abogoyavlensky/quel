@@ -43,6 +43,14 @@ describe("shortcutOf", () => {
     expect(shortcutOf(ev("b", { ...cmd, altKey: true }), true)).toBeNull();
   });
 
+  it("hides and shows the results on ⌘J, and on Ctrl+J off macOS", () => {
+    expect(shortcutOf(ev("j", cmd), true)).toEqual({ kind: "resultsPane" });
+    expect(shortcutOf(ev("j", ctrl), false)).toEqual({ kind: "resultsPane" });
+    expect(shortcutOf(ev("j", ctrl), true)).toBeNull();
+    expect(shortcutOf(ev("J", { ...cmd, shiftKey: true }), true)).toBeNull();
+    expect(shortcutOf(ev("j", { ...cmd, altKey: true }), true)).toBeNull();
+  });
+
   it("picks a tab on ⌘1–⌘9, by code", () => {
     expect(shortcutOf(ev("1", { ...cmd, code: "Digit1" }), true)).toEqual({ kind: "tab", n: 1 });
     expect(shortcutOf(ev("&", { ...cmd, code: "Digit1" }), true)).toEqual({ kind: "tab", n: 1 });

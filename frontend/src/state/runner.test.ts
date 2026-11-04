@@ -418,6 +418,16 @@ describe("a lost connection", () => {
     expect(toasts.dismiss).toHaveBeenCalledWith(`lost-${tabId()}`);
   });
 
+  it("Run again shows hidden results", async () => {
+    api.run.mockRejectedValueOnce(lostErr({}));
+    await runner.runStatements(tabId(), stmts("select 2"));
+    const lostId = tab().messages.at(-1)!.id;
+    api.run.mockResolvedValue(rowsResult(1, false));
+    store.setState({ resultsHidden: true });
+    await runner.rerunLost(tabId(), lostId);
+    expect(store.getState().resultsHidden).toBe(false);
+  });
+
   it("a stale Run again does nothing", async () => {
     api.run.mockRejectedValueOnce(lostErr({}));
     await runner.runStatements(tabId(), stmts("select 2"));
@@ -487,6 +497,35 @@ describe("run policy", () => {
     });
   // Let the runner reach its question.
   const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("shows hidden results for a read-only refusal", async () => {
+    withPolicy("read-only");
+    store.setState({ resultsHidden: true });
+    await runner.runStatements(tabId(), stmts("delete from t"));
+    expect(store.getState().resultsHidden).toBe(false);
+  });
+
+  it("shows hidden results once the question is answered Yes, not before", async () => {
+    withPolicy("writes");
+    api.run.mockResolvedValue(update(1));
+    store.setState({ resultsHidden: true });
+    const running = runner.runStatements(tabId(), stmts("delete from t"));
+    await settle();
+    expect(store.getState().resultsHidden).toBe(true);
+    runner.answerRunConfirm(true);
+    await running;
+    expect(store.getState().resultsHidden).toBe(false);
+  });
+
+  it("leaves results hidden on No", async () => {
+    withPolicy("writes");
+    store.setState({ resultsHidden: true });
+    const running = runner.runStatements(tabId(), stmts("delete from t"));
+    await settle();
+    runner.answerRunConfirm(false);
+    await running;
+    expect(store.getState().resultsHidden).toBe(true);
+  });
 
   it("read-only refuses a script with a write, sending nothing", async () => {
     withPolicy("read-only");
@@ -565,6 +604,43 @@ describe("run policy", () => {
     await runner.runStatements(tabId(), stmts("drop table t"));
     expect(api.run).toHaveBeenCalledTimes(1);
     expect(store.getState().runConfirm).toBeNull();
+  });
+});
+
+describe("hidden results", () => {
+  beforeEach(() => store.setState({ resultsHidden: true }));
+  const hidden = () => store.getState().resultsHidden;
+
+  it("show again when a run starts", async () => {
+    api.run.mockResolvedValue(rowsResult(1, false));
+    editor.input = { text: "select 1", selection: { from: 0, to: 0 } };
+    await runner.runCurrent("statement");
+    expect(hidden()).toBe(false);
+  });
+
+  it("show again for a run refused while not connected", async () => {
+    await runner.disconnectProfile("p1");
+    await runner.runCurrent("statement");
+    expect(hidden()).toBe(false);
+  });
+
+  it("stay hidden with nothing to run", async () => {
+    editor.input = { text: "  ", selection: { from: 0, to: 0 } };
+    await runner.runCurrent("statement");
+    expect(api.run).not.toHaveBeenCalled();
+    expect(hidden()).toBe(true);
+  });
+
+  it("stay hidden when the tab is already running", async () => {
+    const held = deferred<RunResult>();
+    api.run.mockReturnValueOnce(held.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    store.setState({ resultsHidden: true });
+    await runner.runStatements(tabId(), stmts("select 2"));
+    expect(hidden()).toBe(true);
+    held.resolve(rowsResult(1, false));
+    await running;
+    expect(hidden()).toBe(true);
   });
 });
 
