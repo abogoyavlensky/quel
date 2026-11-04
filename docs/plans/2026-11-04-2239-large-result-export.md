@@ -306,7 +306,7 @@ Work on a branch `large-result-export`, cut from master.
 - Modify: `src/quel/export.lg`
 - Test: `test/quel/export_test.lg`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Replace `write-saves-the-text-as-it-is` and add, each on a `temp-dir` with `(ig/init-key :quel.export/registry {})`. To find part files, list the temp dir; the tests assert it holds only the expected files.
   - begin, append twice (one with `"Zoë — 日本"`), finish: the target holds the text exactly, `finish!` returns the path, the dir holds only the target.
   - An existing target keeps its content after `begin!` and `append!`, and after `abort!`; it is replaced only by `finish!`.
@@ -318,11 +318,11 @@ Work on a branch `large-result-export`, cut from master.
   - A rename failure: make the target a non-empty directory, begin, finish. `finish!` throws, the part file is gone, the registry is empty.
   - `(ig/halt-key! :quel.export/registry exports)` deletes the part file of an open export.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test`
   Expected: the new tests in `quel.export-test` FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   In `src/quel/export.lg`: require `integrant.core :as ig`, update the namespace comment (the frontend formats and sends the text in pieces; this side asks where to save and writes it), remove `write!`, and add `part-path` (of a path and an id), `begin!`, `append!`, `finish!`, `abort!` and the `::registry` `init-key` (`(atom {})`) and `halt-key!`, as the Design says.
 
 Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite cannot load until Task 2 replaces it, and removing `write!` cannot wait: it shadows the core `write!` that `append!` needs. Tasks 1 and 2 are one commit.
@@ -333,22 +333,22 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `src/quel/api.lg`, `src/quel/system.lg`
 - Test: `test/quel/api_test.lg`, `test/quel/system_test.lg`
 
-- [ ] **Step 1: Update the tests**
+- [x] **Step 1: Update the tests**
   - `api_test.lg` `with-env`: add `exports (ig/init-key :quel.export/registry {})`, pass `:exports exports`, halt it in `finally`. Update the comment that says `choose-file` is the one handler needing `:app` (`export-begin` needs it too).
   - `every-handler-is-a-var`: replace `"export-result"` with `"export-begin" "export-append" "export-finish" "export-abort"`.
   - Add a test that seeds with `quel.export/begin!` on a temp path, then calls `api/export-append` twice with its id and `api/export-finish` and checks the file, and one that `api/export-abort` leaves no part file.
   - `system_test.lg`: add `:quel.export/registry` to the expected keys, and check `:exports` is a ref to it in `the-handlers-see-the-store-secrets-and-app`.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
   - `src/quel/api.lg`: replace `export-result` with the four handlers and update the `handlers` map. Register by var as the map already does.
   - `src/quel/system.lg`: require `[quel.export]`, add `:quel.export/registry {}` to `config`, add `:exports (ig/ref :quel.export/registry)` to `:quel.api/handlers`.
 
-- [ ] **Step 3: Run the tests to verify they pass**
+- [x] **Step 3: Run the tests to verify they pass**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test`
   Expected: PASS, including every test from Task 1.
 
-- [ ] **Step 4: Commit Tasks 1 and 2 together**
+- [x] **Step 4: Commit Tasks 1 and 2 together**
   `git commit -m "Write exports through a part file, in begin, append and finish steps"`
 
 ### Task 3: Format in chunks
