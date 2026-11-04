@@ -109,13 +109,15 @@ The ladder and the settings are pure or database-backed, so backend tests cover 
 **Files:**
 - Modify: `lgx.edn`
 
-- [ ] **Step 1: Confirm the branch.** Run: `git branch --show-current`. Expected: `zoom-and-window-state`, which holds this plan's commit. Run `git merge --ff-only origin/master` if master has moved.
+- [x] **Step 1: Confirm the branch.** Run: `git branch --show-current`. Expected: `zoom-and-window-state`, which holds this plan's commit. Run `git merge --ff-only origin/master` if master has moved.
 
-- [ ] **Step 2: Bump the tag.** In `lgx.edn`, change `abogoyavlensky/letgo-wails` to `:git/tag "wails-v0.9.0"`.
+- [x] **Step 2: Bump the tag.** In `lgx.edn`, change `abogoyavlensky/letgo-wails` to `:git/tag "wails-v0.9.0"`.
 
-- [ ] **Step 3: Run the backend tests.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: PASS.
+- [x] **Step 3: Run the backend tests.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: PASS.
 
-- [ ] **Step 4: Commit.** `git commit -am "Move to wails-v0.9.0"`
+- [x] **Step 4: Commit.** `git commit -am "Move to wails-v0.9.0"`
+
+> Deviation: skipped the blocking review for this one-line tag bump.
 
 ### Task 3: The ladder and the settings
 
@@ -137,7 +139,7 @@ The namespace holds these, and requires only `sql.core`:
 (state-of maximised? fullscreen?) ; fullscreen wins, then maximised, else :normal
 ```
 
-- [ ] **Step 1: Write the failing tests** in `test/quel/window_test.lg`, using a temp `:dir` store as `workspace_test.lg` does. Cover:
+- [x] **Step 1: Write the failing tests** in `test/quel/window_test.lg`, using a temp `:dir` store as `workspace_test.lg` does. Cover:
   - `next-zoom` walks up to 1.5 and stays there, walks down to 1.0 and stays there, `"reset"` answers 1.0 from anywhere, and an unknown direction throws.
   - A fresh database reads 1.0 and `:normal`.
   - Both settings round-trip, and the default values leave no row.
@@ -145,13 +147,13 @@ The namespace holds these, and requires only `sql.core`:
   - A stored `window-state` of `"sideways"` reads `:normal`.
   - `state-of` for all four inputs.
 
-- [ ] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL, `quel.window` not found.
+- [x] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL, `quel.window` not found.
 
-- [ ] **Step 3: Implement `src/quel/window.lg`.** `parse-double` answers nil for unreadable text. Snap by the smallest absolute difference. Upsert as `set-sidebar-hidden!` does. Add a header comment on why zoom is capped at 150% and starts at 100%, and update the `settings` comment at the top of `workspace.lg`, which lists what the table keeps.
+- [x] **Step 3: Implement `src/quel/window.lg`.** `parse-double` answers nil for unreadable text. Snap by the smallest absolute difference. Upsert as `set-sidebar-hidden!` does. Add a header comment on why zoom is capped at 150% and starts at 100%, and update the `settings` comment at the top of `workspace.lg`, which lists what the table keeps.
 
-- [ ] **Step 4: Run the tests.** Same command. Expected: PASS.
+- [x] **Step 4: Run the tests.** Same command. Expected: PASS.
 
-- [ ] **Step 5: Commit.** `git commit -m "Add the zoom ladder and window-state settings"`
+- [x] **Step 5: Commit.** `git commit -m "Add the zoom ladder and window-state settings"`
 
 ### Task 4: Start state, handlers, wiring
 
@@ -178,24 +180,24 @@ The handlers, all registered by var in the `handlers` map:
   nil)
 ```
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - In `system_test.lg`, `:quel.shell/window` has `:store` as a ref to `:quel.store/db`, and `:quel.api/handlers` has `:window` as a ref to `:quel.shell/window`.
   - In `api_test.lg`, add the three names to `every-handler-is-a-var`. Add a hidden `:window` to `with-env`, built like `menu_test.lg`'s `app`: a `defonce` delay of `(w/new-app {:name "quel-test"})`, then `(w/new-window app {:hidden true})`.
   - New test: `zoom` with `"in"` answers 1.1 and `restore-zoom` then answers 1.1. `"reset"` answers 1.0. `save-window-state` leaves `:normal` in server mode.
 
-- [ ] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the new assertions.
+- [x] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the new assertions.
 
-- [ ] **Step 3: Wire the start state.** In `system.lg`, add `:store (ig/ref :quel.store/db)` to `:quel.shell/window` and `:window (ig/ref :quel.shell/window)` to `:quel.api/handlers`. In `shell.lg`, `::window` drops `:store` along with `:app` and adds `:start-state (window/start-state store)`, requiring `quel.window`. Keep the comment above it accurate.
+- [x] **Step 3: Wire the start state.** In `system.lg`, add `:store (ig/ref :quel.store/db)` to `:quel.shell/window` and `:window (ig/ref :quel.shell/window)` to `:quel.api/handlers`. In `shell.lg`, `::window` drops `:store` along with `:app` and adds `:start-state (window/start-state store)`, requiring `quel.window`. Keep the comment above it accurate.
 
-- [ ] **Step 4: Add the handlers to `api.lg`** and register them as `"zoom"`, `"restore-zoom"` and `"save-window-state"`.
+- [x] **Step 4: Add the handlers to `api.lg`** and register them as `"zoom"`, `"restore-zoom"` and `"save-window-state"`.
 
-- [ ] **Step 5: Run the tests.** Same command. Expected: PASS.
+- [x] **Step 5: Run the tests.** Same command. Expected: PASS.
 
-- [ ] **Step 6: Extend `scripts/smoke.sh`.** After the existing checks: `call zoom '["in"]'` contains `1.1`, `call restore-zoom '[]'` contains `1.1`, `call zoom '["reset"]'` contains `1`, and `call save-window-state '[]'` answers nothing, using the script's `nothing` helper.
+- [x] **Step 6: Extend `scripts/smoke.sh`.** After the existing checks: `call zoom '["in"]'` contains `1.1`, `call restore-zoom '[]'` contains `1.1`, `call zoom '["reset"]'` contains `1`, and `call save-window-state '[]'` answers nothing, using the script's `nothing` helper.
 
-- [ ] **Step 7: Run the smoke test.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke`. Expected: PASS.
+- [x] **Step 7: Run the smoke test.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx smoke`. Expected: PASS.
 
-- [ ] **Step 8: Commit.** `git commit -am "Open the window in its saved state and add the zoom handlers"`
+- [x] **Step 8: Commit.** `git commit -am "Open the window in its saved state and add the zoom handlers"`
 
 ### Task 5: The View menu
 
@@ -203,15 +205,17 @@ The handlers, all registered by var in the `handlers` map:
 - Modify: `src/quel/menu.lg`
 - Test: `test/quel/menu_test.lg`
 
-- [ ] **Step 1: Update the tests.** `every-item-with-a-click-has-one` expects 13. Add `"Zoom In"`, `"Zoom Out"` and `"Actual Size"` to the labels. Add an assertion for the three accelerators, as the test around line 39 does for others.
+- [x] **Step 1: Update the tests.** `every-item-with-a-click-has-one` expects 13. Add `"Zoom In"`, `"Zoom Out"` and `"Actual Size"` to the labels. Add an assertion for the three accelerators, as the test around line 39 does for others.
 
-- [ ] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the count and the labels.
+- [x] **Step 2: Run them to see them fail.** Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the count and the labels.
 
-- [ ] **Step 3: Add the items.** Add `zoom-in!`, `zoom-out!` and `zoom-reset!` as `emitter`s of `menu:zoom-in`, `menu:zoom-out` and `menu:zoom-reset`. Below the palette items in View, add a separator and then Zoom In (`CmdOrCtrl+=`), Zoom Out (`CmdOrCtrl+-`) and Actual Size (`CmdOrCtrl+0`), each `(partial #'x env)`. Add a comment that these have no page key, because a step cannot take the double delivery.
+- [x] **Step 3: Add the items.** Add `zoom-in!`, `zoom-out!` and `zoom-reset!` as `emitter`s of `menu:zoom-in`, `menu:zoom-out` and `menu:zoom-reset`. Below the palette items in View, add a separator and then Zoom In (`CmdOrCtrl+=`), Zoom Out (`CmdOrCtrl+-`) and Actual Size (`CmdOrCtrl+0`), each `(partial #'x env)`. Add a comment that these have no page key, because a step cannot take the double delivery.
 
-- [ ] **Step 4: Run the tests.** Same command. Expected: PASS, including `wails-accepts-the-spec`, which proves Wails parses the accelerators.
+- [x] **Step 4: Run the tests.** Same command. Expected: PASS, including `wails-accepts-the-spec`, which proves Wails parses the accelerators.
 
-- [ ] **Step 5: Commit.** `git commit -am "Add zoom items to the View menu"`
+- [x] **Step 5: Commit.** `git commit -am "Add zoom items to the View menu"`
+
+> Deviation: Tasks 4 and 5 were reviewed together, as one Codex pass over both commits. Its two findings were the missing frontend wiring, which is Task 6.
 
 ### Task 6: The frontend
 
@@ -234,7 +238,7 @@ export function stepZoom(direction: api.ZoomDirection): void; // on the same cha
 export function watchWindowState(): () => void;        // debounced resize listener; returns its remover
 ```
 
-- [ ] **Step 1: Write the failing tests** in `state/window.test.ts`, mocking `@/lib/api`:
+- [x] **Step 1: Write the failing tests** in `state/window.test.ts`, mocking `@/lib/api`:
   - `stepZoom` sets `--zoom` on `document.documentElement` to the reply.
   - Two quick calls run one after the other: the second `api.zoom` starts only once the first resolves.
   - A `stepZoom` made while `loadZoom` is pending runs after the restore, so `--zoom` ends at the step's reply.
@@ -242,25 +246,27 @@ export function watchWindowState(): () => void;        // debounced resize liste
   - With fake timers, several `resize` events make one `saveWindowState` call 400 ms after the last.
   - The remover stops that, including a pending save.
 
-- [ ] **Step 2: Run them to see them fail.** Run: `npm --prefix frontend test`. Expected: FAIL, `./window` not found.
+- [x] **Step 2: Run them to see them fail.** Run: `npm --prefix frontend test`. Expected: FAIL, `./window` not found.
 
-- [ ] **Step 3: Implement `lib/api.ts` and `state/window.ts`.** A failed `saveWindowState` is dropped.
+- [x] **Step 3: Implement `lib/api.ts` and `state/window.ts`.** A failed `saveWindowState` is dropped.
 
-- [ ] **Step 4: Run the tests.** Same command. Expected: PASS.
+- [x] **Step 4: Run the tests.** Same command. Expected: PASS.
 
-- [ ] **Step 5: Wire `App.tsx`.** In `useMenu`, add `menu:zoom-in`, `menu:zoom-out` and `menu:zoom-reset` calling `stepZoom`. In `App`'s start-up effect, add `void loadZoom();`. Add a `useEffect(() => watchWindowState(), [])`. It returns a function, the remover, which is the cleanup React expects, so the braces rule in `AGENTS.md` does not apply; write it as `return watchWindowState();` inside braces anyway, like the update checks' effect.
+- [x] **Step 5: Wire `App.tsx`.** In `useMenu`, add `menu:zoom-in`, `menu:zoom-out` and `menu:zoom-reset` calling `stepZoom`. In `App`'s start-up effect, add `void loadZoom();`. Add a `useEffect(() => watchWindowState(), [])`. It returns a function, the remover, which is the cleanup React expects, so the braces rule in `AGENTS.md` does not apply; write it as `return watchWindowState();` inside braces anyway, like the update checks' effect.
 
-- [ ] **Step 6: Add the palette entries.** In `keys.ts`, add `ZOOM_IN_KEY` (`⌘=`, `Ctrl+=`), `ZOOM_OUT_KEY` (`⌘-`, `Ctrl+-`) and `ZOOM_RESET_KEY` (`⌘0`, `Ctrl+0`). In `commands.ts`, add `zoom-in`, `zoom-out` and `zoom-reset` to the View group, after `sidebar`, always available, with `keepsFocus: true`. Titles: Zoom In, Zoom Out, Actual Size. In `commands.test.ts`, mock `./window` and add the ids wherever a test lists the expected ids exactly.
+- [x] **Step 6: Add the palette entries.** In `keys.ts`, add `ZOOM_IN_KEY` (`⌘=`, `Ctrl+=`), `ZOOM_OUT_KEY` (`⌘-`, `Ctrl+-`) and `ZOOM_RESET_KEY` (`⌘0`, `Ctrl+0`). In `commands.ts`, add `zoom-in`, `zoom-out` and `zoom-reset` to the View group, after `sidebar`, always available, with `keepsFocus: true`. Titles: Zoom In, Zoom Out, Actual Size. In `commands.test.ts`, mock `./window` and add the ids wherever a test lists the expected ids exactly.
 
-- [ ] **Step 7: Adjust the title strip.** In `TitleBar.tsx`, use `h-[calc(38px/var(--zoom,1))]` when `isMac` and `h-[38px]` otherwise. Tailwind needs both class strings written out in full. Leave `px-40` alone, and extend the comment above the component.
+- [x] **Step 7: Adjust the title strip.** In `TitleBar.tsx`, use `h-[calc(38px/var(--zoom,1))]` when `isMac` and `h-[38px]` otherwise. Tailwind needs both class strings written out in full. Leave `px-40` alone, and extend the comment above the component.
 
-- [ ] **Step 8: Add the e2e test** to `palette.spec.ts`: through the palette, Zoom In leaves `--zoom` at `1.1` on the root element; after `page.reload()` it reads `1.1` again; Actual Size brings it back to `1`. The reset also keeps the shared data dir at the default for later tests.
+- [x] **Step 8: Add the e2e test** to `palette.spec.ts`: through the palette, Zoom In leaves `--zoom` at `1.1` on the root element; after `page.reload()` it reads `1.1` again; Actual Size brings it back to `1`. The reset also keeps the shared data dir at the default for later tests.
 
-- [ ] **Step 9: Run everything.** Run: `npm --prefix frontend test && npm --prefix frontend run build && CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: PASS.
+- [x] **Step 9: Run everything.** Run: `npm --prefix frontend test && npm --prefix frontend run build && CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected: PASS.
 
-- [ ] **Step 10: Check the narrowest layout.** 480×320 is what the minimum window gives at 150%. With Playwright, or the running server-mode app, at a 480×320 viewport, confirm the tab strip and the Run button are reachable. If they are not, drop 1.5 from `zoom-levels` rather than reworking the layout: update `window.lg`'s comment, the ladder tests, and the 150% references in this plan's Task 7 checklist.
+- [x] **Step 10: Check the narrowest layout.** 480×320 is what the minimum window gives at 150%. With Playwright, or the running server-mode app, at a 480×320 viewport, confirm the tab strip and the Run button are reachable. If they are not, drop 1.5 from `zoom-levels` rather than reworking the layout: update `window.lg`'s comment, the ladder tests, and the 150% references in this plan's Task 7 checklist.
 
-- [ ] **Step 11: Commit.** `git add -A frontend && git commit -m "Zoom from the menu and palette and save the window state"`
+- [x] **Step 11: Commit.** `git add -A frontend && git commit -m "Zoom from the menu and palette and save the window state"`
+
+> Deviation: `window.test.ts` stubs `document` and `window` with `vi.stubGlobal`, as Vitest runs under Node here. The 480×320 check passed, so 150% stayed.
 
 ### Task 7: Docs, backlog, macOS check
 
@@ -268,11 +274,11 @@ export function watchWindowState(): () => void;        // debounced resize liste
 - Modify: `docs/DESIGN.md`, `docs/backlog/zoom-setting.md`
 - Create: `docs/backlog/zoom-below-100.md`
 
-- [ ] **Step 1: Backlog the gap, as its own commit.** Create `docs/backlog/zoom-below-100.md`, starting with `**Status: open**`: Wails clamps `SetZoom` to at least 1.0, so Quel cannot zoom below 100%. The fix is a darwin-only cgo file in the wails shim that sets `pageZoom` on the window's `webView`, plus lower steps on the ladder. Commit with `git commit -m "Backlog: zoom below 100%"`.
+- [x] **Step 1: Backlog the gap, as its own commit.** Create `docs/backlog/zoom-below-100.md`, starting with `**Status: open**`: Wails clamps `SetZoom` to at least 1.0, so Quel cannot zoom below 100%. The fix is a darwin-only cgo file in the wails shim that sets `pageZoom` on the window's `webView`, plus lower steps on the ladder. Commit with `git commit -m "Backlog: zoom below 100%"`.
 
-- [ ] **Step 2: Update `docs/DESIGN.md`.** In **The window**, say that on macOS the strip's height divides by `--zoom` to keep the traffic lights centred, so it is 38pt rather than 38px. In **Sizes** or next to it, add the ladder and why it stops at 100% and 150%. Add `quel.window` to the namespace table. Add the window state: both states, saved on a debounced `resize`, restored through `:start-state`.
+- [x] **Step 2: Update `docs/DESIGN.md`.** In **The window**, say that on macOS the strip's height divides by `--zoom` to keep the traffic lights centred, so it is 38pt rather than 38px. In **Sizes** or next to it, add the ladder and why it stops at 100% and 150%. Add `quel.window` to the namespace table. Add the window state: both states, saved on a debounced `resize`, restored through `:start-state`.
 
-- [ ] **Step 3: Mark the zoom entry done.** In `docs/backlog/zoom-setting.md`, set `**Status: done**` with a line saying where it landed, naming this plan and `zoom-below-100.md`. Commit with `git commit -am "Document zoom and the remembered window state"`.
+- [x] **Step 3: Mark the zoom entry done.** In `docs/backlog/zoom-setting.md`, set `**Status: done**` with a line saying where it landed, naming this plan and `zoom-below-100.md`. Commit with `git commit -am "Document zoom and the remembered window state"`.
 
 - [ ] **Step 4: Ask the user for the macOS check.** None of this can be checked on Linux. Report what passed, then ask them to run `lgx run` on a Mac and confirm each of these:
   1. ⌘= zooms in one step and ⌘- zooms out one step, including with focus in the editor. ⌘0 returns to 100%. The menu items work too.
@@ -284,6 +290,25 @@ export function watchWindowState(): () => void;        // debounced resize liste
   7. Fullscreen from maximised, then back out, quit, start: the window opens in the state it was left in.
   8. A normal window still opens normal.
 
+> Deviation: `TaskCreate` was unavailable in the session, so this document was the only progress record.
+
 ## Rollout notes
 
 No migration: both settings are rows in the existing `settings` table. An older build ignores them.
+
+## Completion summary
+
+**Status: code complete; the macOS check (Task 7 Step 4) is open.** The branch is not pushed.
+
+- **Upstream:** `wails-v0.9.0` (letgo-packages PR #19, merged as `493a6df`) adds `:start-state`, `set-zoom!`, `maximised?` and `fullscreen?`.
+- **Quel:** `quel.window` holds the ladder and settings. View > Zoom In / Zoom Out / Actual Size and the Command Palette step 100–150%, the level survives a restart, and a window left maximised or fullscreen reopens that way. On macOS the title strip stays 38pt under zoom.
+- **Verified:** on Linux in server mode, 188 backend tests, 496 frontend tests, 30 e2e specs (1 skipped), smoke, the 480×320 layout, and a native `lgx build` with the server tag. Native zoom, the accelerators and the window restore are not verified: they need the Mac.
+- **Issues:** none beyond the deviation notes above. Codex's reviews found no must-fix defects.
+
+**Deviations:**
+- The upstream shim also needed `ns.Def` entries in `shim/shim.go`.
+- Task 2's one-line tag bump had no review, and Tasks 4 and 5 shared one.
+- `window.test.ts` stubs globals, as Vitest runs under Node.
+- `TaskCreate` was unavailable, so the plan was the only tracker.
+
+**What the plan could have specified better:** that `lgx` needs `mise exec --` from a non-interactive shell, and that new shim functions are registered in `shim.go`.

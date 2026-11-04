@@ -189,8 +189,7 @@ text, pinned, position, selection, and `closed_at`, set while the tab is
 in the recently closed list), `workspaces` (each profile's active tab and
 next "Query N" number) and `settings` (app-wide values: the selected
 profile, the zoom level, the window state). Tabs and the workspace row go
-with their profile (`on delete
-cascade`). See [Saved tabs](#saved-tabs).
+with their profile (`on delete cascade`). See [Saved tabs](#saved-tabs).
 
 Connecting a profile opens one `database/sql` pool. Two kinds of work use
 it:
