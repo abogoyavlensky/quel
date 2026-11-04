@@ -457,7 +457,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 **Files:**
 - Modify: `scripts/smoke.sh`
 
-- [ ] **Step 1: Add the step**
+- [x] **Step 1: Add the step**
   Put it inside the existing `if [[ -f "$NREPL_CLIENT" ]]` branch, before the handler redefinition, and add "and an export larger than the bridge's 64 MiB cap is saved" to the header comment.
   - Over the nREPL, start an export on `$tmp/big.csv` and keep its id:
     `(quel.export/begin! (:quel.export/registry @quel.system/system*) "<path>")`.
@@ -466,14 +466,14 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - `call export-finish "[\"$id\"]"`, then compare the file's size and SHA-256 with Python's, and check `$tmp` holds no `*.part` file.
   - `call export-append '["no-such-id","x"]'` answers "This export is no longer open."
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx smoke`
   Expected: `smoke: ok`, with no "nREPL step skipped" line. Stop if the step was skipped: `letgo-packages` must be beside this repo, or `NREPL_CLIENT` set.
 
-- [ ] **Step 3: Confirm the test can fail**
+- [x] **Step 3: Confirm the test can fail**
   Temporarily send the 70 MiB as one `export-append` call and run the step: expected a failure with "assembled body too large". Put it back.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Smoke-test an export past the bridge's 64 MiB cap"`
 
 ### Task 7: Docs and backlog

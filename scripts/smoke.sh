@@ -2,8 +2,9 @@
 # Smoke-test the app headless, in Wails' server mode: the frontend is
 # served, the handlers answer over the real bridge, profiles save and
 # connect, a profile's tabs save and load, a runaway query is
-# cancelled (on Postgres too, when QUEL_PG_URL is set), and redefining a
-# handler over the in-app nREPL changes the running app with no restart.
+# cancelled (on Postgres too, when QUEL_PG_URL is set), an export larger than
+# the bridge's 64 MiB cap is saved, and redefining a handler over the in-app
+# nREPL changes the running app with no restart.
 #
 #   lgx smoke       # or: bash scripts/smoke.sh
 #   lgx smoke-pg    # the same, with a throwaway Postgres in Docker
@@ -148,6 +149,63 @@ print(json.dumps({"name": "Smoke PG", "engine": "postgres", "host": p.hostname, 
     call close-db "[\"$pgp\"]" >/dev/null
 else
     echo "smoke: postgres step skipped (QUEL_PG_URL is unset; lgx smoke-pg sets it)"
+fi
+
+# An export past Wails' 64 MiB cap on one runtime call, sent as the frontend
+# sends it. Over the nREPL, as server mode has no save dialog to begin one.
+# Each call's body is split the way @wailsio/runtime splits it.
+if [[ -f "$NREPL_CLIENT" ]]; then
+    big="$tmp/big.csv"
+    export_id="$(python3 "$NREPL_CLIENT" "$(cat .nrepl-port)" \
+        "(quel.export/begin! (:quel.export/registry @quel.system/system*) \"$big\")")" \
+        || fail "export-begin over the nREPL failed"
+    export_id="${export_id//\"/}"
+    sent="$(python3 - "$base" "$bridge" "$export_id" <<'PY'
+import hashlib, json, sys, urllib.request, uuid
+
+base, bridge, export_id = sys.argv[1:4]
+total = 70 * 1024 * 1024
+per_call = 8 * 1024 * 1024
+piece = 512 * 1024
+line = "1,Zoë — 日本 😀\r\n"
+text = line * (per_call // len(line.encode()))
+size = len(text.encode())
+
+def post(body, headers):
+    request = urllib.request.Request(
+        base + "/wails/runtime", data=body, method="POST",
+        headers={"Content-Type": "application/json", "x-wails-client-id": "server-mode", **headers})
+    with urllib.request.urlopen(request, timeout=120) as reply:
+        return reply.status
+
+digest = hashlib.sha256()
+for call in range((total // size) + 1):
+    body = json.dumps({"object": 0, "method": 0, "args": {
+        "call-id": f"export-{call}", "methodName": bridge,
+        "args": ["export-append", [export_id, text]]}}).encode()
+    chunk_id = uuid.uuid4().hex
+    count = -(-len(body) // piece)
+    for i in range(count):
+        status = post(body[i * piece:(i + 1) * piece], {
+            "x-wails-chunk-id": chunk_id,
+            "x-wails-chunk-index": str(i),
+            "x-wails-chunk-total": str(count)})
+    assert status == 200, status
+    digest.update(text.encode())
+    sent = (call + 1) * size
+print(sent, digest.hexdigest())
+PY
+)" || fail "appending to the export failed"
+    finished="$(call export-finish "[\"$export_id\"]")"
+    [[ "$finished" == *"$big"* ]] || fail "export-finish: $finished"
+    [[ "$sent" == "$(python3 -c 'import hashlib,os,sys; p=sys.argv[1]; print(os.path.getsize(p), hashlib.sha256(open(p,"rb").read()).hexdigest())' "$big")" ]] \
+        || fail "the export's file differs from what was sent"
+    [[ "${sent%% *}" -gt $((64 * 1024 * 1024)) ]] || fail "the export stayed under the cap: $sent"
+    [[ -z "$(find "$tmp" -name '*.part')" ]] || fail "the export left a part file"
+    [[ "$(call export-append '["no-such-id","x"]')" == *"This export is no longer open."* ]] \
+        || fail "an unknown export was not refused"
+else
+    echo "smoke: export step skipped (no client at $NREPL_CLIENT; set NREPL_CLIENT)"
 fi
 
 # Redefine a handler in the running app. It is registered by var, so the
