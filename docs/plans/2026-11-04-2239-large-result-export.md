@@ -1,5 +1,7 @@
 # Large Result Export Implementation Plan
 
+**Status: completed, pending the manual check on a Mac (Task 8, Step 3)**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Save a result of any size up to `MAX_ROWS` as a file, by formatting and sending it to the backend a chunk at a time, so a file over 64 MiB no longer fails with "assembled body too large" and the results footer shows the export's progress.
@@ -482,25 +484,25 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `docs/DESIGN.md`, `docs/backlog/export-past-row-cap.md`
 - Create: `docs/backlog/copy-past-bridge-limit.md`
 
-- [ ] **Step 1: Update `docs/DESIGN.md`**
+- [x] **Step 1: Update `docs/DESIGN.md`**
   - The formats paragraph of `### Export`: they make the file a chunk at a time (`formatChunks`).
   - The Saving paragraph: `saveChunks`; the backend opens the dialog, the frontend sends chunks of at most `CHUNK_UNITS` code units because Wails caps a runtime call at 64 MiB, and the file appears at its path only when all of it is written (`<path>.<id>.part` until then).
   - A new sentence in `### Export`: the results footer's left end shows "Saving 12,500 of 100,000 rows…" or the Copy equivalent, after the same 300 ms delay as "Running…".
   - The Export row of the handler table: `export-begin` (the format and a suggested file name; a save dialog; an id, or nil when canceled), `export-append` (the id and a piece of text), `export-finish` (the id; the path), `export-abort` (the id).
 
-- [ ] **Step 2: Update the backlog entry**
+- [x] **Step 2: Update the backlog entry**
   In `docs/backlog/export-past-row-cap.md`, change "next to `filters` and `write!`" to "next to `filters` and `begin!`". Add one sentence to "Proposed fix": saving already formats and sends the file in chunks (`docs/plans/2026-11-04-2239-large-result-export.md`), so a backend writer can reuse the registry and its part file. The status stays open.
 
-- [ ] **Step 3: Commit the docs**
+- [x] **Step 3: Commit the docs**
   `git commit -m "Docs: exports are saved in pieces"`
 
-- [ ] **Step 4: Add the backlog entry, in its own commit**
+- [x] **Step 4: Add the backlog entry, in its own commit**
   Create `docs/backlog/copy-past-bridge-limit.md`, titled "Copy fails for a result over 64 MiB", starting with `**Status: open**`. Problem: `copyText` falls back to Wails' `Clipboard.SetText`, a runtime call under the same 64 MiB cap, so a native webview that refuses `navigator.clipboard` shows "Couldn't copy to the clipboard." Save works. Origin: this plan.
   `git commit -m "Backlog: copying a result over the bridge's 64 MiB cap"`
 
 ### Task 8: Full verification
 
-- [ ] **Step 1: Run everything that runs here**
+- [x] **Step 1: Run everything that runs here**
   Run:
   ```
   CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test
@@ -510,7 +512,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   ```
   Expected: all pass, including "saves a CSV with the chosen separator as a download".
 
-- [ ] **Step 2: Check that nothing refers to the old handler**
+- [x] **Step 2: Check that nothing refers to the old handler**
   Run: `grep -rn "export-result\|exportResult\|export/write!\|saveText\|formatResult" src test frontend/src scripts docs/DESIGN.md`
   Expected: only `exportResult` in `state/runner.ts`, `state/runner.test.ts` and `ExportMenu.tsx`, which is the runner's own function.
 
@@ -521,3 +523,23 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   select x, printf('%.*c', 4000, 'x') as payload from c
   ```
   Save as CSV. The footer's left end counts up ("Saving 8,000 of 25,000 rows…"), the window stays responsive, and a file of about 100 MB opens whole, with no part file beside it. Save again over the same file and cancel at the dialog: the file stays. Try a read-only directory: the toast shows the error.
+
+## Summary
+
+Saving a result no longer fails at Wails' 64 MiB cap on one runtime call. The frontend formats the file a chunk at a time and sends it through `export-begin`, `export-append`, `export-finish` and `export-abort`. The backend writes to a uniquely named part file and renames it over the target only when the file is whole. The results footer shows "Saving 12,500 of 100,000 rows…". `MAX_ROWS` stays at 100,000.
+
+Verified: 183 backend tests, 509 frontend tests, `lgx smoke` (over 70 MiB through the real transport, size and SHA-256 compared; sent as one call the same step fails with "assembled body too large"), and `lgx e2e` (30 passed, the Postgres-only spec skipped). One-off, not kept: in Chromium against server mode, with the webview check spoofed and `export-begin` redefined over the nREPL to skip the dialog, a 40,000-row, 106 MB CSV saved through `saveChunks` and the real bridge with a matching SHA-256 and the footer counting up.
+
+Not verified: the native dialog and WKWebView, which need the Mac check in Task 8.
+
+Issues: the first backend commit leaves the frontend calling a removed handler until Task 4, as the plan's task order implies (Codex flagged it, and Task 4 resolves it).
+
+Deviations:
+- The plan was already committed on master (`b790a91`), so the branch starts from it.
+- `TaskCreate` was unavailable, so the plan document was the only tracker.
+- `exportResult` keeps the reservation and `finally`, and a new `exportRows` holds the old body.
+- The surrogate test uses a regex rather than `isWellFormed`, which this project's TypeScript `lib` target lacks.
+- The smoke step has its own `if` on the nREPL client, with its own skip message, rather than sitting inside the redefinition's branch.
+- `lgx e2e` takes no arguments, so Task 5's new test was confirmed in the full run.
+
+What the plan could have specified better: `formatResult` blocking the main thread should have been caught in the first design, since it made any progress UI impossible without chunking, and the 300 ms `useDelayed` hides the status for the first moments of an export, which a test has to allow for.
