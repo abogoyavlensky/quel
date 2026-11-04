@@ -121,3 +121,30 @@ test("loads the rest of an open result before exporting it", async ({ page, cont
   expect(lines[2000]).toBe("2000");
   await expect(page.getByText("2,000 rows", { exact: true })).toBeVisible();
 });
+
+test("shows how far an export has come in the footer", async ({ page }) => {
+  // The copy waits for the test, so this does not depend on the machine's speed.
+  await page.addInitScript(() => {
+    navigator.clipboard.writeText = () =>
+      new Promise<void>((resolve) => {
+        (window as unknown as { finishCopy: () => void }).finishCopy = resolve;
+      });
+  });
+  await connectFixture(page, db);
+  await run(page, "select id from t order by id");
+  await expect(page.getByText(/rows loaded, (more available|loading more)/)).toBeVisible();
+
+  await copyAs(page, "CSV");
+  const footer = page.getByRole("group", { name: "Result footer" });
+  await expect(footer.getByText("Copying 2,000 of 2,000 rows…")).toBeVisible();
+
+  await openExport(page);
+  await expect(popover(page).getByRole("button", { name: "Copy" })).toBeDisabled();
+  await expect(popover(page).getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  await page.evaluate(() => (window as unknown as { finishCopy: () => void }).finishCopy());
+  await expect(page.getByText("Copied 2,000 rows as CSV")).toBeVisible();
+  await expect(footer.getByText(/^Copying/)).toHaveCount(0);
+  await expect(footer.getByText("2,000 rows", { exact: true })).toBeVisible();
+});

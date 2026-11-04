@@ -426,7 +426,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/state/status.ts`, `frontend/src/state/status.test.ts`, `frontend/src/components/ResultFooter.tsx`, `frontend/src/components/ExportMenu.tsx`
 - Test: `frontend/e2e/export.spec.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `status.test.ts`: `exportWords` is null with no export and with `rows` null, and "Saving 12,500 of 100,000 rows…" and "Copying 12,500 of 100,000 rows…" with one.
 
   `export.spec.ts`, a test that shows progress while an export runs:
@@ -436,20 +436,20 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - Reopen the popover: Copy and Save are disabled. Close it.
   - Resolve the promise. Expect "Copied 2,000 rows as CSV", and the status gone.
 
-- [ ] **Step 2: Run the unit tests to verify they fail**
+- [x] **Step 2: Run the unit tests to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the `exportWords` tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `status.ts`: `exportWords`.
   - `ResultFooter.tsx`: gate the status with `useDelayed(exportWords(tab) !== null, 300)`, and factor the spinner and words into a small local component shared with the run branch. In the `result` branch the left end shows the status instead of the rows text, and the right end stays. Return null only when there are no run words, no status and no result. Pass `exporting={tab.exporting !== null}` to `ExportMenu`. Update the comment above the component.
   - `ExportMenu.tsx`: the `exporting` prop, the disabled buttons, `setOpen(false)` at the start of `run`. Remove `busy` and its comment.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test && (cd /home/agent/Projects/quel && CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx e2e)`
   Expected: PASS, the whole of `export.spec.ts` included.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Show an export's progress in the results footer"`
 
 ### Task 6: Prove it past the cap in the smoke test

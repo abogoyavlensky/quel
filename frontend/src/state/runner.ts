@@ -21,10 +21,10 @@ import {
 } from "./persist";
 import {
   type EditorTab,
+  type ExportProgress,
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
-  type ExportProgress,
   type RowsResult,
   type RunConfirm,
   type Workspace,
