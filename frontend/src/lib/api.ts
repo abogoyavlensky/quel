@@ -139,6 +139,15 @@ export const selectProfile = (profileId: string | null) => call<void>("select-pr
 export const sidebarHidden = async () => (await call<unknown>("sidebar-hidden")) === true;
 export const setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hidden", hidden);
 
+// One step on the backend's zoom ladder, or back to 100%. Both answer the
+// level now applied.
+export type ZoomDirection = "in" | "out" | "reset";
+export const zoom = (direction: ZoomDirection) => call<number>("zoom", direction);
+export const restoreZoom = () => call<number>("restore-zoom");
+
+// Remember whether the window is maximised or fullscreen.
+export const saveWindowState = () => call<void>("save-window-state");
+
 // New versions (quel.updates). download-update resolves once the update is
 // downloaded, verified and staged; restart-to-update quits the app.
 

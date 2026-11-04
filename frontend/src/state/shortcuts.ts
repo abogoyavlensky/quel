@@ -1,14 +1,16 @@
 // What a keydown means to the app: a palette, the editor, the result, a
-// tab, or the sidebar.
+// tab, the sidebar, or the results pane.
 export type Shortcut =
   | { kind: "palette"; palette: "commands" | "connections" }
   | { kind: "editor" }
   | { kind: "result" }
   | { kind: "sidebar" }
+  | { kind: "resultsPane" }
   | { kind: "tab"; n: number }; // 1–9; 9 means the last tab
 
 // ⇧⌘P and ⌘P (Ctrl on other platforms) open the palettes, ⌘E the editor,
-// ⌘R the result grid, ⌘1–⌘9 a tab, ⌘B hides or shows the sidebar. The modifier is the one the other app keys use. Digits go by
+// ⌘R the result grid, ⌘1–⌘9 a tab, ⌘B hides or shows the sidebar, ⌘J the
+// results pane. The modifier is the one the other app keys use. Digits go by
 // e.code: Shift or the keyboard layout can change e.key.
 export function shortcutOf(
   e: Pick<KeyboardEvent, "key" | "code" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey">,
@@ -22,6 +24,7 @@ export function shortcutOf(
   if (key === "e") return { kind: "editor" };
   if (key === "r") return { kind: "result" };
   if (key === "b") return { kind: "sidebar" };
+  if (key === "j") return { kind: "resultsPane" };
   const digit = /^Digit([1-9])$/.exec(e.code);
   return digit ? { kind: "tab", n: Number(digit[1]) } : null;
 }

@@ -9,6 +9,9 @@ import { type AppState, selectedWorkspace, store } from "./store";
 // load. The button lives in the strip, so without the strip nothing would
 // bring the sidebar back; the saved choice applies again once a workspace
 // loads.
+//
+// Whether the results pane shows, likewise (⌘J, the strip's button, the
+// Command Palette), but in memory only, as a run brings it back.
 
 // AppShell draws the tab strip, with the editor under it, exactly then.
 export function hasTabStrip(s: AppState): boolean {
@@ -47,4 +50,19 @@ export function toggleSidebar(): void {
   store.setState({ sidebarHidden: hidden });
   saving = saving.then(() => api.setSidebarHidden(hidden)).catch(() => {});
   if (hidden && document.activeElement?.closest("[data-quel-sidebar]")) setTimeout(focusEditor);
+}
+
+// Hide or show the results. Nothing to do without a tab strip: there are no
+// results then. Hiding them with focus inside moves focus to the editor.
+export function toggleResults(): void {
+  const s = store.getState();
+  if (!hasTabStrip(s)) return;
+  const hidden = !s.resultsHidden;
+  store.setState({ resultsHidden: hidden });
+  if (hidden && document.activeElement?.closest("[data-quel-results]")) setTimeout(focusEditor);
+}
+
+// A run has something to say, or a key wants the grid.
+export function showResults(): void {
+  store.setState({ resultsHidden: false });
 }

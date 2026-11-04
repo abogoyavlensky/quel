@@ -145,6 +145,7 @@ export interface AppState {
   // The user hid the sidebar (saved in the app database); null until it is
   // read at start-up, which shows it. state/layout.ts.
   sidebarHidden: boolean | null;
+  resultsHidden: boolean; // the results pane is hidden; in memory only
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
   updateDialogOpen: boolean;
@@ -199,6 +200,7 @@ export function initialState(): AppState {
     workspaces: {},
     rowDetails: false,
     sidebarHidden: null,
+    resultsHidden: false,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,

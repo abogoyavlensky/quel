@@ -1,5 +1,6 @@
 (ns quel.shell
   (:require [integrant.core :as ig]
+            [quel.window :as window]
             [wails.core :as w]))
 
 ;; The Wails application and its main window. Neither has a halt-key!:
@@ -10,6 +11,8 @@
 (defmethod ig/init-key ::app [_ opts]
   (w/new-app opts))
 
-;; :app is the application; the rest goes to w/new-window.
-(defmethod ig/init-key ::window [_ {:keys [app] :as opts}]
-  (w/new-window app (dissoc opts :app)))
+;; :app is the application and :store the app database, read for the state
+;; the window was left in; the rest goes to w/new-window.
+(defmethod ig/init-key ::window [_ {:keys [app store] :as opts}]
+  (w/new-window app (assoc (dissoc opts :app :store)
+                           :start-state (window/start-state store))))

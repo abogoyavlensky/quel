@@ -5,14 +5,18 @@ import {
   NEW_TAB_KEY,
   REOPEN_KEY,
   RESULT_KEY,
+  RESULTS_PANE_KEY,
   ROW_KEY,
   RUN_KEY,
   SCRIPT_KEY,
   SIDEBAR_KEY,
   STOP_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  ZOOM_RESET_KEY,
 } from "@/components/keys";
 import { focusEditor } from "@/editor/states";
-import { sidebarShown, toggleSidebar } from "./layout";
+import { sidebarShown, toggleResults, toggleSidebar } from "./layout";
 import { focusResult, openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
@@ -27,6 +31,7 @@ import {
 } from "./runner";
 import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { checkForUpdates } from "./updates";
+import { stepZoom } from "./window";
 
 // The Command Palette's entries: what can run now, as a hand-written list.
 // It repeats some native menu items on purpose: both call the same runner
@@ -204,6 +209,40 @@ export function commands(s: AppState): Command[] {
       run: toggleSidebar,
     },
   );
+  add(
+    loaded && {
+      id: "results",
+      keepsFocus: true,
+      group: "View",
+      title: s.resultsHidden ? "Show Results" : "Hide Results",
+      keys: RESULTS_PANE_KEY,
+      run: toggleResults,
+    },
+  );
+  add({
+    id: "zoom-in",
+    keepsFocus: true,
+    group: "View",
+    title: "Zoom In",
+    keys: ZOOM_IN_KEY,
+    run: () => stepZoom("in"),
+  });
+  add({
+    id: "zoom-out",
+    keepsFocus: true,
+    group: "View",
+    title: "Zoom Out",
+    keys: ZOOM_OUT_KEY,
+    run: () => stepZoom("out"),
+  });
+  add({
+    id: "zoom-reset",
+    keepsFocus: true,
+    group: "View",
+    title: "Actual Size",
+    keys: ZOOM_RESET_KEY,
+    run: () => stepZoom("reset"),
+  });
 
   add({
     id: "check-updates",

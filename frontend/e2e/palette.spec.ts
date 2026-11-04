@@ -101,3 +101,27 @@ test("palettes, the editor key and the tab keys", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+// Server mode has no window to scale, but the level goes through the backend
+// and comes back, so --zoom on the root shows it. Actual Size leaves the
+// shared data dir at the default for later tests.
+test("zooms from the palette and keeps the level across a reload", async ({ page }) => {
+  await page.goto("/");
+  const zoom = () => page.evaluate(() => document.documentElement.style.getPropertyValue("--zoom"));
+  await expect.poll(zoom).toBe("1");
+
+  const run = async (text: string) => {
+    await page.keyboard.press("ControlOrMeta+Shift+p");
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.keyboard.type(text);
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  };
+
+  await run("Zoom In");
+  await expect.poll(zoom).toBe("1.1");
+  await page.reload();
+  await expect.poll(zoom).toBe("1.1");
+  await run("Actual Size");
+  await expect.poll(zoom).toBe("1");
+});

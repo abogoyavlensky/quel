@@ -30,8 +30,8 @@ import { UpdateDialog } from "./UpdateDialog";
 // tabs, the active tab's editor above its results; on the far right,
 // while open, the row details panel. There is no status bar: the top strip
 // says how the connection is, the results footer what a run is doing, and
-// notices are toasts. The left column can be hidden (⌘B,
-// state/layout.ts); it then leaves the window.
+// notices are toasts. The left column and the results can be hidden (⌘B,
+// ⌘J, state/layout.ts); they then leave the window.
 export function AppShell() {
   const workspace = useApp(selectedWorkspace);
   // The editor's dialect comes from the profile, connected or not.
@@ -41,6 +41,7 @@ export function AppShell() {
   const completion = useCompletion(workspace?.status === "connected" ? workspace.connId : null, engine);
   const rowDetails = useApp((s) => s.rowDetails);
   const showSidebar = useApp(sidebarShown);
+  const resultsHidden = useApp((s) => s.resultsHidden);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -77,16 +78,23 @@ export function AppShell() {
             <div className="flex h-full min-h-0 flex-col">
               <EditorTabs workspace={workspace} />
               <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
-                <ResizablePanel defaultSize="45" minSize={80}>
+                {/* Ids keep a dragged split while the results come and go. The
+                    default size sits on the results: a panel without one takes
+                    what is left, so the editor fills the group on its own. */}
+                <ResizablePanel id="editor" minSize={80}>
                   <div className="relative h-full">
                     <SqlEditor tabId={tab.id} engine={engine} completion={completion} />
                     <RunButton key={tab.id} tab={tab} />
                   </div>
                 </ResizablePanel>
-                <ResizableHandle />
-                <ResizablePanel minSize={120}>
-                  <ResultTabs tab={tab} />
-                </ResizablePanel>
+                {!resultsHidden && (
+                  <>
+                    <ResizableHandle />
+                    <ResizablePanel id="results" defaultSize="55" minSize={120} data-quel-results="">
+                      <ResultTabs tab={tab} />
+                    </ResizablePanel>
+                  </>
+                )}
               </ResizablePanelGroup>
             </div>
           ) : selected !== null ? (

@@ -20,6 +20,7 @@ const palette = vi.hoisted(() => ({ openPalette: vi.fn(), focusResult: vi.fn() }
 vi.mock("./palette", () => palette);
 const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
 vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
+vi.mock("./window", () => ({ stepZoom: vi.fn() }));
 vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
@@ -50,7 +51,7 @@ function state(status: ConnStatus = "disconnected", patch: (w: ReturnType<typeof
 }
 
 const ids = (s: AppState) => commands(s).map((c) => c.id);
-const ALWAYS = ["new-connection", "row-details", "check-updates"];
+const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "check-updates"];
 
 beforeEach(() => {
   for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates)]) f.mockReset();
@@ -75,6 +76,10 @@ describe("commands", () => {
       "edit-connection",
       "row-details",
       "sidebar",
+      "results",
+      "zoom-in",
+      "zoom-out",
+      "zoom-reset",
       "check-updates",
     ]);
   });
@@ -155,11 +160,21 @@ describe("commands", () => {
   });
 });
 
+describe("the results entry", () => {
+  it("shows only with a loaded workspace, titled after the pane", () => {
+    expect(ids(initialState())).not.toContain("results");
+    expect(ids(state("disconnected", (w) => (w.loadError = "boom")))).not.toContain("results");
+    const title = (s: AppState) => commands(s).find((c) => c.id === "results")!.title;
+    expect(title(state())).toBe("Hide Results");
+    expect(title({ ...state(), resultsHidden: true })).toBe("Show Results");
+  });
+});
+
 describe("focus", () => {
   it("keeps focus only for the entries that do not move it", () => {
     const w = state("connected", (w) => (w.closed = [{ id: "c1" } as (typeof w.closed)[number]]));
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
-    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar"]);
+    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "zoom-in", "zoom-out", "zoom-reset"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
     expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
   });

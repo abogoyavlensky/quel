@@ -126,6 +126,7 @@ waiting on the network inside Go, not in bytecode.
 | `quel.shell` | The Wails app and window components. |
 | `quel.system` | The integrant config and the running system (`defonce`). |
 | `quel.store` | App database: connection profiles, query history, saved workspace. Migrations in `quel.migrations`. |
+| `quel.window` | The zoom ladder, and the zoom level and window state in the app database. Calls no Wails. |
 | `quel.workspace` | Each profile's saved editor tabs and recently closed tabs, and the selected profile, in the app database. |
 | `quel.secrets` | Passwords in the macOS Keychain, keyed by profile id. Never in the app database. |
 | `quel.conn` | Opens a pool per connected profile, hands out sessions, tracks connection state. |
@@ -187,8 +188,8 @@ Besides `profiles`, it has `editor_tabs` (each profile's tabs: title,
 text, pinned, position, selection, and `closed_at`, set while the tab is
 in the recently closed list), `workspaces` (each profile's active tab and
 next "Query N" number) and `settings` (app-wide values: the selected
-profile). Tabs and the workspace row go with their profile (`on delete
-cascade`). See [Saved tabs](#saved-tabs).
+profile, the zoom level, the window state). Tabs and the workspace row go
+with their profile (`on delete cascade`). See [Saved tabs](#saved-tabs).
 
 Connecting a profile opens one `database/sql` pool. Two kinds of work use
 it:
@@ -546,6 +547,19 @@ at the bottom right.
   (`--text-sm`). The editor is JetBrains Mono at 16px with ligatures
   off, so `<>` and `>=` read as typed. Grid rows are 34px with every
   other row banded; tree rows 32px; connection rows 38px.
+- **Zoom.** View > Zoom In, Zoom Out and Actual Size (⌘=, ⌘-, ⌘0, also
+  in the Command Palette) step through 100, 110, 125 and 150%. It is the
+  webview's own zoom, which scales everything, pixel values included, so
+  the virtualizers need nothing; CSS `zoom` would break their scroll math.
+  Quel keeps its own ladder (`quel.window`) and never reads the level
+  back. It starts at 100% because Wails clamps anything lower
+  (`docs/backlog/zoom-below-100.md`), and stops at 150%, where the
+  minimum window is 480×320 CSS px and the top strip's 24px pill still
+  fits. The keys are native menu items only: a step cannot take the
+  double delivery that Run and the palettes tolerate. macOS ignores a
+  level set before the window runs, so the frontend asks for the saved
+  level at start (`restore-zoom`). Steps run one at a time on a promise
+  chain in `state/window.ts`.
 - **Connections.** Each row always shows its button: a plug to connect,
   a grey stop to disconnect (play is Run's icon, so it is not reused). The pencil shows on hover, and a
   right-click offers Connect or Disconnect, Edit… and Delete….
@@ -559,7 +573,19 @@ at the bottom right.
   content is centred with the same wide padding on both sides, so the
   pill clears the lights and the Update button at the right end, and
   fullscreen needs nothing. The button opts out of the drag area
-  (`--wails-draggable: no-drag`), so a click on it is a click.
+  (`--wails-draggable: no-drag`), so a click on it is a click. Zoom
+  scales the page but not the lights, so on macOS the strip's height
+  divides by `--zoom`, set on the root element: it is 38pt rather than
+  38px. The padding stays, since it only grows in points and on the right
+  it clears the button, which scales with the page.
+- **Window state.** A window left maximised or fullscreen opens that way
+  on the next run; macOS's green button enters fullscreen, so both count.
+  A debounced `resize` listener calls `save-window-state`, which asks the
+  window and writes the `window-state` row in `settings`, there only away
+  from normal. A resize covers every way in and out. Saving at shutdown
+  cannot work: the window is gone by then and reads as not maximised. The
+  state goes to `w/new-window` as `:start-state`. The normal window's
+  size and position are not remembered.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
   mix of a tag into the cool grey swings the hue through blue.
@@ -580,6 +606,17 @@ up the first render, and saved in order, one save at a time
 (no connections, a failed tab load, tabs loading): the button lives in
 the strip, so nothing else could bring it back. Hiding it with focus
 inside moves focus to the editor.
+
+The results pane can be hidden too, so the editor takes the workspace: ⌘J,
+the `PanelBottom` button between the other two panel buttons, or the
+Command Palette. It is also drawn or left out, and the editor and results
+panels have ids, so a dragged split comes back. The choice is app-wide and
+in memory only (`state/layout.ts`), because a run shows the results again:
+a run that starts, and a refusal (not connected, read-only), as both report
+there. A declined confirm, an empty editor and a run already in flight
+leave them hidden. Hiding them with focus inside moves focus to the editor.
+Hiding loses the grid's scroll position and hand-set column widths, as
+switching result tabs does; the selected row stays in the store.
 
 The sidebar lists the saved profiles, each with its status mark (filled
 when connected, a hollow ring when not, pulsing while connecting) and a
@@ -697,8 +734,9 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⇧⌘P / Ctrl+Shift+P | Opens the **Command Palette** |
 | ⌘P / Ctrl+P | Opens **Go to Connection** |
 | ⌘E / Ctrl+E | Focuses the current tab's editor, wherever focus is |
-| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows (nothing on Messages or a result with no rows); the selected row stays |
+| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows, showing hidden results first (nothing on Messages or a result with no rows); the selected row stays |
 | ⌘B / Ctrl+B | Hides or shows the sidebar |
+| ⌘J / Ctrl+J | Hides or shows the results pane |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
 
@@ -729,15 +767,15 @@ by `e.code`, because Shift or the layout changes `e.key`. It catches ⌘P
 before the webview prints, and ⌘R before a browser reloads (server mode).
 None of the keys collide with CodeMirror's keymaps (its only `b` binding
 is the macOS emacs-style `Ctrl-b`). Only the palettes also have native
-View menu items; nine "Tab N" items would be clutter, ⌘B is a toggle
-that cannot take a double delivery (as ⌘I), and server mode has no
+View menu items; nine "Tab N" items would be clutter, ⌘B and ⌘J are
+toggles that cannot take a double delivery (as ⌘I), and server mode has no
 native menu. If the menu
 and the page both see a key, the palette opens twice, which is harmless:
 opening sets the state, it does not toggle it.
 
 **Dialog guards.** At most one palette is open (`store.palette`); opening
 the other switches to it. A palette does not open over the profile or
-update dialog, and ⌘E, ⌘R, ⌘B and ⌘1–9 do nothing while any dialog or palette is
+update dialog, and ⌘E, ⌘R, ⌘B, ⌘J and ⌘1–9 do nothing while any dialog or palette is
 open: in those, the keys belong to the dialog. Picking an entry closes the
 palette first and runs the action on the next tick, so actions that open
 the profile dialog are not refused.

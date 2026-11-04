@@ -19,6 +19,7 @@ import {
   scheduleSave,
   unmarkClosing,
 } from "./persist";
+import { showResults } from "./layout";
 import {
   type EditorTab,
   type ExportProgress,
@@ -145,6 +146,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
     const text = `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`;
     addMessage(tabId, { sql: decision.statement.text, kind: "error", text, elapsedMs: null });
     notify.error(text, { id: "run-refused" });
+    showResults();
     return;
   }
   if (decision.action === "confirm") {
@@ -156,6 +158,7 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
     });
     if (!ok || readyToRun(tabId)?.connId !== connId) return;
   }
+  showResults();
   const tab = findTab(tabId);
   if (!tab) return;
   const alive = aliveFn(tabId);
@@ -287,6 +290,7 @@ export async function runCurrent(mode: RunMode): Promise<void> {
   if (!w || w.status === "connecting") return;
   if (w.status !== "connected") {
     updateWorkspace(w.profileId, (w) => ({ ...w, runRefused: true }));
+    showResults();
     const name = store.getState().profiles.find((p) => p.id === w.profileId)?.name ?? "The profile";
     // One id: a second press replaces the notice rather than stacking.
     notify.error(`${name} isn't connected.`, {

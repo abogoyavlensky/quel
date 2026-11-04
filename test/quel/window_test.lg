@@ -1,0 +1,77 @@
+(ns quel.window-test
+  (:require [quel.store-test :refer [with-store]]
+            [quel.window :as window]
+            [sql.core :as sql]
+            [clojure.test :refer [deftest is]]))
+
+(defn- put! [db k v]
+  (sql/execute! db ["insert into settings (key, value) values (?, ?)" k v]))
+
+(defn- rows [db k]
+  (:n (sql/execute-one! db ["select count(*) as n from settings where key = ?" k])))
+
+(deftest zoom-climbs-the-ladder-and-stops-at-the-top
+  (is (= [1.1 1.25 1.5 1.5]
+         (rest (reductions window/next-zoom 1.0 ["in" "in" "in" "in"])))))
+
+(deftest zoom-walks-down-and-stops-at-100
+  (is (= [1.25 1.1 1.0 1.0]
+         (rest (reductions window/next-zoom 1.5 ["out" "out" "out" "out"])))))
+
+(deftest reset-goes-to-100-from-anywhere
+  (is (every? #(= 1.0 (window/next-zoom % "reset")) window/zoom-levels)))
+
+(deftest an-unknown-direction-throws
+  (is (thrown? Exception (window/next-zoom 1.0 "sideways"))))
+
+(deftest a-fresh-database-has-the-defaults
+  (with-store
+    (fn [db _]
+      (is (= 1.0 (window/zoom-level db)))
+      (is (= :normal (window/start-state db))))))
+
+(deftest zoom-round-trips-and-100-leaves-no-row
+  (with-store
+    (fn [db _]
+      (window/save-zoom! db 1.25)
+      (is (= 1.25 (window/zoom-level db)))
+      (window/save-zoom! db 1.5)
+      (is (= 1.5 (window/zoom-level db)))
+      (window/save-zoom! db 1.0)
+      (is (= 1.0 (window/zoom-level db)))
+      (is (= 0 (rows db "zoom"))))))
+
+(deftest a-saved-zoom-off-the-ladder-snaps-to-the-nearest-step
+  (with-store
+    (fn [db _]
+      (put! db "zoom" "1.2")
+      (is (= 1.25 (window/zoom-level db))))))
+
+(deftest an-unreadable-zoom-reads-100
+  (with-store
+    (fn [db _]
+      (put! db "zoom" "abc")
+      (is (= 1.0 (window/zoom-level db))))))
+
+(deftest the-start-state-round-trips-and-normal-leaves-no-row
+  (with-store
+    (fn [db _]
+      (window/save-start-state! db :maximised)
+      (is (= :maximised (window/start-state db)))
+      (window/save-start-state! db :fullscreen)
+      (is (= :fullscreen (window/start-state db)))
+      (window/save-start-state! db :normal)
+      (is (= :normal (window/start-state db)))
+      (is (= 0 (rows db "window-state"))))))
+
+(deftest an-unknown-start-state-reads-normal
+  (with-store
+    (fn [db _]
+      (put! db "window-state" "sideways")
+      (is (= :normal (window/start-state db))))))
+
+(deftest fullscreen-wins-over-maximised
+  (is (= :normal (window/state-of false false)))
+  (is (= :maximised (window/state-of true false)))
+  (is (= :fullscreen (window/state-of false true)))
+  (is (= :fullscreen (window/state-of true true))))
