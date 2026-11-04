@@ -15,6 +15,7 @@ import {
   toggleSidebarKey,
 } from "@/state/palette";
 import { shortcutOf } from "@/state/shortcuts";
+import { loadZoom, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { isMac } from "@/components/keys";
 import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId, toggleRowDetails } from "@/state/runner";
@@ -41,6 +42,9 @@ function useMenu() {
       onEvent("menu:check-updates", () => void checkForUpdates({ manual: true })),
       onEvent("menu:command-palette", () => openPalette("commands")),
       onEvent("menu:go-to-connection", () => openPalette("connections")),
+      onEvent("menu:zoom-in", () => stepZoom("in")),
+      onEvent("menu:zoom-out", () => stepZoom("out")),
+      onEvent("menu:zoom-reset", () => stepZoom("reset")),
     ];
     return () => offs.forEach((off) => off());
   }, []);
@@ -142,6 +146,10 @@ export default function App() {
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
     void loadSidebar();
+    void loadZoom();
+  }, []);
+  useEffect(() => {
+    return watchWindowState();
   }, []);
   // New versions: 10 s after start, then every 6 hours.
   useEffect(() => {

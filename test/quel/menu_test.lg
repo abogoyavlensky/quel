@@ -20,12 +20,13 @@
   (mapcat (fn [item] (cons (:label item) (labels (:items item)))) items))
 
 (deftest every-item-with-a-click-has-one
-  (is (= 10 (count (on-clicks (menu/spec {:app nil}))))))
+  (is (= 13 (count (on-clicks (menu/spec {:app nil}))))))
 
 (deftest the-tab-and-query-items-are-there
   (is (every? (set (labels (menu/spec {:app nil})))
               ["New Tab" "New Connection…" "Close Tab" "Reopen Closed Tab" "Query" "Run" "Run Script" "Cancel"
-               "Help" "Check for Updates…" "View" "Command Palette…" "Go to Connection…"])))
+               "Help" "Check for Updates…" "View" "Command Palette…" "Go to Connection…"
+               "Zoom In" "Zoom Out" "Actual Size"])))
 
 (deftest wails-accepts-the-spec
   @app
@@ -39,3 +40,9 @@
   (let [item (fn [label] (->> (menu/spec {:app nil}) (mapcat :items) (filter #(= label (:label %))) first))]
     (is (= "CmdOrCtrl+Shift+P" (:accelerator (item "Command Palette…"))))
     (is (= "CmdOrCtrl+P" (:accelerator (item "Go to Connection…"))))))
+
+(deftest the-zoom-items-have-their-keys
+  (let [item (fn [label] (->> (menu/spec {:app nil}) (mapcat :items) (filter #(= label (:label %))) first))]
+    (is (= "CmdOrCtrl+=" (:accelerator (item "Zoom In"))))
+    (is (= "CmdOrCtrl+-" (:accelerator (item "Zoom Out"))))
+    (is (= "CmdOrCtrl+0" (:accelerator (item "Actual Size"))))))

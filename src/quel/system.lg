@@ -49,6 +49,7 @@
                        :store (ig/ref :quel.store/db)
                        :secrets (ig/ref :quel.secrets/store)
                        :app (ig/ref :quel.shell/app)
+                       :window (ig/ref :quel.shell/window)
                        :updates (ig/ref :quel.updates/updater)}
    :quel.shell/app {:name "Quel"
                     :description "A database client"
@@ -56,6 +57,8 @@
                     :quit-on-last-window-closed true
                     :on-shutdown (fn [] (stop!))}
    :quel.shell/window {:app (ig/ref :quel.shell/app)
+                       ;; For the state the window was left in.
+                       :store (ig/ref :quel.store/db)
                        :title "Quel" :width 1200 :height 800
                        :min-width 720 :min-height 480
                        ;; macOS: the page draws under the title bar. Its

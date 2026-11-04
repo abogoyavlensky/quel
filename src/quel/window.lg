@@ -1,0 +1,81 @@
+(ns quel.window
+  (:require [sql.core :as sql]))
+
+;; What Quel remembers about its window, in the settings table: the zoom
+;; level and whether it was left maximised or fullscreen. Each has a row
+;; only away from its default. Nothing here calls Wails; quel.api and
+;; quel.shell apply these to the window.
+;;
+;; Quel keeps its own ladder of levels. Wails' ZoomIn and ZoomOut step
+;; differently per platform, and GetZoom passes through a C float (1.1
+;; comes back as 1.10000002), so the saved level is the truth. The ladder
+;; starts at 100%: Wails clamps anything lower. It stops at 150%: there the
+;; window's 720×480 minimum is 480×320 CSS px, and the title strip's 24px
+;; pill still fits the 38pt band that macOS centres the traffic lights in.
+
+(def zoom-levels [1.0 1.1 1.25 1.5])
+
+(def ^:private default-zoom (first zoom-levels))
+
+(defn- setting [db k]
+  (:value (sql/execute-one! db ["select value from settings where key = ?" k])))
+
+(defn- put-setting! [db k value]
+  (sql/execute! db [(str "insert into settings (key, value) values (?, ?)"
+                         " on conflict (key) do update set value = excluded.value")
+                    k value]))
+
+(defn- delete-setting! [db k]
+  (sql/execute! db ["delete from settings where key = ?" k]))
+
+(defn- nearest-level [level]
+  (apply min-key #(abs (- % level)) zoom-levels))
+
+(defn zoom-level
+  "The saved level, on the ladder; 100% when none is saved or it is
+   unreadable."
+  [db]
+  (let [saved (some-> (setting db "zoom") parse-double)]
+    (if saved (nearest-level saved) default-zoom)))
+
+(defn save-zoom!
+  "Remember the zoom level."
+  [db level]
+  (if (= default-zoom level)
+    (delete-setting! db "zoom")
+    (put-setting! db "zoom" (str level)))
+  nil)
+
+(defn next-zoom
+  "The level after `level` going \"in\", \"out\" or \"reset\". It stays put at
+   the ends of the ladder."
+  [level direction]
+  (case direction
+    "in" (or (first (filter #(> % level) zoom-levels)) (last zoom-levels))
+    "out" (or (last (filter #(< % level) zoom-levels)) default-zoom)
+    "reset" default-zoom
+    (throw (ex-info (str "Unknown zoom direction: " direction) {:direction direction}))))
+
+(def ^:private start-states {"maximised" :maximised "fullscreen" :fullscreen})
+
+(defn start-state
+  "The state the window was left in: :normal, :maximised or :fullscreen."
+  [db]
+  (get start-states (setting db "window-state") :normal))
+
+(defn save-start-state!
+  "Remember the state the window is in."
+  [db state]
+  (if (= :normal state)
+    (delete-setting! db "window-state")
+    (put-setting! db "window-state" (name state)))
+  nil)
+
+(defn state-of
+  "The window's state from its two checks. A fullscreen window may also
+   report as maximised, so fullscreen goes first."
+  [maximised? fullscreen?]
+  (cond
+    fullscreen? :fullscreen
+    maximised? :maximised
+    :else :normal))

@@ -37,6 +37,9 @@
 (def check-updates! (emitter "Check for Updates" "menu:check-updates"))
 (def command-palette! (emitter "Command Palette" "menu:command-palette"))
 (def go-to-connection! (emitter "Go to Connection" "menu:go-to-connection"))
+(def zoom-in! (emitter "Zoom In" "menu:zoom-in"))
+(def zoom-out! (emitter "Zoom Out" "menu:zoom-out"))
+(def zoom-reset! (emitter "Actual Size" "menu:zoom-reset"))
 
 ;; Cmd+W closes the editor tab: on macOS Wails' window menu has no Close
 ;; item, so the key is free. If the native menu and the editor's own keymap
@@ -44,6 +47,9 @@
 ;; per tab). Opening a palette tolerates the same double delivery: it sets
 ;; the state, it does not toggle it. Check for Updates sits in Help: the shim builds the app menu
 ;; from its role, which takes no items of ours.
+;; The zoom keys are here alone, with nothing on the page: a zoom step
+;; cannot take the double delivery. The key is = rather than Plus so the
+;; unshifted key works.
 (defn spec [env]
   [{:role :app-menu}
    {:label "File"
@@ -63,7 +69,14 @@
     :items [{:label "Command Palette…" :accelerator "CmdOrCtrl+Shift+P"
              :on-click (partial #'command-palette! env)}
             {:label "Go to Connection…" :accelerator "CmdOrCtrl+P"
-             :on-click (partial #'go-to-connection! env)}]}
+             :on-click (partial #'go-to-connection! env)}
+            {:separator true}
+            {:label "Zoom In" :accelerator "CmdOrCtrl+="
+             :on-click (partial #'zoom-in! env)}
+            {:label "Zoom Out" :accelerator "CmdOrCtrl+-"
+             :on-click (partial #'zoom-out! env)}
+            {:label "Actual Size" :accelerator "CmdOrCtrl+0"
+             :on-click (partial #'zoom-reset! env)}]}
    {:label "Query"
     :items [{:label "Run" :accelerator "CmdOrCtrl+Enter"
              :on-click (partial #'run! env)}

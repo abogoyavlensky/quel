@@ -44,6 +44,11 @@
     (is (= (ig/ref :quel.secrets/store) (:secrets h)))
     (is (= (ig/ref :quel.shell/app) (:app h)))))
 
+(deftest the-window-reads-the-store-and-the-handlers-see-the-window
+  (let [c (system/config)]
+    (is (= (ig/ref :quel.store/db) (get-in c [:quel.shell/window :store])))
+    (is (= (ig/ref :quel.shell/window) (get-in c [:quel.api/handlers :window])))))
+
 ;; The tests run without QUEL_SECRETS, so the real keyring is the default.
 (deftest the-keychain-unless-told-otherwise
   (is (= (if (= "memory" (os/getenv "QUEL_SECRETS")) :memory :system)

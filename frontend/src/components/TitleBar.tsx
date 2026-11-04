@@ -9,6 +9,7 @@ import { selectedWorkspace, store, useApp } from "@/state/store";
 import { updateLabel } from "@/state/updates";
 import { engineLabel, tagInk } from "./colors";
 import { ConnMark } from "./ConnMark";
+import { isMac } from "./keys";
 
 // A run policy other than Never ask, at the end of the connection pill.
 // Neutral ink: colour belongs to the tag.
@@ -55,6 +56,12 @@ function PolicyMark({ policy }: { policy: RunPolicy }) {
 // nothing. Server mode and Linux have no traffic lights; it reads the same.
 // The pill ends with the profile's run policy, unless it is Never ask
 // (PolicyMark).
+//
+// Zoom scales the page but not the lights. On macOS the height divides by
+// --zoom (state/window.ts), so the strip stays 38pt with the lights on its
+// centre line; the ladder stops where the 24px pill and button still fit.
+// The padding stays: it only grows in points, and on the right it clears
+// the button, which scales with the page.
 export function TitleBar() {
   const profile = useApp((s) => s.profiles.find((p) => p.id === s.selected));
   const w = useApp(selectedWorkspace);
@@ -67,7 +74,8 @@ export function TitleBar() {
     <header
       style={tag ? ({ "--tag": `var(--color-tag-${tag})` } as CSSProperties) : undefined}
       className={cn(
-        "relative flex h-[38px] shrink-0 items-center justify-center border-b bg-chrome px-40 text-xs [--wails-draggable:drag] select-none",
+        isMac ? "h-[calc(38px/var(--zoom,1))]" : "h-[38px]",
+        "relative flex shrink-0 items-center justify-center border-b bg-chrome px-40 text-xs [--wails-draggable:drag] select-none",
         tag &&
           "border-[color-mix(in_oklab,var(--tag)_25%,var(--border))] bg-[color-mix(in_oklab,var(--tag)_12%,var(--chrome))]",
       )}

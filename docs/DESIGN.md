@@ -126,6 +126,7 @@ waiting on the network inside Go, not in bytecode.
 | `quel.shell` | The Wails app and window components. |
 | `quel.system` | The integrant config and the running system (`defonce`). |
 | `quel.store` | App database: connection profiles, query history, saved workspace. Migrations in `quel.migrations`. |
+| `quel.window` | The zoom ladder, and the zoom level and window state in the app database. Calls no Wails. |
 | `quel.workspace` | Each profile's saved editor tabs and recently closed tabs, and the selected profile, in the app database. |
 | `quel.secrets` | Passwords in the macOS Keychain, keyed by profile id. Never in the app database. |
 | `quel.conn` | Opens a pool per connected profile, hands out sessions, tracks connection state. |
@@ -187,8 +188,8 @@ Besides `profiles`, it has `editor_tabs` (each profile's tabs: title,
 text, pinned, position, selection, and `closed_at`, set while the tab is
 in the recently closed list), `workspaces` (each profile's active tab and
 next "Query N" number) and `settings` (app-wide values: the selected
-profile). Tabs and the workspace row go with their profile (`on delete
-cascade`). See [Saved tabs](#saved-tabs).
+profile, the zoom level, the window state). Tabs and the workspace row go
+with their profile (`on delete cascade`). See [Saved tabs](#saved-tabs).
 
 Connecting a profile opens one `database/sql` pool. Two kinds of work use
 it:
@@ -546,6 +547,19 @@ at the bottom right.
   (`--text-sm`). The editor is JetBrains Mono at 16px with ligatures
   off, so `<>` and `>=` read as typed. Grid rows are 34px with every
   other row banded; tree rows 32px; connection rows 38px.
+- **Zoom.** View > Zoom In, Zoom Out and Actual Size (⌘=, ⌘-, ⌘0, also
+  in the Command Palette) step through 100, 110, 125 and 150%. It is the
+  webview's own zoom, which scales everything, pixel values included, so
+  the virtualizers need nothing; CSS `zoom` would break their scroll math.
+  Quel keeps its own ladder (`quel.window`) and never reads the level
+  back. It starts at 100% because Wails clamps anything lower
+  (`docs/backlog/zoom-below-100.md`), and stops at 150%, where the
+  minimum window is 480×320 CSS px and the top strip's 24px pill still
+  fits. The keys are native menu items only: a step cannot take the
+  double delivery that Run and the palettes tolerate. macOS ignores a
+  level set before the window runs, so the frontend asks for the saved
+  level at start (`restore-zoom`). Steps run one at a time on a promise
+  chain in `state/window.ts`.
 - **Connections.** Each row always shows its button: a plug to connect,
   a grey stop to disconnect (play is Run's icon, so it is not reused). The pencil shows on hover, and a
   right-click offers Connect or Disconnect, Edit… and Delete….
@@ -559,7 +573,19 @@ at the bottom right.
   content is centred with the same wide padding on both sides, so the
   pill clears the lights and the Update button at the right end, and
   fullscreen needs nothing. The button opts out of the drag area
-  (`--wails-draggable: no-drag`), so a click on it is a click.
+  (`--wails-draggable: no-drag`), so a click on it is a click. Zoom
+  scales the page but not the lights, so on macOS the strip's height
+  divides by `--zoom`, set on the root element: it is 38pt rather than
+  38px. The padding stays, since it only grows in points and on the right
+  it clears the button, which scales with the page.
+- **Window state.** A window left maximised or fullscreen opens that way
+  on the next run; macOS's green button enters fullscreen, so both count.
+  A debounced `resize` listener calls `save-window-state`, which asks the
+  window and writes the `window-state` row in `settings`, there only away
+  from normal. A resize covers every way in and out. Saving at shutdown
+  cannot work: the window is gone by then and reads as not maximised. The
+  state goes to `w/new-window` as `:start-state`. The normal window's
+  size and position are not remembered.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
   mix of a tag into the cool grey swings the hue through blue.
