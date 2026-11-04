@@ -280,7 +280,7 @@ export function watchWindowState(): () => void;        // debounced resize liste
 
 - [x] **Step 3: Mark the zoom entry done.** In `docs/backlog/zoom-setting.md`, set `**Status: done**` with a line saying where it landed, naming this plan and `zoom-below-100.md`. Commit with `git commit -am "Document zoom and the remembered window state"`.
 
-- [ ] **Step 4: Ask the user for the macOS check.** None of this can be checked on Linux. Report what passed, then ask them to run `lgx run` on a Mac and confirm each of these:
+- [x] **Step 4: Ask the user for the macOS check.** None of this can be checked on Linux. Report what passed, then ask them to run `lgx run` on a Mac and confirm each of these:
   1. ⌘= zooms in one step and ⌘- zooms out one step, including with focus in the editor. ⌘0 returns to 100%. The menu items work too.
   2. ⇧⌘= also zooms in, by one step. If it does nothing, add the shift-only `+` key described under **Keys** in the Design.
   3. The level survives a quit and start, with no distracting jump at start.
@@ -298,11 +298,11 @@ No migration: both settings are rows in the existing `settings` table. An older 
 
 ## Completion summary
 
-**Status: code complete; the macOS check (Task 7 Step 4) is open.** The branch is not pushed.
+**Status: completed.** The user ran the macOS check (Task 7 Step 4) and it passed.
 
 - **Upstream:** `wails-v0.9.0` (letgo-packages PR #19, merged as `493a6df`) adds `:start-state`, `set-zoom!`, `maximised?` and `fullscreen?`.
 - **Quel:** `quel.window` holds the ladder and settings. View > Zoom In / Zoom Out / Actual Size and the Command Palette step 100–150%, the level survives a restart, and a window left maximised or fullscreen reopens that way. On macOS the title strip stays 38pt under zoom.
-- **Verified:** on Linux in server mode, 188 backend tests, 496 frontend tests, 30 e2e specs (1 skipped), smoke, the 480×320 layout, and a native `lgx build` with the server tag. Native zoom, the accelerators and the window restore are not verified: they need the Mac.
+- **Verified:** on Linux in server mode, 188 backend tests, 496 frontend tests, 30 e2e specs (1 skipped), smoke, the 480×320 layout, and a native `lgx build` with the server tag. Native zoom, the accelerators and the window restore were checked by the user on a Mac.
 - **Issues:** none beyond the deviation notes above. Codex's reviews found no must-fix defects.
 
 **Deviations:**
