@@ -1,7 +1,9 @@
 # No way to zoom the interface
 
-**Status: planned**
-Plan: docs/plans/2026-11-04-2242-zoom-and-window-state.md
+**Status: done**
+Landed through docs/plans/2026-11-04-2242-zoom-and-window-state.md: View >
+Zoom In / Zoom Out / Actual Size from 100% to 150%, with the level kept in the
+app database. Going below 100% is `docs/backlog/zoom-below-100.md`.
 
 ## Problem
 
