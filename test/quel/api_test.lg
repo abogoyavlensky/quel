@@ -4,11 +4,18 @@
             [quel.conn-test :refer [temp-path]]
             [quel.secrets :as secrets]
             [quel.store-test :refer [temp-dir]]
+            [quel.window :as window]
             [string :as str]
+            [wails.core :as w]
             [clojure.test :refer [deftest is]]))
 
 ;; The handlers as plain fns: what the frontend calls, minus the bridge
 ;; (the wails package's own tests cover that).
+
+;; Wails keeps one application per process. The window is never run, so
+;; zoom and the state checks do nothing to it, as in server mode.
+(defonce ^:private window
+  (delay (w/new-window (w/new-app {:name "quel-test"}) {:hidden true})))
 
 (defn- with-env [f]
   (let [conns (ig/init-key :quel.conn/registry {})
@@ -21,7 +28,7 @@
       ;; :app stays nil: choose-file, the one handler that needs it, opens
       ;; a dialog and is not called here.
       ;; Update checks are off: nothing here reaches GitHub.
-      (f {:conns conns :execs execs :store store :secrets secrets :app nil
+      (f {:conns conns :execs execs :store store :secrets secrets :app nil :window @window
           :updates {:enabled? false :store store :version "1.0.0"}}
          path)
       (finally
@@ -39,9 +46,28 @@
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file" "export-result"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
+           "zoom" "restore-zoom" "save-window-state"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
+
+(deftest zoom-steps-from-the-saved-level-and-keeps-it
+  (with-env
+    (fn [env _]
+      (is (= 1.0 (api/restore-zoom env)))
+      (is (= 1.1 (api/zoom env "in")))
+      (is (= 1.25 (api/zoom env "in")))
+      (is (= 1.1 (api/zoom env "out")))
+      (is (= 1.1 (api/restore-zoom env)))
+      (is (= 1.0 (api/zoom env "reset")))
+      (is (= 1.0 (api/restore-zoom env))))))
+
+(deftest save-window-state-records-a-normal-window
+  (with-env
+    (fn [env _]
+      (window/save-start-state! (:store env) :maximised)
+      (is (nil? (api/save-window-state env)))
+      (is (= :normal (window/start-state (:store env)))))))
 
 (deftest open-run-close
   (with-env

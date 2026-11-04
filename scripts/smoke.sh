@@ -150,6 +150,13 @@ else
     echo "smoke: postgres step skipped (QUEL_PG_URL is unset; lgx smoke-pg sets it)"
 fi
 
+# The zoom level is saved across calls; server mode has no window to scale,
+# so the state check finds nothing to remember.
+[[ "$(call zoom '["in"]')" == *'1.1'* ]] || fail "zoom in"
+[[ "$(call restore-zoom '[]')" == *'1.1'* ]] || fail "restore-zoom"
+[[ "$(call zoom '["reset"]')" == *'1'* ]] || fail "zoom reset"
+r="$(call save-window-state '[]')"; nothing "$r" || fail "save-window-state: $r"
+
 # Redefine a handler in the running app. It is registered by var, so the
 # next call runs the new definition. (alter-var-root is fine here: this is
 # the test driving the app, not app code.)

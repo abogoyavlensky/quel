@@ -9,6 +9,7 @@
             [quel.meta.sqlite]
             [quel.profiles :as profiles]
             [quel.updates :as updates]
+            [quel.window :as window]
             [quel.workspace :as workspace]
             [wails.core :as w]))
 
@@ -130,6 +131,27 @@
 
 ;; New versions (quel.updates).
 
+;; Zoom. The level is applied here rather than when the window is created:
+;; macOS ignores a level set before the window runs. The frontend sends
+;; these one at a time, as a step reads the level and then writes it.
+(defn zoom [{:keys [store window]} direction]
+  (let [level (window/next-zoom (window/zoom-level store) direction)]
+    (window/save-zoom! store level)
+    (w/set-zoom! window level)
+    level))
+
+(defn restore-zoom [{:keys [store window]}]
+  (let [level (window/zoom-level store)]
+    (w/set-zoom! window level)
+    level))
+
+;; The frontend calls this after the window resizes. Saving at shutdown
+;; cannot work: the window is gone by then and reads as not maximised.
+(defn save-window-state [{:keys [store window]}]
+  (window/save-start-state! store (window/state-of (w/maximised? window)
+                                                   (w/fullscreen? window)))
+  nil)
+
 (defn check-update [{:keys [updates]}]
   (updates/check updates))
 
@@ -174,6 +196,9 @@
    "select-profile" #'select-profile
    "sidebar-hidden" #'sidebar-hidden
    "set-sidebar-hidden" #'set-sidebar-hidden
+   "zoom" #'zoom
+   "restore-zoom" #'restore-zoom
+   "save-window-state" #'save-window-state
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update
