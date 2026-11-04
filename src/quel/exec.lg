@@ -281,9 +281,9 @@
    after a cancel, where it is just \"context canceled\"), :sent? whether
    the statement may have reached the server, and :reconnect the result
    of taking a new session: {:ok true} or {:error msg}."
-  [{:keys [kind canceled? error sent? reconnect]}]
+  [{:keys [kind canceled? sent? reconnect] driver-msg :error}]
   (let [lost "The connection to the database was lost"
-        cause (if canceled? "" (str " (" error ")"))
+        cause (if canceled? "" (str " (" driver-msg ")"))
         opening (cond
                   (= :page kind)
                   (str (when canceled? "Query canceled. ")
@@ -328,19 +328,19 @@
   (let [session (conn/current-session conns conn-id session-id)]
     (if (and session (dead? session))
       (do (conn/reset-session! conns conn-id session-id)
-          (let [error (ex-message e)
-                sent? (not (not-sent? error))
+          (let [driver-msg (ex-message e)
+                sent? (not (not-sent? driver-msg))
                 reconnect (reconnect! conns conn-id session-id)]
             ;; :lost is the same story as data, for the frontend's notice
             ;; (the bridge sends ex-data as the error's cause).
-            (throw (ex-info (lost-message {:kind kind :canceled? canceled? :error error
+            (throw (ex-info (lost-message {:kind kind :canceled? canceled? :error driver-msg
                                            :sent? sent? :reconnect reconnect})
                             {:query-id query-id
                              :lost {:not-run (not sent?)
                                     :reconnected (boolean (:ok reconnect))
                                     :page (= :page kind)
                                     :canceled (boolean canceled?)
-                                    :error error}}))))
+                                    :error driver-msg}}))))
       (throw (failure e canceled? query-id)))))
 
 (defn- open-cursor!
