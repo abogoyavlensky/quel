@@ -581,6 +581,17 @@ up the first render, and saved in order, one save at a time
 the strip, so nothing else could bring it back. Hiding it with focus
 inside moves focus to the editor.
 
+The results pane can be hidden too, so the editor takes the workspace: ⌘J,
+the `PanelBottom` button between the other two panel buttons, or the
+Command Palette. It is also drawn or left out, and the editor and results
+panels have ids, so a dragged split comes back. The choice is app-wide and
+in memory only (`state/layout.ts`), because a run shows the results again:
+a run that starts, and a refusal (not connected, read-only), as both report
+there. A declined confirm, an empty editor and a run already in flight
+leave them hidden. Hiding them with focus inside moves focus to the editor.
+Hiding loses the grid's scroll position and hand-set column widths, as
+switching result tabs does; the selected row stays in the store.
+
 The sidebar lists the saved profiles, each with its status mark (filled
 when connected, a hollow ring when not, pulsing while connecting) and a
 Connect/Disconnect button.
@@ -685,8 +696,9 @@ name is `result-YYYY-MM-DD-HHMM.<ext>` in local time.
 | ⇧⌘P / Ctrl+Shift+P | Opens the **Command Palette** |
 | ⌘P / Ctrl+P | Opens **Go to Connection** |
 | ⌘E / Ctrl+E | Focuses the current tab's editor, wherever focus is |
-| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows (nothing on Messages or a result with no rows); the selected row stays |
+| ⌘R / Ctrl+R | Focuses the grid of the result the current tab shows, showing hidden results first (nothing on Messages or a result with no rows); the selected row stays |
 | ⌘B / Ctrl+B | Hides or shows the sidebar |
+| ⌘J / Ctrl+J | Hides or shows the results pane |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
 
@@ -717,15 +729,15 @@ by `e.code`, because Shift or the layout changes `e.key`. It catches ⌘P
 before the webview prints, and ⌘R before a browser reloads (server mode).
 None of the keys collide with CodeMirror's keymaps (its only `b` binding
 is the macOS emacs-style `Ctrl-b`). Only the palettes also have native
-View menu items; nine "Tab N" items would be clutter, ⌘B is a toggle
-that cannot take a double delivery (as ⌘I), and server mode has no
+View menu items; nine "Tab N" items would be clutter, ⌘B and ⌘J are
+toggles that cannot take a double delivery (as ⌘I), and server mode has no
 native menu. If the menu
 and the page both see a key, the palette opens twice, which is harmless:
 opening sets the state, it does not toggle it.
 
 **Dialog guards.** At most one palette is open (`store.palette`); opening
 the other switches to it. A palette does not open over the profile or
-update dialog, and ⌘E, ⌘R, ⌘B and ⌘1–9 do nothing while any dialog or palette is
+update dialog, and ⌘E, ⌘R, ⌘B, ⌘J and ⌘1–9 do nothing while any dialog or palette is
 open: in those, the keys belong to the dialog. Picking an entry closes the
 palette first and runs the action on the next tick, so actions that open
 the profile dialog are not refused.
