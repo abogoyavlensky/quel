@@ -31,6 +31,15 @@ Then in Quel: `run` and `fetch-page` replies carry `:in-transaction`;
 the editor tab shows it (a marker on the tab), and closing such a tab
 asks to commit, roll back or cancel.
 
+The same status should sharpen the lost-connection message
+(`quel.exec/lost-message`): say "Your open transaction was rolled back"
+only when one was open, instead of "Any open transaction, SET values and
+temp tables in this tab are gone." Read the status before each
+statement, not after a failure: by then `database/sql` may have closed
+the `Conn` (the `driver: bad connection` path), and `Conn.Raw` fails.
+pgx keeps the last status of a connection that died unnoticed, which is
+the one wanted.
+
 Size: a shim function per driver, tests and a release round; a few lines
 of backend and a small UI change in Quel.
 

@@ -101,20 +101,84 @@
         (is (= 0 (first-cell execs conns id "select count(*) from kept"))
             "the temp table survived, so the session did")))))
 
+(defn- thrown-of-run [execs conns id q]
+  (try (run execs conns id q) nil (catch e e)))
+
 (defn- message-of-run [execs conns id q]
   (try (run execs conns id q) nil (catch e (ex-message e))))
 
-(deftest a-dead-session-is-reset
+(defn- terminate! [conns id pid]
+  (sql/execute! (conn/db conns id) [(str "select pg_terminate_backend(" pid ")")]))
+
+(deftest a-dead-session-reconnects-at-once
   (with-pg
     (with-env
       (fn [execs conns id]
-        (let [pid (first-cell execs conns id "select pg_backend_pid()")]
-          (sql/execute! (conn/db conns id) [(str "select pg_terminate_backend(" pid ")")])
-          (let [msg (message-of-run execs conns id "select 1")]
-            (is (str/ends-with? (str msg) "The session was reset.") (str "got " (pr-str msg))))
+        (let [pid (first-cell execs conns id "select pg_backend_pid()")
+              old (conn/current-session conns id "s1")]
+          (terminate! conns id pid)
+          (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (= {:not-run false :reconnected true :page false :canceled false} (dissoc lost :error)))
+            (is (string? (:error lost)))
+            
+            (is (str/includes? msg "The connection to the database was lost") (str "got " (pr-str msg)))
+            (is (str/includes? msg "may or may not have completed"))
+            (is (str/includes? msg "Reconnected")))
+          (let [now (conn/current-session conns id "s1")]
+            (is (some? now) "a new session is in place before the next run")
+            (is (not (identical? old now))))
           (let [pid2 (first-cell execs conns id "select pg_backend_pid()")]
             (is (int? pid2) "the next run works")
             (is (not= pid pid2) "on a fresh connection")))))))
+
+(deftest an-idle-timeout-is-reported-as-not-run
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (run execs conns id "set idle_session_timeout = '500ms'")
+        (sleep 1500)
+        (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (true? (:not-run lost)))
+            (is (true? (:reconnected lost)))
+            
+          (is (str/includes? msg "so the statement was not run.") (str "got " (pr-str msg)))
+          (is (str/includes? msg "Reconnected")))
+        (is (= "0" (first-cell execs conns id "show idle_session_timeout"))
+            "the new session did not inherit the setting")))))
+
+(deftest a-failed-reconnect-is-reported
+  (with-pg
+    (let [conns (ig/init-key :quel.conn/registry {})
+          execs (ig/init-key :quel.exec/registry {:conns conns})
+          main (:conn-id (conn/open! conns pg-url))
+          admin (fn [q] (sql/execute! (conn/db conns main) [q]))
+          lost-url (str/replace pg-url #"/[^/?]+(\?|$)" "/quel_lost$1")]
+      (try
+        (admin "create database quel_lost")
+        (let [id (:conn-id (conn/open! conns lost-url))
+              pid (first-cell execs conns id "select pg_backend_pid()")]
+          (admin "alter database quel_lost allow_connections false")
+          (terminate! conns main pid)
+          (let [e (thrown-of-run execs conns id "select 1")
+                msg (str (ex-message e))
+                lost (:lost (ex-data e))]
+            (is (false? (:reconnected lost)))
+            
+            (is (str/includes? msg "Could not reconnect (") (str "got " (pr-str msg)))
+            (is (str/includes? msg "the next run tries again.")))
+          (is (nil? (conn/current-session conns id "s1")))
+          (admin "alter database quel_lost allow_connections true")
+          (is (= 1 (first-cell execs conns id "select 1")) "the next run reconnects")
+          (conn/close! conns id))
+        (finally
+          (try (admin "alter database quel_lost allow_connections true") (catch _ nil))
+          (try (admin "drop database if exists quel_lost with (force)") (catch _ nil))
+          (ig/halt-key! :quel.exec/registry execs)
+          (ig/halt-key! :quel.conn/registry conns))))))
 
 (deftest an-aborted-transaction-keeps-the-session
   (with-pg
@@ -124,7 +188,7 @@
           (run execs conns id "begin")
           (let [msg (message-of-run execs conns id "select 1/0")]
             (is (str/includes? (str msg) "division by zero"))
-            (is (not (str/includes? (str msg) "reset"))))
+            (is (not (str/includes? (str msg) "connection to the database was lost"))))
           (is (str/includes? (str (message-of-run execs conns id "select 1"))
                              "current transaction is aborted"))
           (run execs conns id "rollback")
@@ -236,6 +300,26 @@
         (is (= {} @execs))
         (is (= 0 (first-cell execs conns id "select count(*) from kept2"))
             "the session survived")))))
+
+(deftest a-page-read-on-a-lost-connection-is-reported
+  (with-pg
+    (with-env
+      (fn [execs conns id]
+        (let [pid (first-cell execs conns id "select pg_backend_pid()")]
+          (is (true? (:has-more (run-q execs conns id "lost" "select g from generate_series(1, 1000000) g"
+                                       :page-size 10))))
+          (terminate! conns id pid)
+          ;; Rows already in the client's buffer read fine first.
+          (let [msg (loop [n 0]
+                      (let [r (try (exec/fetch-page! execs conns "lost" 1000)
+                                   (catch e e))]
+                        (cond
+                          (not (map? r)) (do (is (true? (:page (:lost (ex-data r)))))
+                                             (ex-message r))
+                          (or (:closed r) (not (:has-more r)) (>= n 100000)) nil
+                          :else (recur (inc n)))))]
+            (is (str/includes? (str msg) "while reading rows") (str "got " (pr-str msg)))
+            (is (str/includes? (str msg) "Reconnected"))))))))
 
 (deftest a-run-is-cancellable-while-the-previous-cursor-drains
   (with-pg

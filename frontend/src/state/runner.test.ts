@@ -380,6 +380,91 @@ describe("runStatements", () => {
   });
 });
 
+describe("a lost connection", () => {
+  const lostErr = (lost: Record<string, unknown>) =>
+    Object.assign(new Error("The connection to the database was lost (broken pipe)"), {
+      cause: {
+        "query-id": "q",
+        lost: { "not-run": true, reconnected: true, page: false, canceled: false, error: "broken pipe", ...lost },
+      },
+    });
+
+  it("is a notice with Run again for the rest of the script, and a toast", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(1, false)).mockRejectedValueOnce(lostErr({}));
+    await runner.runStatements(tabId(), stmts("select 1; select 2; select 3"));
+    const m = tab().messages.at(-1)!;
+    expect(m).toMatchObject({ kind: "lost", sql: "select 2", lost: { notRun: true, error: "broken pipe" } });
+    expect(m.rerun?.map((s) => s.text)).toEqual(["select 2", "select 3"]);
+    expect(runner.canRerunLost(tab(), m.id)).toBe(true);
+    // The statement's result tab shows it, and is the one on screen.
+    const r = tab().results.at(-1)!;
+    expect(r).toMatchObject({ kind: "lost", sql: "select 2", messageId: m.id, lost: { notRun: true } });
+    expect(tab().active).toBe(r.id);
+    expect(toasts.info).toHaveBeenCalledWith(
+      "Query 1: connection restored.",
+      expect.objectContaining({ id: `lost-${tabId()}`, action: expect.objectContaining({ label: "Run again" }) }),
+    );
+  });
+
+  it("Run again runs the rest, and the run dismisses the toast", async () => {
+    api.run.mockRejectedValueOnce(lostErr({}));
+    await runner.runStatements(tabId(), stmts("select 2; select 3"));
+    const { onClick } = toasts.info.mock.calls[0][1].action;
+    api.run.mockResolvedValue(rowsResult(1, false));
+    toasts.dismiss.mockReset();
+    await onClick();
+    await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(3));
+    expect(api.run.mock.calls.slice(1).map((c) => c[3])).toEqual(["select 2", "select 3"]);
+    expect(toasts.dismiss).toHaveBeenCalledWith(`lost-${tabId()}`);
+  });
+
+  it("a stale Run again does nothing", async () => {
+    api.run.mockRejectedValueOnce(lostErr({}));
+    await runner.runStatements(tabId(), stmts("select 2"));
+    const lostId = tab().messages.at(-1)!.id;
+    api.run.mockResolvedValue(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 9"));
+    expect(runner.canRerunLost(tab(), lostId)).toBe(false);
+    await runner.rerunLost(tabId(), lostId);
+    expect(api.run).toHaveBeenCalledTimes(2);
+  });
+
+  it("offers no Run again when the statement may have completed", async () => {
+    api.run.mockRejectedValueOnce(lostErr({ "not-run": false }));
+    await runner.runStatements(tabId(), stmts("insert into t values (1)"));
+    const m = tab().messages.at(-1)!;
+    expect(m.kind).toBe("lost");
+    expect(m.rerun).toBeUndefined();
+    expect(toasts.info.mock.calls[0][1].action).toBeUndefined();
+  });
+
+  it("is an error when reconnecting failed", async () => {
+    api.run.mockRejectedValueOnce(lostErr({ reconnected: false }));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    expect(tab().messages.at(-1)).toMatchObject({ kind: "error" });
+    expect(toasts.info).not.toHaveBeenCalled();
+  });
+
+  it("is a cancel when the user canceled", async () => {
+    const e = lostErr({ canceled: true, "not-run": false });
+    e.message = "Query canceled. The connection to the database was lost";
+    api.run.mockRejectedValueOnce(e);
+    await runner.runStatements(tabId(), stmts("select 1"));
+    expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
+  });
+
+  it("is a notice without Run again on a page read", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(500, true));
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    const resultId = tab().results[0].id;
+    api.fetchPage.mockRejectedValueOnce(lostErr({ "not-run": false, page: true }));
+    await runner.fetchMore(tabId(), resultId);
+    const m = tab().messages.at(-1)!;
+    expect(m).toMatchObject({ kind: "lost", lost: { page: true } });
+    expect(m.rerun).toBeUndefined();
+  });
+});
+
 describe("run policy", () => {
   const withPolicy = (policy: RunPolicy) =>
     store.setState({

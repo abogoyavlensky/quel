@@ -25,7 +25,7 @@
  :deps {;; The desktop shell: a Wails v3 window whose handlers are let-go fns.
         abogoyavlensky/letgo-wails
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "wails-v0.7.0"
+         :git/tag "wails-v0.8.0"
          :deps/root "wails"}
 
         ;; An nREPL inside the running app, started only under `lgx run`.

@@ -155,9 +155,9 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
         ) : current?.kind === "rows" ? (
           <ResultGrid key={current.id} tabId={tab.id} result={current} />
         ) : current ? (
-          <ResultOutcome result={current} />
+          <ResultOutcome tab={tab} result={current} />
         ) : (
-          <MessagesView messages={tab.messages} />
+          <MessagesView tab={tab} />
         )}
       </div>
       <ResultFooter key={tab.id} tab={tab} result={current} />

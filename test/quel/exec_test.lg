@@ -444,3 +444,50 @@
         (is (not= :timeout (deref done 3000 :timeout)))
         (is (= {} @execs))
         (is (not (contains? @conns id)))))))
+
+(def ^:private broken-pipe
+  "write failed: write tcp 100.88.215.20:52866->10.20.84.128:5439: write: broken pipe")
+
+(deftest not-sent-errors-are-the-ones-that-reached-no-server
+  (doseq [msg [broken-pipe
+               "driver: bad connection"
+               "sql: connection is already closed"
+               "FATAL: terminating connection due to idle-session timeout (SQLSTATE 57P05)"
+               "FATAL: terminating connection due to idle-in-transaction timeout (SQLSTATE 25P03)"]]
+    (is (exec/not-sent? msg) msg))
+  (doseq [msg ["FATAL: terminating connection due to administrator command (SQLSTATE 57P01)"
+               "unexpected EOF"
+               nil]]
+    (is (not (exec/not-sent? msg)) (pr-str msg))))
+
+(def ^:private gone "Any open transaction, SET values and temp tables in this tab are gone.")
+
+(defn- lost [opts]
+  (exec/lost-message (merge {:kind :run :canceled? false :error broken-pipe
+                             :sent? false :reconnect {:ok true}}
+                            opts)))
+
+(deftest a-lost-connection-says-what-happened
+  (let [m (lost {})]
+    (is (str/includes? m broken-pipe))
+    (is (str/includes? m "so the statement was not run."))
+    (is (str/includes? m "Reconnected: the next run uses a new connection."))
+    (is (str/ends-with? m gone)))
+  (let [m (lost {:error "unexpected EOF" :sent? true})]
+    (is (str/includes? m "may or may not have completed"))
+    (is (not (str/includes? m "was not run"))))
+  (let [m (lost {:canceled? true :error "context canceled" :sent? true})]
+    (is (str/starts-with? m "Query canceled."))
+    (is (not (str/includes? m "context canceled")))
+    (is (str/ends-with? m gone)))
+  (let [m (lost {:kind :page :error "unexpected EOF" :sent? true})]
+    (is (str/includes? m "while reading rows"))
+    (is (str/includes? m "if it changes data, check before running it again"))
+    (is (str/includes? m "unexpected EOF")))
+  (let [m (lost {:kind :page :canceled? true :error "context canceled" :sent? true})]
+    (is (str/starts-with? m "Query canceled."))
+    (is (str/includes? m "while reading rows"))
+    (is (not (str/includes? m "context canceled"))))
+  (let [m (lost {:reconnect {:error "dial tcp: no route to host"}})]
+    (is (str/includes? m "Could not reconnect (dial tcp: no route to host): the next run tries again."))
+    (is (not (str/includes? m "Reconnected")))))

@@ -1,13 +1,15 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import type { Message } from "@/state/store";
+import type { EditorTab } from "@/state/store";
+import { LostNotice } from "./LostNotice";
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-// What each statement did, newest at the bottom: rows, rows affected, or
-// the error.
-export function MessagesView({ messages }: { messages: Message[] }) {
+// What each statement did, newest at the bottom: rows, rows affected, the
+// error, or a lost-and-restored connection.
+export function MessagesView({ tab }: { tab: EditorTab }) {
+  const { messages } = tab;
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
@@ -25,16 +27,20 @@ export function MessagesView({ messages }: { messages: Message[] }) {
             <p className="truncate font-mono text-muted-foreground" title={m.sql}>
               {m.sql.replace(/\s+/g, " ")}
             </p>
-            <p
-              className={cn(
-                "break-words whitespace-pre-wrap",
-                m.kind === "error" && "text-destructive",
-                m.kind === "canceled" && "text-muted-foreground",
-              )}
-            >
-              {m.text}
-              {m.elapsedMs !== null && <span className="text-muted-foreground"> in {m.elapsedMs} ms</span>}
-            </p>
+            {m.kind === "lost" && m.lost ? (
+              <LostNotice tab={tab} messageId={m.id} lost={m.lost} />
+            ) : (
+              <p
+                className={cn(
+                  "break-words whitespace-pre-wrap",
+                  m.kind === "error" && "text-destructive",
+                  m.kind === "canceled" && "text-muted-foreground",
+                )}
+              >
+                {m.text}
+                {m.elapsedMs !== null && <span className="text-muted-foreground"> in {m.elapsedMs} ms</span>}
+              </p>
+            )}
           </div>
         </div>
       ))}

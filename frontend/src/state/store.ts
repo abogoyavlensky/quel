@@ -2,7 +2,9 @@ import { useStore } from "zustand";
 import { createStore } from "zustand/vanilla";
 import type { CsvSeparator, ExportFormat } from "@/grid/export";
 import type { Cell, ClosedTab, Column, Profile, UpdateState } from "@/lib/types";
+import type { Lost } from "@/lib/lost";
 import type { ConfirmReason } from "@/sql/guard";
+import type { Statement } from "@/sql/split";
 
 // The app's state: the saved profiles and a workspace per profile (its
 // connection, its editor tabs, and each tab's results and messages).
@@ -46,15 +48,23 @@ export type ResultTab =
   | RowsResult
   | (ResultBase & { kind: "running" })
   | (ResultBase & { kind: "update"; text: string; elapsedMs: number })
-  | (ResultBase & { kind: "error" | "canceled"; text: string });
+  | (ResultBase & { kind: "error" | "canceled"; text: string })
+  // The connection was lost and restored. messageId: its notice in the
+  // messages, which holds what Run again would run.
+  | (ResultBase & { kind: "lost"; text: string; lost: Lost; messageId: string });
 
 export interface Message {
   id: string;
   sql: string; // the statement, as sent
-  kind: "rows" | "update" | "error" | "canceled";
+  kind: "rows" | "update" | "error" | "canceled" | "lost";
   text: string; // "500 rows", "3 rows affected", the error message
   elapsedMs: number | null;
   at: number; // Date.now()
+  // "lost": the connection was lost and restored (lib/lost.ts).
+  lost?: Lost;
+  // "lost" with nothing run: the failed statement and the rest of its
+  // script, for Run again.
+  rerun?: Statement[];
 }
 
 export interface EditorTab {
@@ -251,11 +261,14 @@ export function closedCursor(r: ResultTab): ResultTab {
   return r.kind === "rows" && r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r;
 }
 
-export function addMessage(tabId: string, m: Omit<Message, "id" | "at">): void {
+// Add a message; returns its id.
+export function addMessage(tabId: string, m: Omit<Message, "id" | "at">): string {
+  const id = crypto.randomUUID();
   updateTab(tabId, (t) => ({
     ...t,
-    messages: [...t.messages, { ...m, id: crypto.randomUUID(), at: Date.now() }].slice(-MAX_MESSAGES),
+    messages: [...t.messages, { ...m, id, at: Date.now() }].slice(-MAX_MESSAGES),
   }));
+  return id;
 }
 
 // Every open result in the profile's tabs becomes closed: the backend
