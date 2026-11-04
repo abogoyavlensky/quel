@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Cell, Column } from "@/lib/types";
-import { EXTENSIONS, formatResult, toCsv, toJson, toMarkdown } from "./export";
+import {
+  CHUNK_UNITS,
+  EXTENSIONS,
+  type ExportChunk,
+  type ExportFormat,
+  collectChunks,
+  formatChunks,
+  formatResult,
+  toCsv,
+  toJson,
+  toMarkdown,
+} from "./export";
 
 const col = (name: string, type = "TEXT"): Column => ({ name, type });
 
@@ -157,5 +168,68 @@ describe("formatResult", () => {
 
   it("has an extension per format", () => {
     expect(EXTENSIONS).toEqual({ csv: "csv", json: "json", markdown: "md" });
+  });
+});
+
+describe("formatChunks", () => {
+  const cols = [col("id", "INT4"), col("name")];
+  const rows: Cell[][] = Array.from({ length: 50 }, (_, i) => [i, `customer ${i}`]);
+  const texts = (chunks: Iterable<ExportChunk>) => [...chunks].map((c) => c.text);
+
+  it.each<[ExportFormat, string]>([
+    ["csv", toCsv(cols, rows, ";")],
+    ["json", toJson(cols, rows)],
+    ["markdown", toMarkdown(cols, rows)],
+  ])("joins to the whole %s, at any size", (format, whole) => {
+    expect(texts(formatChunks(format, cols, rows, ";")).join("")).toBe(whole);
+    expect(texts(formatChunks(format, cols, rows, ";", 16)).join("")).toBe(whole);
+  });
+
+  it("counts the rows up to all of them", () => {
+    const counts = [...formatChunks("csv", cols, rows, ",", 64)].map((c) => c.rows);
+    expect(counts.length).toBeGreaterThan(1);
+    expect(counts).toEqual([...counts].sort((a, b) => a - b));
+    expect(counts.at(-1)).toBe(50);
+  });
+
+  it("has a chunk for an empty result", () => {
+    expect([...formatChunks("json", cols, [], ",")]).toEqual([{ text: "[]", rows: 0 }]);
+    expect([...formatChunks("csv", cols, [], ",")]).toEqual([{ text: "id,name\r\n", rows: 0 }]);
+    expect([...formatChunks("markdown", cols, [], ",")]).toHaveLength(1);
+  });
+
+  it("cuts a cell longer than a chunk", () => {
+    const chunks = [...formatChunks("csv", [col("a")], [["x".repeat(100)]], ",", 8)];
+    expect(chunks.every((c) => c.text.length <= 8)).toBe(true);
+    expect(chunks.map((c) => c.text).join("")).toBe(`a\r\n${"x".repeat(100)}\r\n`);
+    expect(chunks.at(-1)?.rows).toBe(1);
+  });
+
+  it("never cuts a surrogate pair", () => {
+    const text = "😀".repeat(10);
+    for (const size of [2, 3, 4, 5]) {
+      const chunks = texts(formatChunks("csv", [col("a")], [[text]], ",", size));
+      expect(chunks.join("")).toBe(`a\r\n${text}\r\n`);
+      for (const c of chunks) {
+        expect(c.isWellFormed()).toBe(true);
+      }
+    }
+  });
+
+  it("stays under the bridge's cap for the worst text", () => {
+    const worst = JSON.stringify("\u0001".repeat(CHUNK_UNITS));
+    expect(new TextEncoder().encode(worst).length).toBeLessThan(64 * 1024 * 1024);
+  });
+});
+
+describe("collectChunks", () => {
+  it("gathers the texts and reports the rows", async () => {
+    const seen: number[] = [];
+    const chunks = [
+      { text: "a", rows: 2 },
+      { text: "b", rows: 5 },
+    ];
+    expect(await collectChunks(chunks, (n) => seen.push(n))).toEqual(["a", "b"]);
+    expect(seen).toEqual([0, 2, 5]);
   });
 });

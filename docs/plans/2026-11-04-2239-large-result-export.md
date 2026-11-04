@@ -357,7 +357,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/grid/export.ts`
 - Test: `frontend/src/grid/export.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Keep the `toCsv`, `toJson` and `toMarkdown` tests as they are. Keep the `formatResult` tests, for now, and add a `formatChunks` block:
   - For each format, the chunks' text joined equals `toCsv`, `toJson` or `toMarkdown`, with a small `size` and with the default.
   - The last chunk's `rows` is `rows.length`, and `rows` never goes down.
@@ -367,18 +367,18 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - The worst case fits: for `CHUNK_UNITS` control characters, `new TextEncoder().encode(JSON.stringify(text)).length` stays under 64 MiB. Build it with `"\u0001".repeat(CHUNK_UNITS)`.
   - `collectChunks` returns the texts in order and reports 0, then each chunk's `rows`.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the new tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   In `frontend/src/grid/export.ts`, as the Design says. Keep `formatResult` until Task 4 replaces its caller. Run the JSON cell code (`rawJson`) per row as it does today.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: PASS, with the existing format tests unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Format exports a chunk at a time"`
 
 ### Task 4: Save chunks to the backend
