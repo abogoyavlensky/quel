@@ -9,8 +9,9 @@
 ;; on the next launch: the open tabs (title, text, pinned, position, the
 ;; selection), the active tab, the next "Query N" number, and the most
 ;; recent closed tabs, for reopening. Results, messages and undo history
-;; are not saved. App-wide, the settings table keeps the selected profile
-;; and whether the sidebar is hidden.
+;; are not saved. App-wide, the settings table keeps the selected profile,
+;; whether the sidebar is hidden, and (see quel.window) the zoom and window
+;; state.
 ;;
 ;; A tab from the frontend arrives with string keys:
 ;;
