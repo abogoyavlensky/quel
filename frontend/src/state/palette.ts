@@ -1,6 +1,6 @@
 import { focusEditor } from "@/editor/states";
 import { selectTab } from "@/state/runner";
-import { toggleSidebar } from "./layout";
+import { showResults, toggleResults, toggleSidebar } from "./layout";
 import { store, selectedWorkspace, showsResult, type AppState } from "@/state/store";
 
 // The two palettes (components/CommandPalette.tsx, GoToConnection.tsx) and
@@ -55,9 +55,14 @@ export function focusEditorKey(): void {
 }
 
 // The active result's grid (ResultGrid marks it; only the active result's
-// grid is mounted).
+// grid is mounted). Hidden results show first, and the grid is there on the
+// next tick.
 export function focusResult(): void {
-  document.querySelector<HTMLElement>("[data-result-grid]")?.focus();
+  const focus = () => document.querySelector<HTMLElement>("[data-result-grid]")?.focus();
+  if (store.getState().resultsHidden) {
+    showResults();
+    setTimeout(focus);
+  } else focus();
 }
 
 // ⌘R: the grid of the result the current tab shows. Nothing without a grid
@@ -71,6 +76,11 @@ export function focusResultKey(): void {
 // strip).
 export function toggleSidebarKey(): void {
   if (!modalOpen(store.getState())) toggleSidebar();
+}
+
+// ⌘J: hide or show the results (layout.ts does nothing without a tab strip).
+export function toggleResultsKey(): void {
+  if (!modalOpen(store.getState())) toggleResults();
 }
 
 // ⌘1–⌘9: tab n, and its editor; 9 is the last tab, as in browsers.
