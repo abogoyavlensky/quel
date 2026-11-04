@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
-import type { ResultTab } from "@/state/store";
+import type { RowsResult } from "@/state/store";
 import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
 import { display, isNumericType } from "./format";
 import { initialWidths, numberWidth } from "./widths";
@@ -21,7 +21,7 @@ const MIN_COL = 40;
 const LOAD_AHEAD = 50; // rows from the end at which the next page loads
 
 // What the results footer says about a result's rows.
-export function rowsText(r: ResultTab): string {
+export function rowsText(r: RowsResult): string {
   const n = r.rows.length.toLocaleString();
   switch (r.cursor) {
     case "done":
@@ -35,7 +35,7 @@ export function rowsText(r: ResultTab): string {
   }
 }
 
-export function ResultGrid({ tabId, result }: { tabId: string; result: ResultTab }) {
+export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResult }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [widths, setWidths] = useState(() => initialWidths(result.columns, result.rows));
   const numeric = result.columns.map((c) => isNumericType(c.type));

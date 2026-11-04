@@ -24,17 +24,21 @@ import {
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
+  type RowsResult,
   type RunConfirm,
   type Workspace,
   activeTabOf,
   addMessage,
   closeCursors,
+  closedCursor,
+  findRows,
   findTab,
   newTabState,
   newWorkspace,
   selectedWorkspace,
   store,
   updateResult,
+  updateRows,
   updateTab,
   updateWorkspace,
   workspaceOfTab,
@@ -70,6 +74,9 @@ function stillOn(profileId: string, connId: string): boolean {
   const w = store.getState().workspaces[profileId];
   return w?.status === "connected" && w.connId === connId;
 }
+
+// What every kind of result has, to make a result of another kind.
+const resultBase = ({ id, sql, pinned }: ResultTab) => ({ id, sql, pinned });
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -111,16 +118,20 @@ export function answerRunConfirm(ok: boolean): void {
   answer?.(ok);
 }
 
-// Run statements one after another in the tab's session. Each one that
-// returns rows gets its own result tab; the run first drops the tab's
-// unpinned results, and the open cursors of the pinned ones are closed by
-// the backend as soon as the session runs again. The first error or a
-// cancel stops the script.
+// Run statements one after another in the tab's session. Each one gets its
+// own result tab when it starts, which its reply fills in: rows, a count,
+// or the error. The run first drops the tab's unpinned results, and the
+// open cursors of the pinned ones are closed by the backend as soon as the
+// session runs again. The first error or a cancel stops the script.
+//
+// The first statement's tab takes focus. A later one's does only from the
+// statement before it, so a user reading another tab mid-script stays
+// there, until an error or a cancel takes focus.
 //
 // First the profile's run policy judges the run as a whole (sql/guard.ts):
-// a refused run sends nothing and says why in the messages; a run that
-// asks waits for the dialog, and runs only if the tab is still ready on
-// the same connection. While a question is open every other run is
+// a refused run sends nothing, changes no result, and says why in a toast
+// and the messages; a run that asks waits for the dialog, and runs only if
+// the tab is still ready on the same connection. While a question is open every other run is
 // dropped, as a second run in flight is.
 export async function runStatements(tabId: string, statements: Statement[]): Promise<void> {
   if (pendingAnswer || statements.length === 0) return;
@@ -130,13 +141,9 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
   const profile = store.getState().profiles.find((p) => p.id === profileId);
   const decision = gate(profile?.["run-policy"] ?? "never", statements);
   if (decision.action === "refuse") {
-    addMessage(tabId, {
-      sql: decision.statement.text,
-      kind: "error",
-      text: `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`,
-      elapsedMs: null,
-    });
-    updateTab(tabId, (t) => ({ ...t, active: MESSAGES }));
+    const text = `Not run: ${profile?.name ?? "this connection"} is read-only, and this statement changes data or structure.`;
+    addMessage(tabId, { sql: decision.statement.text, kind: "error", text, elapsedMs: null });
+    notify.error(text, { id: "run-refused" });
     return;
   }
   if (decision.action === "confirm") {
@@ -155,21 +162,17 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
 
   const firstId = newId();
   for (const r of tab.results) {
-    if (!r.pinned && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
+    if (!r.pinned && r.kind === "rows" && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
   }
   updateTab(tabId, (t) => ({
     ...t,
     runningQueryId: firstId,
     stopping: false,
     runStartedAt: Date.now(),
-    results: t.results
-      .filter((r) => r.pinned)
-      .map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
-    active: t.results.some((r) => r.pinned && r.id === t.active) ? t.active : MESSAGES,
+    results: t.results.filter((r) => r.pinned).map(closedCursor),
   }));
 
-  let lastResult: string | null = null;
-  let failed = false;
+  let previous: string | null = null;
   try {
     for (const [i, stmt] of statements.entries()) {
       const current = alive() ? findTab(tabId) : undefined;
@@ -181,32 +184,28 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
       updateTab(tabId, (t) => ({
         ...t,
         runningQueryId: queryId,
-        results: t.results.map((r) => (r.cursor === "open" ? { ...r, cursor: "closed", fetching: false } : r)),
+        results: [...t.results.map(closedCursor), { kind: "running", id: queryId, sql: stmt.text, pinned: false }],
+        active: previous === null || t.active === previous ? queryId : t.active,
       }));
+      const hasTab = () => findTab(tabId)?.results.some((r) => r.id === queryId) ?? false;
       try {
         const r = await api.run(connId, tabId, queryId, stmt.text);
         if (!alive()) return;
         // The profile disconnected while this ran: its cursor is gone.
         const live = stillOn(profileId, connId);
         if (r.columns.length > 0) {
-          lastResult = queryId;
-          updateTab(tabId, (t) => ({
-            ...t,
-            results: [
-              ...t.results,
-              {
-                id: queryId,
-                sql: stmt.text,
-                columns: r.columns,
-                rows: r.rows,
-                cursor: !r["has-more"] ? "done" : live ? "open" : "closed",
-                fetching: false,
-                pinned: false,
-                elapsedMs: r["elapsed-ms"],
-                selectedRow: null,
-              },
-            ],
+          updateResult(tabId, queryId, (p) => ({
+            ...resultBase(p),
+            kind: "rows",
+            columns: r.columns,
+            rows: r.rows,
+            cursor: !r["has-more"] ? "done" : live ? "open" : "closed",
+            fetching: false,
+            elapsedMs: r["elapsed-ms"],
+            selectedRow: null,
           }));
+          // Its tab closed while it ran, and the cancel came too late.
+          if (r["has-more"] && live && !hasTab()) void api.closeResult(queryId).catch(() => {});
           addMessage(tabId, {
             sql: stmt.text,
             kind: "rows",
@@ -215,42 +214,29 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
           });
         } else {
           const n = r["update-count"];
-          addMessage(tabId, {
-            sql: stmt.text,
-            kind: "update",
-            text: n === null ? "Done" : plural(n, "row affected", "rows affected"),
-            elapsedMs: r["elapsed-ms"],
-          });
+          const text = n === null ? "Done" : plural(n, "row affected", "rows affected");
+          updateResult(tabId, queryId, (p) => ({ ...resultBase(p), kind: "update", text, elapsedMs: r["elapsed-ms"] }));
+          addMessage(tabId, { sql: stmt.text, kind: "update", text, elapsedMs: r["elapsed-ms"] });
         }
       } catch (e) {
         if (!alive()) return;
         const text = errorText(e);
         const lost = lostOf(e);
         if (lost?.reconnected && !lost.canceled) {
-          addLost(tabId, stmt.text, text, lost, lost.notRun ? statements.slice(i) : undefined);
+          const messageId = addLost(tabId, stmt.text, text, lost, lost.notRun ? statements.slice(i) : undefined);
+          updateResult(tabId, queryId, (p) => ({ ...resultBase(p), kind: "lost", text, lost, messageId }));
         } else {
-          addMessage(tabId, {
-            sql: stmt.text,
-            kind: text.startsWith("Query canceled.") ? "canceled" : "error",
-            text,
-            elapsedMs: null,
-          });
+          const kind = text.startsWith("Query canceled.") ? "canceled" : "error";
+          updateResult(tabId, queryId, (p) => ({ ...resultBase(p), kind, text }));
+          addMessage(tabId, { sql: stmt.text, kind, text, elapsedMs: null });
         }
-        failed = true;
+        if (hasTab()) updateTab(tabId, (t) => ({ ...t, active: queryId }));
         break;
       }
+      previous = queryId;
     }
   } finally {
-    if (alive()) {
-      updateTab(tabId, (t) => ({
-        ...t,
-        runningQueryId: null,
-        stopping: false,
-        runStartedAt: null,
-        // The last result may have been closed while the script ran on.
-        active: !failed && lastResult && t.results.some((r) => r.id === lastResult) ? lastResult : MESSAGES,
-      }));
-    }
+    if (alive()) updateTab(tabId, (t) => ({ ...t, runningQueryId: null, stopping: false, runStartedAt: null }));
   }
 }
 
@@ -261,14 +247,15 @@ const lostToastId = (tabId: string) => `lost-${tabId}`;
 // The connection under a statement or page read was lost, and the backend
 // reconnected the tab. A notice in the messages, and a toast; both offer
 // Run again when nothing was run (rerun: that statement and the rest of
-// its script).
-function addLost(tabId: string, sql: string, text: string, lost: Lost, rerun?: Statement[]): void {
+// its script). Returns the message's id.
+function addLost(tabId: string, sql: string, text: string, lost: Lost, rerun?: Statement[]): string {
   const messageId = addMessage(tabId, { sql, kind: "lost", text, elapsedMs: null, lost, rerun });
   const title = findTab(tabId)?.title ?? "Query";
   notify.info(`${title}: connection restored.`, {
     id: lostToastId(tabId),
     action: rerun ? { label: "Run again", onClick: () => void rerunLost(tabId, messageId) } : undefined,
   });
+  return messageId;
 }
 
 // Whether a lost-connection message can still be run again: it is the
@@ -315,11 +302,11 @@ export async function runCurrent(mode: RunMode): Promise<void> {
 // Load the next page of an open result, up to maxRows in all.
 export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<void> {
   const tab = findTab(tabId);
-  const result = tab?.results.find((r) => r.id === resultId);
+  const result = findRows(tabId, resultId);
   if (!tab || !result || result.cursor !== "open" || result.fetching || tab.runningQueryId) return;
   if (result.rows.length >= maxRows) {
     void api.closeResult(resultId).catch(() => {});
-    updateResult(tabId, resultId, (r) => ({ ...r, cursor: "capped" }));
+    updateRows(tabId, resultId, (r) => ({ ...r, cursor: "capped" }));
     return;
   }
 
@@ -327,13 +314,13 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
   if (w?.status !== "connected" || !w.connId) return;
   const { profileId, connId } = w;
   const alive = aliveFn(tabId);
-  updateResult(tabId, resultId, (r) => ({ ...r, fetching: true }));
+  updateRows(tabId, resultId, (r) => ({ ...r, fetching: true }));
   updateTab(tabId, (t) => ({ ...t, runningQueryId: resultId }));
   try {
     const p = await api.fetchPage(resultId);
     if (!alive()) return;
     const live = stillOn(profileId, connId);
-    updateResult(tabId, resultId, (r) => {
+    updateRows(tabId, resultId, (r) => {
       // Closed meanwhile (a disconnect, the result was replaced).
       if (r.cursor !== "open") return r;
       const rows = r.rows.concat(p.rows);
@@ -348,7 +335,7 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
   } catch (e) {
     if (!alive()) return;
     const text = errorText(e);
-    updateResult(tabId, resultId, (r) => (r.cursor === "open" ? { ...r, cursor: "closed" } : r));
+    updateRows(tabId, resultId, (r) => (r.cursor === "open" ? { ...r, cursor: "closed" } : r));
     const lost = lostOf(e);
     if (lost?.reconnected && !lost.canceled) {
       addLost(tabId, result.sql, text, lost);
@@ -362,7 +349,7 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
     }
   } finally {
     if (alive()) {
-      updateResult(tabId, resultId, (r) => ({ ...r, fetching: false }));
+      updateRows(tabId, resultId, (r) => ({ ...r, fetching: false }));
       updateTab(tabId, (t) => ({ ...t, runningQueryId: null }));
     }
   }
@@ -373,7 +360,7 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
 // result or tab is gone, another statement is running in the tab, or the
 // cursor closed (canceled, an error, a disconnect).
 export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<boolean> {
-  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  const find = () => findRows(tabId, resultId);
   for (;;) {
     const result = find();
     if (!result || result.cursor === "closed") return false;
@@ -393,7 +380,7 @@ export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROW
 }
 
 // Resolves once the result is gone or no longer fetching.
-function untilNotFetching(find: () => ResultTab | undefined): Promise<void> {
+function untilNotFetching(find: () => RowsResult | undefined): Promise<void> {
   return new Promise((resolve) => {
     const unsubscribe = store.subscribe(() => {
       if (find()?.fetching) return;
@@ -519,18 +506,23 @@ export async function closeTab(tabId: string): Promise<void> {
   } catch (e) {
     if (!store.getState().workspaces[profileId]) return;
     seed(tabId, text, selection);
-    // As it was, less the run: cancelled above, and ended by the epoch. A
-    // result whose page was in flight is closed: that page is dropped, so
-    // reading on would skip its rows.
-    for (const r of tab.results) if (r.fetching && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
+    // As it was, less the run: cancelled above, and ended by the epoch, so
+    // its statement shows as canceled. A result whose page was in flight is
+    // closed: that page is dropped, so reading on would skip its rows.
+    for (const r of tab.results) {
+      if (r.kind === "rows" && r.fetching && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
+    }
     const back: EditorTab = {
       ...tab,
       runningQueryId: null,
       stopping: false,
       runStartedAt: null,
-      results: tab.results.map((r) =>
-        r.fetching ? { ...r, fetching: false, cursor: r.cursor === "open" ? "closed" : r.cursor } : r,
-      ),
+      results: tab.results.map((r): ResultTab => {
+        if (r.kind === "running") return { ...resultBase(r), kind: "canceled", text: "Query canceled." };
+        return r.kind === "rows" && r.fetching
+          ? { ...r, fetching: false, cursor: r.cursor === "open" ? "closed" : r.cursor }
+          : r;
+      }),
     };
     // The fresh tab that stood in for it goes, unless typed in since.
     const stale = replacement !== null && currentInput(replacement).text === "" ? replacement : null;
@@ -592,7 +584,7 @@ export function selectResult(tabId: string, id: string): void {
 }
 
 export function selectRow(tabId: string, resultId: string, index: number | null): void {
-  updateResult(tabId, resultId, (r) => ({ ...r, selectedRow: index }));
+  updateRows(tabId, resultId, (r) => ({ ...r, selectedRow: index }));
 }
 
 export function toggleRowDetails(): void {
@@ -625,7 +617,7 @@ export async function exportResult(
   action: "copy" | "save",
   maxRows = MAX_ROWS,
 ): Promise<void> {
-  const find = () => findTab(tabId)?.results.find((r) => r.id === resultId);
+  const find = () => findRows(tabId, resultId);
   const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
   if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
   const result = find();
@@ -664,7 +656,8 @@ export function pin(tabId: string, resultId: string): void {
 export function closeResult(tabId: string, resultId: string): void {
   const r = findTab(tabId)?.results.find((x) => x.id === resultId);
   if (!r) return;
-  if (r.cursor === "open") void api.closeResult(resultId).catch(() => {});
+  if (r.kind === "rows" && r.cursor === "open") void api.closeResult(resultId).catch(() => {});
+  if (r.kind === "running") cancel(tabId);
   updateTab(tabId, (t: EditorTab) => {
     const results = t.results.filter((x) => x.id !== resultId);
     const active = t.active === resultId ? (results.at(-1)?.id ?? MESSAGES) : t.active;

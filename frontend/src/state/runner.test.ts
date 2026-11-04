@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClosedTab, FetchResult, RunResult, SavedTab, SavedWorkspace } from "@/lib/types";
 import type { RunPolicy } from "@/sql/guard";
+import type { RowsResult } from "./store";
 
 const api = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -85,6 +86,12 @@ const ws = (id = "p1") => store.getState().workspaces[id];
 const tab = (id = "p1") => activeTabOf(ws(id));
 const tabId = (id = "p1") => ws(id).activeTab;
 const stmts = (sql: string) => split(sql);
+// The tab's i-th result, which must have rows.
+function rowsAt(i: number, t = tab()): RowsResult {
+  const r = t.results[i];
+  if (r?.kind !== "rows") throw new Error(`result ${i} has no rows: ${r?.kind}`);
+  return r;
+}
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
@@ -126,32 +133,142 @@ describe("runStatements", () => {
     await runner.runStatements(tabId(), stmts("select 1"));
     const t = tab();
     expect(t.results).toHaveLength(1);
-    expect(t.results[0].cursor).toBe("open");
-    expect(t.results[0].rows).toHaveLength(500);
+    expect(rowsAt(0, t).cursor).toBe("open");
+    expect(rowsAt(0, t).rows).toHaveLength(500);
     expect(t.active).toBe(t.results[0].id);
     expect(t.runningQueryId).toBeNull();
     expect(api.run).toHaveBeenCalledWith("c1", tabId(), t.results[0].id, "select 1");
     expect(t.messages[0]).toMatchObject({ kind: "rows", sql: "select 1" });
   });
 
-  it("gives each row-returning statement of a script its own tab", async () => {
+  it("shows a running tab until the reply fills it", async () => {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    const [r] = tab().results;
+    expect(r).toMatchObject({ kind: "running", sql: "select 1" });
+    expect(tab().active).toBe(r.id);
+    expect(tab().runningQueryId).toBe(r.id);
+    reply.resolve(rowsResult(3, false));
+    await running;
+    expect(rowsAt(0).id).toBe(r.id);
+    expect(tab().active).toBe(r.id);
+  });
+
+  it("shows a statement with no rows in its tab", async () => {
+    api.run.mockResolvedValue(update(1));
+    await runner.runStatements(tabId(), stmts("insert into t values (1)"));
+    const t = tab();
+    expect(t.results).toEqual([
+      { kind: "update", id: t.active, sql: "insert into t values (1)", pinned: false, text: "1 row affected", elapsedMs: 3 },
+    ]);
+    expect(t.messages.at(-1)).toMatchObject({ kind: "update" });
+  });
+
+  it("says Done for a statement with no update count", async () => {
+    api.run.mockResolvedValue({ ...update(0), "update-count": null });
+    await runner.runStatements(tabId(), stmts("create table x (a int)"));
+    expect(tab().results[0]).toMatchObject({ kind: "update", text: "Done" });
+  });
+
+  it("gives every statement of a script a tab, the last one active", async () => {
     api.run
-      .mockResolvedValueOnce(rowsResult(2, false))
-      .mockResolvedValueOnce(update(3))
+      .mockResolvedValueOnce(rowsResult(1, false))
+      .mockResolvedValueOnce(update(2))
       .mockResolvedValueOnce(rowsResult(1, false));
     await runner.runStatements(tabId(), stmts("select 1; update t set x = 1; select 2"));
     const t = tab();
-    expect(t.results).toHaveLength(2);
-    expect(t.results.map((r) => r.cursor)).toEqual(["done", "done"]);
+    expect(t.results.map((r) => r.kind)).toEqual(["rows", "update", "rows"]);
+    expect([rowsAt(0, t).cursor, rowsAt(2, t).cursor]).toEqual(["done", "done"]);
     expect(t.messages.map((m) => m.kind)).toEqual(["rows", "update", "rows"]);
-    expect(t.messages[1].text).toBe("3 rows affected");
-    expect(t.active).toBe(t.results[1].id);
+    expect(t.messages[1].text).toBe("2 rows affected");
+    expect(t.active).toBe(t.results[2].id);
   });
 
-  it("shows messages for a run with no rows", async () => {
-    api.run.mockResolvedValue(update(1));
-    await runner.runStatements(tabId(), stmts("insert into t values (1)"));
+  it("moves focus from a pinned result to the run, which leaves its rows alone", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(3, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const pinned = rowsAt(0);
+    runner.pin(tabId(), pinned.id);
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 2"));
+    expect(tab().active).toBe(tab().results[1].id);
+    reply.resolve(rowsResult(1, false));
+    await running;
+    expect(rowsAt(0).rows).toEqual(pinned.rows);
+    expect(rowsAt(0).pinned).toBe(true);
+  });
+
+  it("keeps a pin set while the statement runs", async () => {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    runner.pin(tabId(), tab().results[0].id);
+    reply.resolve(rowsResult(1, false));
+    await running;
+    expect(rowsAt(0).pinned).toBe(true);
+  });
+
+  it("leaves a user on the tab they picked mid-script, until a statement fails", async () => {
+    const second = deferred<RunResult>();
+    const third = deferred<RunResult>();
+    api.run
+      .mockResolvedValueOnce(rowsResult(1, false))
+      .mockReturnValueOnce(second.promise)
+      .mockReturnValueOnce(third.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1; select 2; select 3"));
+    await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
+    const first = tab().results[0].id;
+    runner.selectResult(tabId(), first);
+    second.resolve(rowsResult(1, false));
+    await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(3));
+    expect(tab().active).toBe(first);
+    third.reject(new Error("boom"));
+    await running;
+    expect(tab().results[2]).toMatchObject({ kind: "error", text: "boom" });
+    expect(tab().active).toBe(tab().results[2].id);
+  });
+
+  it("leaves a user on Messages mid-script", async () => {
+    const second = deferred<RunResult>();
+    api.run.mockResolvedValueOnce(rowsResult(1, false)).mockReturnValueOnce(second.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1; select 2; select 3"));
+    await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
+    runner.selectResult(tabId(), MESSAGES);
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    second.resolve(rowsResult(1, false));
+    await running;
     expect(tab().active).toBe(MESSAGES);
+  });
+
+  it("closing the running tab cancels the run and stops the script", async () => {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1; select 2"));
+    const id = tab().results[0].id;
+    runner.closeResult(tabId(), id);
+    expect(api.cancel).toHaveBeenCalledWith(id);
+    expect(tab().results).toHaveLength(0);
+    reply.reject(new Error("Query canceled."));
+    await running;
+    expect(api.run).toHaveBeenCalledTimes(1);
+    expect(tab().results).toHaveLength(0);
+    expect(tab().active).toBe(MESSAGES);
+    expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
+    expect(tab().runningQueryId).toBeNull();
+  });
+
+  it("closes the cursor of a reply whose tab was closed", async () => {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1"));
+    const id = tab().results[0].id;
+    runner.closeResult(tabId(), id);
+    reply.resolve(rowsResult(500, true));
+    await running;
+    expect(api.closeResult).toHaveBeenCalledWith(id);
+    expect(tab().results).toHaveLength(0);
   });
 
   it("replaces unpinned results and keeps pinned ones, closed", async () => {
@@ -165,7 +282,7 @@ describe("runStatements", () => {
     const t = tab();
     expect(t.results.map((r) => r.id)).toEqual([pinned, t.results[1].id]);
     expect(t.results[1].id).not.toBe(unpinned);
-    expect(t.results[0].cursor).toBe("closed");
+    expect(rowsAt(0, t).cursor).toBe("closed");
     expect(api.closeResult).toHaveBeenCalledWith(unpinned);
     expect(api.closeResult).not.toHaveBeenCalledWith(pinned);
   });
@@ -176,7 +293,9 @@ describe("runStatements", () => {
     const t = tab();
     expect(api.run).toHaveBeenCalledTimes(2);
     expect(t.messages.at(-1)).toMatchObject({ kind: "error", text: "no such table: nope" });
-    expect(t.active).toBe(MESSAGES);
+    expect(t.results.map((r) => r.kind)).toEqual(["rows", "error"]);
+    expect(t.results[1]).toMatchObject({ sql: "select * from nope", text: "no such table: nope" });
+    expect(t.active).toBe(t.results[1].id);
     expect(t.runningQueryId).toBeNull();
   });
 
@@ -191,7 +310,22 @@ describe("runStatements", () => {
     await running;
     expect(api.run).toHaveBeenCalledTimes(1);
     expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
+    expect(tab().results).toEqual([
+      { kind: "canceled", id: tab().active, sql: "select 1", pinned: false, text: "Query canceled." },
+    ]);
     expect(tab().stopping).toBe(false);
+  });
+
+  it("keeps the outcome of a statement that finished before Stop, and sends no more", async () => {
+    const first = deferred<RunResult>();
+    api.run.mockReturnValueOnce(first.promise);
+    const running = runner.runStatements(tabId(), stmts("select 1; select 2"));
+    runner.cancel(tabId());
+    first.resolve(rowsResult(2, false));
+    await running;
+    expect(api.run).toHaveBeenCalledTimes(1);
+    expect(rowsAt(0).rows).toHaveLength(2);
+    expect(tab().results).toHaveLength(1);
   });
 
   it("ignores a run while one is in flight", async () => {
@@ -213,7 +347,7 @@ describe("runStatements", () => {
   it("closes an earlier result's cursor when the script runs on", async () => {
     api.run.mockResolvedValueOnce(rowsResult(500, true)).mockResolvedValueOnce(update(1));
     await runner.runStatements(tabId(), stmts("select 1; delete from t"));
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("does not open a cursor for a profile disconnected meanwhile", async () => {
@@ -223,19 +357,20 @@ describe("runStatements", () => {
     await runner.disconnectProfile("p1");
     first.resolve(rowsResult(500, true));
     await running;
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
-  it("does not activate a result closed while the script ran on", async () => {
+  it("keeps the running tab active when an earlier result closes", async () => {
     const second = deferred<RunResult>();
     api.run.mockResolvedValueOnce(rowsResult(1, false)).mockReturnValueOnce(second.promise);
     const running = runner.runStatements(tabId(), stmts("select 1; update t set x = 1"));
     await vi.waitFor(() => expect(api.run).toHaveBeenCalledTimes(2));
     runner.closeResult(tabId(), tab().results[0].id);
+    expect(tab().active).toBe(tab().results[0].id);
     second.resolve(update(1));
     await running;
-    expect(tab().results).toHaveLength(0);
-    expect(tab().active).toBe(MESSAGES);
+    expect(tab().results.map((r) => r.kind)).toEqual(["update"]);
+    expect(tab().active).toBe(tab().results[0].id);
   });
 
   it("caps the messages log", async () => {
@@ -261,6 +396,10 @@ describe("a lost connection", () => {
     expect(m).toMatchObject({ kind: "lost", sql: "select 2", lost: { notRun: true, error: "broken pipe" } });
     expect(m.rerun?.map((s) => s.text)).toEqual(["select 2", "select 3"]);
     expect(runner.canRerunLost(tab(), m.id)).toBe(true);
+    // The statement's result tab shows it, and is the one on screen.
+    const r = tab().results.at(-1)!;
+    expect(r).toMatchObject({ kind: "lost", sql: "select 2", messageId: m.id, lost: { notRun: true } });
+    expect(tab().active).toBe(r.id);
     expect(toasts.info).toHaveBeenCalledWith(
       "Query 1: connection restored.",
       expect.objectContaining({ id: `lost-${tabId()}`, action: expect.objectContaining({ label: "Run again" }) }),
@@ -351,12 +490,19 @@ describe("run policy", () => {
 
   it("read-only refuses a script with a write, sending nothing", async () => {
     withPolicy("read-only");
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const before = tab();
+    api.run.mockClear();
     await runner.runStatements(tabId(), stmts("select 1; delete from t"));
     expect(api.run).not.toHaveBeenCalled();
     const t = tab();
     expect(t.messages.at(-1)).toMatchObject({ kind: "error", sql: "delete from t" });
-    expect(t.messages.at(-1)?.text).toContain("Prod is read-only");
-    expect(t.active).toBe(MESSAGES);
+    const text = t.messages.at(-1)?.text;
+    expect(text).toContain("Prod is read-only");
+    expect(toasts.error).toHaveBeenCalledWith(text, { id: "run-refused" });
+    expect(t.results).toEqual(before.results);
+    expect(t.active).toBe(before.active);
     expect(t.runningQueryId).toBeNull();
     expect(store.getState().runConfirm).toBeNull();
   });
@@ -426,10 +572,10 @@ describe("row details", () => {
   it("selects a row on one result only", async () => {
     api.run.mockResolvedValueOnce(rowsResult(3, false)).mockResolvedValueOnce(rowsResult(3, false));
     await runner.runStatements(tabId(), stmts("select 1; select 2"));
-    const [r1, r2] = tab().results;
+    const [r1, r2] = [rowsAt(0), rowsAt(1)];
     expect(r1.selectedRow).toBeNull();
     runner.selectRow(tabId(), r1.id, 2);
-    expect(tab().results.map((r) => r.selectedRow)).toEqual([2, null]);
+    expect([rowsAt(0).selectedRow, rowsAt(1).selectedRow]).toEqual([2, null]);
     expect(r2.selectedRow).toBeNull();
   });
 
@@ -442,7 +588,7 @@ describe("row details", () => {
     await runner.runStatements(tabId(), stmts("select 2"));
     runner.selectRow(tabId(), tab().results[1].id, 0);
     await runner.runStatements(tabId(), stmts("select 3"));
-    expect(tab().results.map((r) => r.selectedRow)).toEqual([1, null]);
+    expect([rowsAt(0).selectedRow, rowsAt(1).selectedRow]).toEqual([1, null]);
   });
 
   it("toggles the panel, and opening leaves it open", () => {
@@ -527,11 +673,11 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockResolvedValueOnce(page(200, false));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].rows).toHaveLength(1000);
-    expect(tab().results[0].cursor).toBe("open");
+    expect(rowsAt(0).rows).toHaveLength(1000);
+    expect(rowsAt(0).cursor).toBe("open");
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
     await runner.fetchMore(tabId(), id);
     expect(api.fetchPage).toHaveBeenCalledTimes(2);
   });
@@ -540,14 +686,14 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue(page(0, false, true));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("caps the rows it loads and closes the cursor", async () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue(page(500, true));
     await runner.fetchMore(tabId(), id, 800);
-    const r = tab().results[0];
+    const r = rowsAt(0);
     expect(r.rows).toHaveLength(800);
     expect(r.cursor).toBe("capped");
     expect(api.closeResult).toHaveBeenCalledWith(id);
@@ -557,7 +703,7 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValue({ ...page(400, false) });
     await runner.fetchMore(tabId(), id, 800);
-    const r = tab().results[0];
+    const r = rowsAt(0);
     expect(r.rows).toHaveLength(800);
     expect(r.cursor).toBe("capped");
   });
@@ -570,7 +716,7 @@ describe("fetchMore", () => {
     await runner.disconnectProfile("p1");
     p.resolve(page(500, true));
     await fetching;
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("reads one page at a time", async () => {
@@ -578,13 +724,13 @@ describe("fetchMore", () => {
     const p = deferred<FetchResult>();
     api.fetchPage.mockReturnValueOnce(p.promise);
     const first = runner.fetchMore(tabId(), id);
-    expect(tab().results[0].fetching).toBe(true);
+    expect(rowsAt(0).fetching).toBe(true);
     expect(tab().runningQueryId).toBe(id);
     await runner.fetchMore(tabId(), id);
     expect(api.fetchPage).toHaveBeenCalledTimes(1);
     p.resolve(page(10, true));
     await first;
-    expect(tab().results[0].fetching).toBe(false);
+    expect(rowsAt(0).fetching).toBe(false);
     expect(tab().runningQueryId).toBeNull();
   });
 
@@ -592,7 +738,7 @@ describe("fetchMore", () => {
     const id = await openResult();
     api.fetchPage.mockRejectedValue(new Error("Query canceled."));
     await runner.fetchMore(tabId(), id);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
     expect(tab().messages.at(-1)).toMatchObject({ kind: "canceled" });
   });
 });
@@ -608,8 +754,8 @@ describe("loadAll", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockResolvedValueOnce(page(200, false));
     expect(await runner.loadAll(tabId(), id)).toBe(true);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
     expect(api.fetchPage).toHaveBeenCalledTimes(2);
   });
 
@@ -624,7 +770,7 @@ describe("loadAll", () => {
     const id = await openResult();
     api.fetchPage.mockResolvedValueOnce(page(500, true)).mockRejectedValueOnce(new Error("boom"));
     expect(await runner.loadAll(tabId(), id)).toBe(false);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("is false, without spinning, when another statement is running in the tab", async () => {
@@ -659,8 +805,8 @@ describe("loadAll", () => {
     p.resolve(page(500, true));
     await inFlight;
     expect(await loading).toBe(true);
-    expect(tab().results[0].rows).toHaveLength(1200);
-    expect(tab().results[0].cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(1200);
+    expect(rowsAt(0).cursor).toBe("done");
   });
 
   it("is true when the cursor ends capped", async () => {
@@ -668,7 +814,7 @@ describe("loadAll", () => {
     api.fetchPage.mockResolvedValue(page(500, true));
     expect(await runner.loadAll(tabId(), id, 800)).toBe(true);
     expect(tab().results[0]).toMatchObject({ cursor: "capped" });
-    expect(tab().results[0].rows).toHaveLength(800);
+    expect(rowsAt(0).rows).toHaveLength(800);
   });
 
   it("is false when the result is closed while loading", async () => {
@@ -679,7 +825,7 @@ describe("loadAll", () => {
     await runner.disconnectProfile("p1");
     p.resolve(page(500, true));
     expect(await loading).toBe(false);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 });
 
@@ -874,9 +1020,9 @@ describe("workspaces", () => {
     expect(api.closeDb).toHaveBeenCalledTimes(1);
     expect(ws("p1")).toMatchObject({ status: "disconnected", connId: null, error: null });
     expect(tabId("p1")).toBe(p1Tab);
-    expect(tab("p1").results[0].cursor).toBe("closed");
+    expect(rowsAt(0, tab("p1")).cursor).toBe("closed");
     expect(ws("p2")).toMatchObject({ status: "connected", connId: "c2" });
-    expect(tab("p2").results[0].cursor).toBe("open");
+    expect(rowsAt(0, tab("p2")).cursor).toBe("open");
   });
 
   it("selecting a profile loads its workspace, remembers it, and never connects", async () => {
@@ -1117,7 +1263,6 @@ describe("closing and reopening", () => {
     api.run.mockReturnValueOnce(held.promise);
     const script = runner.runStatements(id, stmts("select 2; select 3"));
     const running = tab().runningQueryId;
-    const pinnedBefore = tab().results;
     api.closeTab.mockRejectedValueOnce(new Error("disk full"));
     await runner.closeTab(id);
     expect(api.cancel).toHaveBeenCalledWith(running);
@@ -1126,13 +1271,14 @@ describe("closing and reopening", () => {
     expect(ws().nextTabNumber).toBe(3);
     expect(tab().id).toBe(id);
     expect(tab()).toMatchObject({ runningQueryId: null, stopping: false });
-    expect(tab().results).toEqual(pinnedBefore);
+    const canceled = { kind: "canceled", sql: "select 2", text: "Query canceled." };
+    expect(tab().results).toMatchObject([canceled]);
     expect(tab().messages).toHaveLength(1);
     // The script's late reply is dropped, and it runs nothing more.
     held.resolve(rowsResult(1, false));
     await script;
     expect(api.run).toHaveBeenCalledTimes(2);
-    expect(tab().results).toEqual(pinnedBefore);
+    expect(tab().results).toMatchObject([canceled]);
     expect(tab().runningQueryId).toBeNull();
   });
 
@@ -1150,8 +1296,8 @@ describe("closing and reopening", () => {
     expect(api.closeResult).toHaveBeenCalledWith(resultId);
     page.resolve({ rows: rows(500, 501), "has-more": true, closed: false });
     await loading;
-    expect(tab().results[0].rows).toHaveLength(500);
-    expect(tab().results[0].cursor).toBe("closed");
+    expect(rowsAt(0).rows).toHaveLength(500);
+    expect(rowsAt(0).cursor).toBe("closed");
   });
 
   it("a save before the close has run still lists the tab, with its last text", async () => {

@@ -12,6 +12,7 @@ test.skip(!pgUrl, "QUEL_PG_URL is unset: run under scripts/with-postgres.sh");
 
 const dialog = (page: Page) => page.getByRole("dialog");
 const saved = (page: Page) => page.getByRole("list", { name: "Saved connections" });
+const outcome = (page: Page) => page.getByRole("region", { name: "Statement outcome" });
 const log = (page: Page) => page.getByRole("log", { name: "Messages" });
 
 async function run(page: Page, sql: string) {
@@ -39,15 +40,20 @@ test("a dropped connection is restored, and Run again runs it", async ({ page })
   await expectConnected(page);
 
   await run(page, "set idle_session_timeout = '1s'");
-  await expect(log(page)).toContainText("Done");
+  await expect(outcome(page)).toContainText("Done");
   await page.waitForTimeout(2000);
   await run(page, "select 41 + 1 as answer");
 
-  await expect(log(page)).toContainText("Connection lost and restored. The statement was not run.");
-  await expect(log(page)).toContainText("were reset");
+  // The statement's own result tab shows the notice.
+  await expect(outcome(page)).toContainText("Connection lost and restored. The statement was not run.");
+  await expect(outcome(page)).toContainText("were reset");
   await expect(page.locator("[data-sonner-toast]", { hasText: "connection restored." })).toBeVisible();
 
-  await log(page).getByRole("button", { name: "Run again" }).click();
+  await outcome(page).getByRole("button", { name: "Run again" }).click();
   await expect(page.getByRole("grid")).toContainText("42");
+
+  // Messages keeps it, without Run again now that the tab has moved on.
+  await page.getByRole("tab", { name: "Messages" }).click();
+  await expect(log(page)).toContainText("Connection lost and restored.");
   await expect(log(page).getByRole("button", { name: "Run again" })).toHaveCount(0);
 });

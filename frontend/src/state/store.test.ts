@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  type ResultTab,
+  type RowsResult,
   closeCursors,
   findTab,
   initialState,
@@ -12,7 +12,8 @@ import {
   workspaceOfTab,
 } from "./store";
 
-const result = (id: string): ResultTab => ({
+const result = (id: string): RowsResult => ({
+  kind: "rows",
   id,
   sql: "select 1",
   columns: [],
@@ -55,8 +56,8 @@ describe("workspaces", () => {
   it("closes the cursors of one workspace", () => {
     const { a, b } = seed();
     closeCursors("a");
-    expect(findTab(a)?.results[0].cursor).toBe("closed");
-    expect(findTab(b)?.results[0].cursor).toBe("open");
+    expect(findTab(a)?.results[0]).toMatchObject({ cursor: "closed" });
+    expect(findTab(b)?.results[0]).toMatchObject({ cursor: "open" });
   });
 
   it("gives the selected workspace", () => {
