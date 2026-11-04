@@ -76,6 +76,7 @@ describe("commands", () => {
       "edit-connection",
       "row-details",
       "sidebar",
+      "results",
       "zoom-in",
       "zoom-out",
       "zoom-reset",
@@ -159,11 +160,21 @@ describe("commands", () => {
   });
 });
 
+describe("the results entry", () => {
+  it("shows only with a loaded workspace, titled after the pane", () => {
+    expect(ids(initialState())).not.toContain("results");
+    expect(ids(state("disconnected", (w) => (w.loadError = "boom")))).not.toContain("results");
+    const title = (s: AppState) => commands(s).find((c) => c.id === "results")!.title;
+    expect(title(state())).toBe("Hide Results");
+    expect(title({ ...state(), resultsHidden: true })).toBe("Show Results");
+  });
+});
+
 describe("focus", () => {
   it("keeps focus only for the entries that do not move it", () => {
     const w = state("connected", (w) => (w.closed = [{ id: "c1" } as (typeof w.closed)[number]]));
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
-    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "zoom-in", "zoom-out", "zoom-reset"]);
+    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "zoom-in", "zoom-out", "zoom-reset"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
     expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
   });

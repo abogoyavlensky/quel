@@ -6,7 +6,14 @@ import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
 import { loadSidebar } from "@/state/layout";
-import { focusEditorKey, focusResultKey, focusTabKey, openPalette, toggleSidebarKey } from "@/state/palette";
+import {
+  focusEditorKey,
+  focusResultKey,
+  focusTabKey,
+  openPalette,
+  toggleResultsKey,
+  toggleSidebarKey,
+} from "@/state/palette";
 import { shortcutOf } from "@/state/shortcuts";
 import { loadZoom, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
@@ -87,9 +94,9 @@ function useStopKey() {
 
 // ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘R the result
 // grid, ⌘1–⌘9 pick a tab,
-// ⌘B hides or shows the sidebar (state/shortcuts.ts). Only the palettes
-// have native View menu items: nine "Tab N" items would be clutter, a
-// toggle like ⌘B cannot take the double delivery (as ⌘I), and a menu item
+// ⌘B hides or shows the sidebar, ⌘J the results (state/shortcuts.ts). Only
+// the palettes have native View menu items: nine "Tab N" items would be
+// clutter, a toggle like ⌘B or ⌘J cannot take the double delivery (as ⌘I), and a menu item
 // does not exist in server mode, where the key must come from here. With the app window a palette key
 // may arrive twice (menu and page); opening sets the state, so that is
 // harmless. Caught in the capture phase, before the editor sees it.
@@ -104,6 +111,7 @@ function useGlobalKeys() {
       else if (k.kind === "editor") focusEditorKey();
       else if (k.kind === "result") focusResultKey();
       else if (k.kind === "sidebar") toggleSidebarKey();
+      else if (k.kind === "resultsPane") toggleResultsKey();
       else focusTabKey(k.n);
     };
     window.addEventListener("keydown", onKey, true);

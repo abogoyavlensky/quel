@@ -5,7 +5,7 @@ vi.mock("@/editor/states", () => ({ focusEditor }));
 const api = vi.hoisted(() => ({ sidebarHidden: vi.fn(), setSidebarHidden: vi.fn() }));
 vi.mock("@/lib/api", () => api);
 
-import { loadSidebar, sidebarShown, toggleSidebar } from "./layout";
+import { loadSidebar, showResults, sidebarShown, toggleResults, toggleSidebar } from "./layout";
 import { type AppState, initialState, newWorkspace, store } from "./store";
 
 // A selected profile p with a loaded workspace (the tab strip shows).
@@ -67,6 +67,53 @@ describe("loadSidebar", () => {
     api.sidebarHidden.mockRejectedValue(new Error("no database"));
     await loadSidebar();
     expect(store.getState().sidebarHidden).toBeNull();
+  });
+});
+
+describe("toggleResults", () => {
+  it("hides and shows them, in memory only", async () => {
+    store.setState(loaded(), true);
+    toggleResults();
+    expect(store.getState().resultsHidden).toBe(true);
+    toggleResults();
+    expect(store.getState().resultsHidden).toBe(false);
+    await vi.runAllTimersAsync();
+    expect(api.setSidebarHidden).not.toHaveBeenCalled();
+  });
+
+  it("does nothing without a tab strip", () => {
+    toggleResults();
+    expect(store.getState().resultsHidden).toBe(false);
+    const failed = { ...newWorkspace("p"), loadError: "boom" };
+    store.setState(loaded({ workspaces: { p: failed } }), true);
+    toggleResults();
+    expect(store.getState().resultsHidden).toBe(false);
+  });
+
+  it("moves focus to the editor when they hide with focus inside", () => {
+    store.setState(loaded(), true);
+    vi.stubGlobal("document", { activeElement: focused(true) });
+    toggleResults();
+    vi.runAllTimers();
+    expect(focusEditor).toHaveBeenCalledOnce();
+  });
+
+  it("leaves focus alone when it was elsewhere, or on show", () => {
+    store.setState(loaded(), true);
+    vi.stubGlobal("document", { activeElement: focused(false) });
+    toggleResults();
+    vi.stubGlobal("document", { activeElement: focused(true) });
+    toggleResults();
+    vi.runAllTimers();
+    expect(focusEditor).not.toHaveBeenCalled();
+  });
+});
+
+describe("showResults", () => {
+  it("brings hidden results back", () => {
+    store.setState(loaded({ resultsHidden: true }), true);
+    showResults();
+    expect(store.getState().resultsHidden).toBe(false);
   });
 });
 
