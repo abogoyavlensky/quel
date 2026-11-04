@@ -86,19 +86,21 @@ The ladder and the settings are pure or database-backed, so backend tests cover 
 - Modify: `~/Projects/letgo-packages/wails/README.md`
 - Test: `~/Projects/letgo-packages/wails/test/wails/window_test.lg`
 
-- [ ] **Step 1: Branch.** Run: `cd ~/Projects/letgo-packages && git switch master && git pull --ff-only && git switch -c wails-zoom-window-state`.
+- [x] **Step 1: Branch.** Run: `cd ~/Projects/letgo-packages && git switch master && git pull --ff-only && git switch -c wails-zoom-window-state`.
 
-- [ ] **Step 2: Add the failing tests to `window_test.lg`.** `new-window` takes `:normal`, `:maximised`, `:fullscreen` and the string `"maximised"`; `:sideways` and `1` throw a message naming `:start-state`, following `new-window-refuses-an-unknown-mac-title-bar`. `set-zoom!` answers nil for `1.25` and for the integer `1`. `maximised?` and `fullscreen?` answer false in server mode.
+- [x] **Step 2: Add the failing tests to `window_test.lg`.** `new-window` takes `:normal`, `:maximised`, `:fullscreen` and the string `"maximised"`; `:sideways` and `1` throw a message naming `:start-state`, following `new-window-refuses-an-unknown-mac-title-bar`. `set-zoom!` answers nil for `1.25` and for the integer `1`. `maximised?` and `fullscreen?` answer false in server mode.
 
-- [ ] **Step 3: Run them to see them fail.** Run: `cd ~/Projects/letgo-packages/wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the new tests only.
+- [x] **Step 3: Run them to see them fail.** Run: `cd ~/Projects/letgo-packages/wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: FAIL on the new tests only.
 
-- [ ] **Step 4: Implement the shim.** In `NewWindow`, call a `startState(opts)` helper shaped like `macTitleBar`, mapping `normal`, `maximised` and `fullscreen` to `application.WindowState*`, defaulting to normal, and returning an error that lists the values. Add `SetZoom`, `IsMaximised` and `IsFullscreen` next to the other pass-throughs.
+- [x] **Step 4: Implement the shim.** In `NewWindow`, call a `startState(opts)` helper shaped like `macTitleBar`, mapping `normal`, `maximised` and `fullscreen` to `application.WindowState*`, defaulting to normal, and returning an error that lists the values. Add `SetZoom`, `IsMaximised` and `IsFullscreen` next to the other pass-throughs.
 
-- [ ] **Step 5: Implement `core.lg`.** Add `:start-state` to the `new-window` docstring. Add `set-zoom!`, which passes `(double level)` so an integer works; its docstring says Wails clamps below 1.0 and that before `run!` the level is not applied on macOS. Add `maximised?` and `fullscreen?`. Add the new fns to `README.md` wherever it lists the window controls.
+- [x] **Step 5: Implement `core.lg`.** Add `:start-state` to the `new-window` docstring. Add `set-zoom!`, which passes `(double level)` so an integer works; its docstring says Wails clamps below 1.0 and that before `run!` the level is not applied on macOS. Add `maximised?` and `fullscreen?`. Add the new fns to `README.md` wherever it lists the window controls.
 
-- [ ] **Step 6: Run the tests.** Run: `cd ~/Projects/letgo-packages/wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: PASS.
+- [x] **Step 6: Run the tests.** Run: `cd ~/Projects/letgo-packages/wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: PASS.
 
-- [ ] **Step 7: Commit, push, open the PR.** Commit with `git commit -m "wails: start state, zoom and maximised/fullscreen checks"`, push the branch and open a PR against `abogoyavlensky/letgo-packages`. Once its checks pass, merge it and push the `wails-v0.9.0` tag (one tag, by name). The user authorized both for this plan when approving it. Part 2 needs the tag.
+- [x] **Step 7: Commit, push, open the PR.** Commit with `git commit -m "wails: start state, zoom and maximised/fullscreen checks"`, push the branch and open a PR against `abogoyavlensky/letgo-packages`. Once its checks pass, merge it and push the `wails-v0.9.0` tag (one tag, by name). The user authorized both for this plan when approving it. Part 2 needs the tag.
+
+> Deviation: the shim also needed `ns.Def` entries in `shim/shim.go`; the plan named only `window.go`. Merged as PR #19 (`493a6df`), tag `wails-v0.9.0` pushed.
 
 ## Part 2: Quel
 
