@@ -1,6 +1,7 @@
 # No way to zoom the interface
 
-**Status: open**
+**Status: planned**
+Plan: docs/plans/2026-11-04-2242-zoom-and-window-state.md
 
 ## Problem
 
