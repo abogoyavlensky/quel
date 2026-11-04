@@ -7,7 +7,6 @@ import {
   type ExportFormat,
   collectChunks,
   formatChunks,
-  formatResult,
   toCsv,
   toJson,
   toMarkdown,
@@ -156,16 +155,7 @@ describe("toMarkdown", () => {
   });
 });
 
-describe("formatResult", () => {
-  const cols = [col("id", "INT4")];
-  const rows: Cell[][] = [[1]];
-
-  it("picks the format", () => {
-    expect(formatResult("csv", cols, rows, ";")).toBe(toCsv(cols, rows, ";"));
-    expect(formatResult("json", cols, rows, ",")).toBe(toJson(cols, rows));
-    expect(formatResult("markdown", cols, rows, ",")).toBe(toMarkdown(cols, rows));
-  });
-
+describe("EXTENSIONS", () => {
   it("has an extension per format", () => {
     expect(EXTENSIONS).toEqual({ csv: "csv", json: "json", markdown: "md" });
   });
@@ -211,7 +201,7 @@ describe("formatChunks", () => {
       const chunks = texts(formatChunks("csv", [col("a")], [[text]], ",", size));
       expect(chunks.join("")).toBe(`a\r\n${text}\r\n`);
       for (const c of chunks) {
-        expect(c.isWellFormed()).toBe(true);
+        expect(c).not.toMatch(/[\uD800-\uDBFF]$|^[\uDC00-\uDFFF]/);
       }
     }
   });

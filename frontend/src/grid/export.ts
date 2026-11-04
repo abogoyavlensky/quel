@@ -91,22 +91,6 @@ export function toMarkdown(columns: Column[], rows: Cell[][]): string {
   return whole(markdownParts(columns), rows);
 }
 
-export function formatResult(
-  format: ExportFormat,
-  columns: Column[],
-  rows: Cell[][],
-  separator: CsvSeparator,
-): string {
-  switch (format) {
-    case "csv":
-      return toCsv(columns, rows, separator);
-    case "json":
-      return toJson(columns, rows);
-    case "markdown":
-      return toMarkdown(columns, rows);
-  }
-}
-
 function partsOf(format: ExportFormat, columns: Column[], rows: Cell[][], separator: CsvSeparator): Parts {
   switch (format) {
     case "csv":

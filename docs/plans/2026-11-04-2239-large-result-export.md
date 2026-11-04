@@ -387,7 +387,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/lib/api.ts`, `frontend/src/lib/api.test.ts`, `frontend/src/lib/save.ts`, `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`, `frontend/src/state/runner.test.ts`, `frontend/src/grid/export.ts`, `frontend/src/grid/export.test.ts`
 - Create: `frontend/src/lib/save.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `api.test.ts`: move the answer-or-nil cases to `exportBegin` (`bridge.call` receives `"export-begin", "csv", "result.csv"`), and keep `{}`, null, undefined and `""` meaning cancel.
 
   `save.test.ts`, with `vi.mock("@/lib/api")` and `vi.stubGlobal("window", { webkit: { messageHandlers: { external: { postMessage() {} } } } })`:
@@ -402,22 +402,22 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - `exporting` is null after a save, a canceled save, a failed save, a copy, a failed copy and a load that stopped.
   - `exporting` is set, with `rows` null, while `loadAll` is pending, and a second `exportResult` for another result of the tab then returns without saving or copying.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the new and updated tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `api.ts`: replace `exportResult` with `exportBegin`, `exportAppend`, `exportFinish`, `exportAbort`, rename `pathOrNull` to `answerOrNull`, and update the comments above them.
   - `save.ts`: `saveChunks` replaces `saveText`; `download` takes the parts. Update the file's header comment.
   - `store.ts`: add `exporting` to `EditorTab`, null in `newTabState`. `persist` saves named fields, so it stays in memory; check `state/persist.ts` to confirm.
   - `runner.ts`: `exportResult` as the Design says. Put the copy's `collectChunks` and join inside the `try` that toasts "Couldn't copy to the clipboard.", so a text too long for the engine's string limit gets that toast rather than failing silently.
   - `export.ts`: remove `formatResult`, and move its "picks the format" test to `formatChunks`. Keep the `EXTENSIONS` test.
 
-- [ ] **Step 4: Run the tests and the type check**
+- [x] **Step 4: Run the tests and the type check**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test && npm --prefix /home/agent/Projects/quel/frontend run build`
   Expected: PASS, and the build has no type errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Save exports to the backend in chunks"`
 
 ### Task 5: Show progress in the results footer

@@ -1,10 +1,10 @@
-import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
+import { type CsvSeparator, EXTENSIONS, type ExportFormat, collectChunks, formatChunks } from "@/grid/export";
 import * as api from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { type Lost, lostOf } from "@/lib/lost";
 import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
-import { saveText } from "@/lib/save";
+import { saveChunks } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import { gate } from "@/sql/guard";
@@ -24,6 +24,7 @@ import {
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
+  type ExportProgress,
   type RowsResult,
   type RunConfirm,
   type Workspace,
@@ -610,12 +611,31 @@ export function exportFilename(format: ExportFormat, now = new Date()): string {
 const FORMAT_NAMES: Record<ExportFormat, string> = { csv: "CSV", json: "JSON", markdown: "Markdown" };
 
 // Copy or save a result in the format the store holds. An open result is
-// loaded to the end first; if that cannot be done nothing goes out.
+// loaded to the end first; if that cannot be done nothing goes out. A tab
+// exports one result at a time, from the click on: a second click, on any of
+// its results, does nothing.
 export async function exportResult(
   tabId: string,
   resultId: string,
   action: "copy" | "save",
   maxRows = MAX_ROWS,
+): Promise<void> {
+  if (findTab(tabId)?.exporting) return;
+  const setExporting = (exporting: ExportProgress | null) => updateTab(tabId, (t) => ({ ...t, exporting }));
+  setExporting({ action, rows: null, total: 0 });
+  try {
+    await exportRows(tabId, resultId, action, maxRows, (rows, total) => setExporting({ action, rows, total }));
+  } finally {
+    setExporting(null);
+  }
+}
+
+async function exportRows(
+  tabId: string,
+  resultId: string,
+  action: "copy" | "save",
+  maxRows: number,
+  progress: (rows: number, total: number) => void,
 ): Promise<void> {
   const find = () => findRows(tabId, resultId);
   const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
@@ -624,8 +644,9 @@ export async function exportResult(
   if (!result) return void stopped();
 
   const { format, separator } = store.getState().export;
-  const text = formatResult(format, result.columns, result.rows, separator);
+  const chunks = formatChunks(format, result.columns, result.rows, separator);
   const n = result.rows.length;
+  const onRows = (rows: number) => progress(rows, n);
   const rows = n === 1 ? "1 row" : `${n.toLocaleString("en-US")} rows`;
   const which =
     result.cursor === "capped"
@@ -634,12 +655,18 @@ export async function exportResult(
         ? `the ${n.toLocaleString("en-US")} loaded ${n === 1 ? "row" : "rows"}`
         : rows;
   if (action === "copy") {
-    if (await copyText(text)) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
+    let copied = false;
+    try {
+      copied = await copyText((await collectChunks(chunks, onRows)).join(""));
+    } catch {
+      // Past the engine's longest string: join throws.
+    }
+    if (copied) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
     else notify.error("Couldn't copy to the clipboard.");
     return;
   }
   try {
-    const saved = await saveText(exportFilename(format), format, text);
+    const saved = await saveChunks(exportFilename(format), format, chunks, onRows);
     if (saved === null) return;
     notify.success(
       saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,

@@ -25,7 +25,7 @@ vi.mock("@/lib/notify", () => ({ notify: toasts }));
 
 const clipboard = vi.hoisted(() => ({ copyText: vi.fn() }));
 vi.mock("@/lib/clipboard", () => clipboard);
-const save = vi.hoisted(() => ({ saveText: vi.fn() }));
+const save = vi.hoisted(() => ({ saveChunks: vi.fn() }));
 vi.mock("@/lib/save", () => save);
 
 // The editor's text per tab (texts, set by a test or by seed), else input.
@@ -100,7 +100,7 @@ beforeEach(() => {
   toasts.info.mockReset();
   toasts.dismiss.mockReset();
   clipboard.copyText.mockReset();
-  save.saveText.mockReset();
+  save.saveChunks.mockReset();
   api.closeResult.mockResolvedValue(undefined);
   api.closeSession.mockResolvedValue(undefined);
   api.closeDb.mockResolvedValue(undefined);
@@ -898,25 +898,26 @@ describe("exportResult", () => {
   it("saves under a stamped file name and toasts the path", async () => {
     const id = await openResult();
     runner.setExport({ format: "json" });
-    save.saveText.mockResolvedValue("/tmp/result.json");
+    save.saveChunks.mockResolvedValue("/tmp/result.json");
     await runner.exportResult(tabId(), id, "save");
-    const [filename, format, text] = save.saveText.mock.calls[0];
+    const [filename, format, chunks] = save.saveChunks.mock.calls[0];
     expect(filename).toMatch(/^result-\d{4}-\d{2}-\d{2}-\d{4}\.json$/);
     expect(format).toBe("json");
+    const text = [...(chunks as Iterable<{ text: string }>)].map((c) => c.text).join("");
     expect(JSON.parse(text)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     expect(toasts.success).toHaveBeenCalledWith("Saved 3 rows to /tmp/result.json");
   });
 
   it("toasts a browser download without a path", async () => {
     const id = await openResult(1);
-    save.saveText.mockResolvedValue("download");
+    save.saveChunks.mockResolvedValue("download");
     await runner.exportResult(tabId(), id, "save");
     expect(toasts.success).toHaveBeenCalledWith("Saved 1 row as CSV");
   });
 
   it("says nothing for a canceled save", async () => {
     const id = await openResult();
-    save.saveText.mockResolvedValue(null);
+    save.saveChunks.mockResolvedValue(null);
     await runner.exportResult(tabId(), id, "save");
     expect(toasts.success).not.toHaveBeenCalled();
     expect(toasts.error).not.toHaveBeenCalled();
@@ -924,9 +925,76 @@ describe("exportResult", () => {
 
   it("toasts a failed save", async () => {
     const id = await openResult();
-    save.saveText.mockRejectedValue(new Error("disk full"));
+    save.saveChunks.mockRejectedValue(new Error("disk full"));
     await runner.exportResult(tabId(), id, "save");
     expect(toasts.error).toHaveBeenCalledWith("Couldn't save the export: disk full");
+  });
+
+  it("shows how far a save has come", async () => {
+    const id = await openResult();
+    const saved = deferred<string>();
+    save.saveChunks.mockImplementation((_f, _x, _c, onRows: (rows: number) => void) => {
+      onRows(2);
+      return saved.promise;
+    });
+    const exporting = runner.exportResult(tabId(), id, "save");
+    await vi.waitFor(() => expect(save.saveChunks).toHaveBeenCalled());
+    expect(tab().exporting).toEqual({ action: "save", rows: 2, total: 3 });
+    saved.resolve("/tmp/result.csv");
+    await exporting;
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("shows how far a copy has come", async () => {
+    const id = await openResult();
+    const copied = deferred<boolean>();
+    clipboard.copyText.mockReturnValue(copied.promise);
+    const exporting = runner.exportResult(tabId(), id, "copy");
+    await vi.waitFor(() => expect(clipboard.copyText).toHaveBeenCalled());
+    expect(tab().exporting).toEqual({ action: "copy", rows: 3, total: 3 });
+    copied.resolve(true);
+    await exporting;
+    expect(tab().exporting).toBeNull();
+  });
+
+  it.each([
+    ["a canceled save", () => save.saveChunks.mockResolvedValue(null)],
+    ["a failed save", () => save.saveChunks.mockRejectedValue(new Error("disk full"))],
+  ])("stops showing progress after %s", async (_, arrange) => {
+    const id = await openResult();
+    arrange();
+    await runner.exportResult(tabId(), id, "save");
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("stops showing progress after a failed copy", async () => {
+    const id = await openResult();
+    clipboard.copyText.mockResolvedValue(false);
+    await runner.exportResult(tabId(), id, "copy");
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("stops showing progress after a load that stopped", async () => {
+    const id = await openResult(500, true);
+    api.fetchPage.mockRejectedValueOnce(new Error("boom"));
+    await runner.exportResult(tabId(), id, "copy");
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("exports one result of a tab at a time, from the click on", async () => {
+    const id = await openResult(500, true);
+    const p = deferred<ReturnType<typeof page>>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    clipboard.copyText.mockResolvedValue(true);
+    const exporting = runner.exportResult(tabId(), id, "copy");
+    // Loading: reserved, with nothing to report yet.
+    expect(tab().exporting).toEqual({ action: "copy", rows: null, total: 0 });
+    await runner.exportResult(tabId(), id, "save");
+    expect(save.saveChunks).not.toHaveBeenCalled();
+    p.resolve(page(2, false));
+    await exporting;
+    expect(toasts.success).toHaveBeenCalledWith("Copied 502 rows as CSV");
+    expect(tab().exporting).toBeNull();
   });
 });
 

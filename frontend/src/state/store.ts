@@ -67,6 +67,14 @@ export interface Message {
   rerun?: Statement[];
 }
 
+// An export in progress. rows is null until rows are moving: while the rest
+// of the result loads and while the save dialog is open.
+export interface ExportProgress {
+  action: "copy" | "save";
+  rows: number | null;
+  total: number;
+}
+
 export interface EditorTab {
   id: string; // = the backend session-id
   title: string; // "Query 1", "Query 2", ..., or the user's name for it
@@ -74,6 +82,7 @@ export interface EditorTab {
   runningQueryId: string | null; // the statement or page in flight
   stopping: boolean; // cancel asked: the script stops after this one
   runStartedAt: number | null; // when the running statement or script began (Date.now())
+  exporting: ExportProgress | null; // in memory only
   results: ResultTab[];
   active: string; // "messages" or a result id
   messages: Message[]; // newest last, capped at MAX_MESSAGES
@@ -157,6 +166,7 @@ export function newTabState(n: number): EditorTab {
     runningQueryId: null,
     stopping: false,
     runStartedAt: null,
+    exporting: null,
     results: [],
     active: MESSAGES,
     messages: [],
