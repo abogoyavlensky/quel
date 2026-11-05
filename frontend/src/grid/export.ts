@@ -144,14 +144,17 @@ export function* formatChunks(
 const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 // The chunks' texts, for what has no bridge call to wait on between chunks:
-// each is followed by a task, so the UI can draw the rows reported.
+// each is followed by a task, so the UI can draw the rows reported and a
+// cancel can arrive. Canceled, it stops there and the texts are partial.
 export async function collectChunks(
   chunks: Iterable<ExportChunk>,
   onRows: (rows: number) => void,
+  signal: AbortSignal,
 ): Promise<string[]> {
   const texts: string[] = [];
   onRows(0);
   for (const chunk of chunks) {
+    if (signal.aborted) break;
     texts.push(chunk.text);
     onRows(chunk.rows);
     await nextTask();

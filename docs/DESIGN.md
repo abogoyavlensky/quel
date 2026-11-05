@@ -699,7 +699,10 @@ and "the N loaded rows" for a result that was closed before the click.
 A tab exports one result at a time, from the click on, and Copy and Save are
 disabled until it is done. Once rows are moving, the left end of the results
 footer shows how far it has come ("Saving 12,500 of 100,000 rows…", "Copying
-…"), after the same 300 ms delay as "Running…".
+…"), after the same 300 ms delay as "Running…". A **Cancel** button sits
+beside it, and beside the rows text while the rest of the result loads. It stops
+at the next page or chunk and nothing goes out: a loading result keeps its
+cursor open, and a file being saved is dropped, leaving the target as it was.
 
 The formats are pure functions over the columns and rows (`grid/export.ts`).
 `formatChunks` makes the file a chunk at a time as it is read, so a large

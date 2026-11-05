@@ -14,8 +14,11 @@ const chunks = [
   { text: "a", rows: 1 },
   { text: "b", rows: 2 },
 ];
-const save = (onRows: (rows: number) => void = () => {}, from: Iterable<(typeof chunks)[0]> = chunks) =>
-  saveChunks("result.csv", "csv", from, onRows);
+const save = (
+  onRows: (rows: number) => void = () => {},
+  from: Iterable<(typeof chunks)[0]> = chunks,
+  signal = new AbortController().signal,
+) => saveChunks("result.csv", "csv", from, onRows, signal);
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
@@ -69,6 +72,27 @@ describe("saveChunks in the app's webview", () => {
     api.exportAppend.mockRejectedValueOnce(new Error("disk full"));
     api.exportAbort.mockRejectedValue(new Error("gone"));
     await expect(save()).rejects.toThrow("disk full");
+  });
+
+  it("drops the export when canceled, and sends nothing more", async () => {
+    const controller = new AbortController();
+    const onRows = (n: number) => {
+      if (n === 1) controller.abort();
+    };
+    expect(await save(onRows, chunks, controller.signal)).toBeNull();
+    expect(api.exportAppend).toHaveBeenCalledTimes(1);
+    expect(api.exportAbort).toHaveBeenCalledWith("id-1");
+    expect(api.exportFinish).not.toHaveBeenCalled();
+  });
+
+  it("drops the export when canceled after the last chunk", async () => {
+    const controller = new AbortController();
+    const onRows = (n: number) => {
+      if (n === 2) controller.abort();
+    };
+    expect(await save(onRows, chunks, controller.signal)).toBeNull();
+    expect(api.exportAbort).toHaveBeenCalledWith("id-1");
+    expect(api.exportFinish).not.toHaveBeenCalled();
   });
 
   it("drops the export when finishing fails", async () => {

@@ -148,3 +148,32 @@ test("shows how far an export has come in the footer", async ({ page }) => {
   await expect(footer.getByText(/^Copying/)).toHaveCount(0);
   await expect(footer.getByText("2,000 rows", { exact: true })).toBeVisible();
 });
+
+test("Cancel stops an export while the rest of its rows load", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await connectFixture(page, db);
+  await run(page, "select id from t order by id");
+  await expect(page.getByText(/rows loaded, (more available|loading more)/)).toBeVisible();
+
+  // Pages slow enough for the button to show.
+  await page.route("**/wails/runtime", async (route) => {
+    if (route.request().postData()?.includes("fetch-page")) await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
+  await page.evaluate(() => navigator.clipboard.writeText("before"));
+  await copyAs(page, "CSV");
+  const footer = page.getByRole("group", { name: "Result footer" });
+  await footer.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.getByText("Export canceled.")).toBeVisible();
+  await expect(footer.getByRole("button", { name: "Cancel" })).toHaveCount(0);
+  await expect(footer.getByText(/rows loaded, more available/)).toBeVisible();
+  expect(await clipboard(page)).toBe("before");
+
+  // Its cursor stayed open, so the same result still exports whole, which
+  // also closes the cursor: an open one would lock the fixture for later specs.
+  await page.unrouteAll();
+  await copyAs(page, "CSV");
+  await expect(page.getByText("Copied 2,000 rows as CSV")).toBeVisible();
+  expect((await clipboard(page)).split("\r\n")).toHaveLength(2002);
+});

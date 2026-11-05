@@ -1057,6 +1057,59 @@ describe("exportResult", () => {
     expect(tab().exporting).toBeNull();
   });
 
+  it("cancels a save and says so", async () => {
+    const id = await openResult();
+    let signal: AbortSignal | undefined;
+    const saved = deferred<null>();
+    save.saveChunks.mockImplementation((_f, _x, _c, _r, s: AbortSignal) => {
+      signal = s;
+      return saved.promise;
+    });
+    const exporting = runner.exportResult(tabId(), id, "save");
+    await vi.waitFor(() => expect(save.saveChunks).toHaveBeenCalled());
+    expect(signal?.aborted).toBe(false);
+    runner.cancelExport(tabId());
+    expect(signal?.aborted).toBe(true);
+    saved.resolve(null);
+    await exporting;
+    expect(toasts.info).toHaveBeenCalledWith("Export canceled.");
+    expect(toasts.success).not.toHaveBeenCalled();
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("keeps a save that finished before the cancel reached it", async () => {
+    const id = await openResult();
+    const saved = deferred<string>();
+    save.saveChunks.mockReturnValue(saved.promise);
+    const exporting = runner.exportResult(tabId(), id, "save");
+    await vi.waitFor(() => expect(save.saveChunks).toHaveBeenCalled());
+    runner.cancelExport(tabId());
+    saved.resolve("/tmp/result.csv");
+    await exporting;
+    expect(toasts.success).toHaveBeenCalledWith("Saved 3 rows to /tmp/result.csv");
+    expect(toasts.info).not.toHaveBeenCalled();
+  });
+
+  it("cancels the load before an export, leaving the cursor open", async () => {
+    const id = await openResult(500, true);
+    const p = deferred<ReturnType<typeof page>>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    const exporting = runner.exportResult(tabId(), id, "copy");
+    runner.cancelExport(tabId());
+    p.resolve(page(500, true));
+    await exporting;
+    expect(api.fetchPage).toHaveBeenCalledTimes(1);
+    expect(rowsAt(0).cursor).toBe("open");
+    expect(clipboard.copyText).not.toHaveBeenCalled();
+    expect(toasts.info).toHaveBeenCalledWith("Export canceled.");
+    expect(toasts.error).not.toHaveBeenCalled();
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("does nothing to cancel with no export", () => {
+    expect(() => runner.cancelExport(tabId())).not.toThrow();
+  });
+
   it("a tab back from a failed close can export again", async () => {
     const id = await openResult();
     const tid = tabId();

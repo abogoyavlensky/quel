@@ -35,40 +35,48 @@ function download(filename: string, format: ExportFormat, texts: string[]): void
   URL.revokeObjectURL(url);
 }
 
-// Through the backend: a canceled dialog reads no chunks. On a failure the
-// export is dropped, leaving the chosen file as it was, and the first error
-// is the one that surfaces.
+// Through the backend: a canceled dialog reads no chunks. On a cancel or a
+// failure the export is dropped, leaving the chosen file as it was, and the
+// first error is the one that surfaces.
 async function saveToBackend(
   filename: string,
   format: ExportFormat,
   chunks: Iterable<ExportChunk>,
   onRows: (rows: number) => void,
+  signal: AbortSignal,
 ): Promise<string | null> {
   const id = await api.exportBegin(format, filename);
   if (id === null) return null;
+  const drop = () => api.exportAbort(id).catch(() => {});
   onRows(0);
   try {
     for (const chunk of chunks) {
+      if (signal.aborted) break;
       await api.exportAppend(id, chunk.text);
       onRows(chunk.rows);
     }
-    return await api.exportFinish(id);
+    if (!signal.aborted) return await api.exportFinish(id);
   } catch (e) {
-    await api.exportAbort(id).catch(() => {});
+    await drop();
     throw e;
   }
+  await drop();
+  return null;
 }
 
 // Save chunks as a file, reporting the rows written once the file is chosen:
 // the path it was saved to, "download" when the browser took it, or null when
-// the user canceled the dialog. A failed write rejects.
+// the user canceled the dialog or the signal did. A failed write rejects.
 export async function saveChunks(
   filename: string,
   format: ExportFormat,
   chunks: Iterable<ExportChunk>,
   onRows: (rows: number) => void,
+  signal: AbortSignal,
 ): Promise<string | null> {
-  if (inAppWebview()) return saveToBackend(filename, format, chunks, onRows);
-  download(filename, format, await collectChunks(chunks, onRows));
+  if (inAppWebview()) return saveToBackend(filename, format, chunks, onRows, signal);
+  const texts = await collectChunks(chunks, onRows, signal);
+  if (signal.aborted) return null;
+  download(filename, format, texts);
   return "download";
 }

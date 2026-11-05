@@ -1,8 +1,10 @@
 import { LoaderCircle } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { rowsText } from "@/grid/ResultGrid";
+import { Button } from "@/components/ui/button";
 import { formatElapsed } from "@/lib/elapsed";
 import { useDelayed } from "@/lib/useDelayed";
+import { cancelExport } from "@/state/runner";
 import { exportWords, runWords } from "@/state/status";
 import { type EditorTab, type ResultTab, isRunning } from "@/state/store";
 import { ExportMenu } from "./ExportMenu";
@@ -38,8 +40,9 @@ function Working({ children }: { children: ReactNode }) {
 // rows or count and time take the same places. Otherwise (Messages, the
 // empty tab, an error, a cancel) there is none. A page load is not a run:
 // the rows text says "loading more…". An export, past the same delay, says
-// how far it has come in the rows text's place, on Messages too. Keyed by
-// tab in ResultTabs: switching tabs starts the delay over.
+// how far it has come in the rows text's place, on Messages too, with a
+// Cancel button after it, also while the rest of its rows load. Keyed by tab
+// in ResultTabs: switching tabs starts the delay over.
 export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: ResultTab | undefined }) {
   const result = shown?.kind === "rows" || shown?.kind === "update" ? shown : undefined;
   const busy = useDelayed(isRunning(tab), 300);
@@ -47,7 +50,8 @@ export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: R
   const exportText = exportWords(tab);
   const exportShown = useDelayed(exportText !== null, 300);
   const exporting = exportShown ? exportText : null;
-  if (!words && !exporting && !result) return null;
+  const cancelable = useDelayed(tab.exporting !== null, 300);
+  if (!words && !exporting && !cancelable && !result) return null;
 
   return (
     <div
@@ -62,15 +66,22 @@ export function ResultFooter({ tab, result: shown }: { tab: EditorTab; result: R
         </>
       ) : (
         <>
-          {exporting ? (
-            <Working>{exporting}</Working>
-          ) : (
-            result && (
-              <span role="status" className="min-w-0 truncate">
-                {result.kind === "rows" ? rowsText(result) : result.text}
-              </span>
-            )
-          )}
+          <div className="flex min-w-0 items-center gap-2">
+            {exporting ? (
+              <Working>{exporting}</Working>
+            ) : (
+              result && (
+                <span role="status" className="min-w-0 truncate">
+                  {result.kind === "rows" ? rowsText(result) : result.text}
+                </span>
+              )
+            )}
+            {cancelable && (
+              <Button variant="ghost" size="xs" onClick={() => cancelExport(tab.id)}>
+                Cancel
+              </Button>
+            )}
+          </div>
           {result && (
             <div className="flex shrink-0 items-center gap-2">
               {result.kind === "rows" && (

@@ -219,7 +219,24 @@ describe("collectChunks", () => {
       { text: "a", rows: 2 },
       { text: "b", rows: 5 },
     ];
-    expect(await collectChunks(chunks, (n) => seen.push(n))).toEqual(["a", "b"]);
+    const { signal } = new AbortController();
+    expect(await collectChunks(chunks, (n) => seen.push(n), signal)).toEqual(["a", "b"]);
     expect(seen).toEqual([0, 2, 5]);
+  });
+
+  it("stops when canceled", async () => {
+    const controller = new AbortController();
+    const chunks = [
+      { text: "a", rows: 2 },
+      { text: "b", rows: 5 },
+    ];
+    const texts = await collectChunks(
+      chunks,
+      (n) => {
+        if (n === 2) controller.abort();
+      },
+      controller.signal,
+    );
+    expect(texts).toEqual(["a"]);
   });
 });

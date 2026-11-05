@@ -25,8 +25,8 @@ too, or the frontend formatters fed in batches, so `grid/export.ts` rules
 (CSV quoting, raw JSON cells, Markdown escapes) must stay in one place or be
 ported with the same tests. Saving already formats and sends the file in
 chunks (`docs/plans/2026-11-04-2239-large-result-export.md`), so a backend
-writer can reuse the registry and its part file, and the footer's progress.
-Cancel needs a UI of its own.
+writer can reuse the registry and its part file, and the footer's progress
+and Cancel button.
 
 Notes: rerunning is wrong for a statement with side effects or one that is
 not repeatable, so only a read statement may do it. Server mode has no save

@@ -547,3 +547,5 @@ Deviations:
 - `lgx e2e` takes no arguments, so Task 5's new test was confirmed in the full run.
 
 What the plan could have specified better: `formatResult` blocking the main thread should have been caught in the first design, since it made any progress UI impossible without chunking, and the plan should have checked its new let-go calls against the native build, which runs differently from every test task, and listed `closeTab`'s tab snapshot among the places a new `EditorTab` field must be handled.
+
+Added after the plan: a Cancel button beside the footer's status, which replaces the "Canceling an export" item under Out of scope. An `AbortController` per tab reaches `loadAll`, `collectChunks` and `saveChunks`, which stop at the next page or chunk and drop the export.

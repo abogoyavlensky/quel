@@ -362,13 +362,19 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
 
 // Load every page of an open result, up to maxRows in all. True once the
 // cursor is done or capped; false when the rows cannot all be had: the
-// result or tab is gone, another statement is running in the tab, or the
-// cursor closed (canceled, an error, a disconnect).
-export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<boolean> {
+// result or tab is gone, another statement is running in the tab, the
+// cursor closed (canceled, an error, a disconnect), or the signal fired, which
+// stops between pages and leaves the cursor open.
+export async function loadAll(
+  tabId: string,
+  resultId: string,
+  maxRows = MAX_ROWS,
+  signal?: AbortSignal,
+): Promise<boolean> {
   const find = () => findRows(tabId, resultId);
   for (;;) {
     const result = find();
-    if (!result || result.cursor === "closed") return false;
+    if (signal?.aborted || !result || result.cursor === "closed") return false;
     if (result.cursor !== "open") return true;
     if (result.fetching) {
       // A page of this result is already coming (the grid asked for it).
@@ -616,6 +622,15 @@ export function exportFilename(format: ExportFormat, now = new Date()): string {
 
 const FORMAT_NAMES: Record<ExportFormat, string> = { csv: "CSV", json: "JSON", markdown: "Markdown" };
 
+// What cancels the tab's export. In a map, not the store: it is no state to draw.
+const exportCancels = new Map<string, AbortController>();
+
+// Cancel the tab's export. It stops at the next page or chunk, and nothing
+// goes out: a file being saved is dropped, leaving the target as it was.
+export function cancelExport(tabId: string): void {
+  exportCancels.get(tabId)?.abort();
+}
+
 // Copy or save a result in the format the store holds. An open result is
 // loaded to the end first; if that cannot be done nothing goes out. A tab
 // exports one result at a time, from the click on: a second click, on any of
@@ -629,9 +644,14 @@ export async function exportResult(
   if (findTab(tabId)?.exporting) return;
   const setExporting = (exporting: ExportProgress | null) => updateTab(tabId, (t) => ({ ...t, exporting }));
   setExporting({ action, rows: null, total: 0 });
+  const controller = new AbortController();
+  exportCancels.set(tabId, controller);
   try {
-    await exportRows(tabId, resultId, action, maxRows, (rows, total) => setExporting({ action, rows, total }));
+    const progress = (rows: number, total: number) => setExporting({ action, rows, total });
+    await exportRows(tabId, resultId, action, maxRows, progress, controller.signal);
   } finally {
+    // A tab back from a failed close may have started another by now.
+    if (exportCancels.get(tabId) === controller) exportCancels.delete(tabId);
     setExporting(null);
   }
 }
@@ -642,10 +662,14 @@ async function exportRows(
   action: "copy" | "save",
   maxRows: number,
   progress: (rows: number, total: number) => void,
+  signal: AbortSignal,
 ): Promise<void> {
   const find = () => findRows(tabId, resultId);
   const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
-  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
+  const canceled = () => notify.info("Export canceled.");
+  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows, signal))) {
+    return void (signal.aborted ? canceled() : stopped());
+  }
   const result = find();
   if (!result) return void stopped();
 
@@ -663,7 +687,9 @@ async function exportRows(
   if (action === "copy") {
     let copied = false;
     try {
-      copied = await copyText((await collectChunks(chunks, onRows)).join(""));
+      const texts = await collectChunks(chunks, onRows, signal);
+      if (signal.aborted) return void canceled();
+      copied = await copyText(texts.join(""));
     } catch {
       // Past the engine's longest string: join throws.
     }
@@ -672,8 +698,8 @@ async function exportRows(
     return;
   }
   try {
-    const saved = await saveChunks(exportFilename(format), format, chunks, onRows);
-    if (saved === null) return;
+    const saved = await saveChunks(exportFilename(format), format, chunks, onRows, signal);
+    if (saved === null) return void (signal.aborted && canceled());
     notify.success(
       saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,
     );
