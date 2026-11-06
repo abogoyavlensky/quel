@@ -2,6 +2,7 @@
   (:require [integrant.core :as ig]
             [quel.api :as api]
             [quel.conn-test :refer [temp-path]]
+            [quel.export :as export]
             [quel.secrets :as secrets]
             [quel.store-test :refer [temp-dir]]
             [quel.window :as window]
@@ -23,15 +24,17 @@
         dir (temp-dir)
         store (ig/init-key :quel.store/db {:dir dir})
         secrets (ig/init-key :quel.secrets/store {:backend :memory})
+        exports (ig/init-key :quel.export/registry {})
         path (temp-path)]
     (try
-      ;; :app stays nil: choose-file, the one handler that needs it, opens
-      ;; a dialog and is not called here.
+      ;; :app stays nil: choose-file and export-begin, the handlers that
+      ;; need it, open a dialog and are not called here.
       ;; Update checks are off: nothing here reaches GitHub.
-      (f {:conns conns :execs execs :store store :secrets secrets :app nil :window @window
+      (f {:conns conns :execs execs :store store :secrets secrets :exports exports :app nil :window @window
           :updates {:enabled? false :store store :version "1.0.0"}}
          path)
       (finally
+        (ig/halt-key! :quel.export/registry exports)
         (ig/halt-key! :quel.exec/registry execs)
         (ig/halt-key! :quel.conn/registry conns)
         (ig/halt-key! :quel.store/db store)
@@ -44,12 +47,41 @@
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
-           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file" "export-result"
+           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
+           "export-begin" "export-append" "export-finish" "export-abort"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
            "zoom" "restore-zoom" "save-window-state"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
+
+;; export-begin opens a dialog: these start the export behind it.
+(deftest an-export-is-written-through-the-handlers
+  (with-env
+    (fn [{:keys [exports] :as env} _]
+      (let [dir (temp-dir)
+            target (str dir "/result.csv")
+            id (export/begin! exports target)]
+        (try
+          (api/export-append env id "id\r\n")
+          (api/export-append env id "1\r\n")
+          (is (= target (api/export-finish env id)))
+          (is (= "id\r\n1\r\n" (slurp target)))
+          (finally
+            (os/sh "rm" "-rf" dir)))))))
+
+(deftest an-aborted-export-leaves-no-file
+  (with-env
+    (fn [{:keys [exports] :as env} _]
+      (let [dir (temp-dir)
+            id (export/begin! exports (str dir "/result.csv"))]
+        (try
+          (api/export-append env id "id\r\n")
+          (api/export-abort env id)
+          (is (empty? (os/ls dir)))
+          (is (empty? @exports))
+          (finally
+            (os/sh "rm" "-rf" dir)))))))
 
 (deftest zoom-steps-from-the-saved-level-and-keeps-it
   (with-env

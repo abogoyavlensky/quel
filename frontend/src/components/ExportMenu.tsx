@@ -11,7 +11,9 @@ import { type RowsResult, useApp } from "@/state/store";
 
 // The results footer's Export button: a popover to pick the format (and, for
 // CSV, the separator), then copy the result or save it to a file. The
-// choice is app-wide (AppState.export), so it opens as it was left.
+// choice is app-wide (AppState.export), so it opens as it was left. Both close
+// it on the click, and the results footer takes it from there; a tab exports
+// one result at a time, so both are disabled while it does.
 
 const FORMATS: { value: ExportFormat; label: string }[] = [
   { value: "csv", label: "CSV" },
@@ -25,21 +27,21 @@ const SEPARATORS: { value: CsvSeparator; label: string }[] = [
   { value: "\t", label: "Tab" },
 ];
 
-export function ExportMenu({ tabId, result }: { tabId: string; result: RowsResult }) {
+export function ExportMenu({
+  tabId,
+  result,
+  exporting,
+}: {
+  tabId: string;
+  result: RowsResult;
+  exporting: boolean;
+}) {
   const { format, separator } = useApp((s) => s.export);
   const [open, setOpen] = useState(false);
-  // The export is loading the rest of an open result (the results footer shows
-  // the progress): both buttons are disabled until it is done.
-  const [busy, setBusy] = useState(false);
 
-  async function run(action: "copy" | "save") {
-    setBusy(true);
-    try {
-      await exportResult(tabId, result.id, action);
-    } finally {
-      setBusy(false);
-      setOpen(false);
-    }
+  function run(action: "copy" | "save") {
+    setOpen(false);
+    void exportResult(tabId, result.id, action);
   }
 
   return (
@@ -90,10 +92,10 @@ export function ExportMenu({ tabId, result }: { tabId: string; result: RowsResul
           </div>
         )}
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => void run("copy")}>
+          <Button variant="outline" size="sm" className="flex-1" disabled={exporting} onClick={() => run("copy")}>
             Copy
           </Button>
-          <Button size="sm" className="flex-1" disabled={busy} onClick={() => void run("save")}>
+          <Button size="sm" className="flex-1" disabled={exporting} onClick={() => run("save")}>
             Save
           </Button>
         </div>

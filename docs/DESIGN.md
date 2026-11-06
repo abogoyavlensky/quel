@@ -142,10 +142,10 @@ waiting on the network inside Go, not in bytecode.
 | `quel.dev` | nREPL and the window reload on frontend rebuilds, under `lgx run` only. |
 
 Integrant components: `:quel.store/db`, `:quel.conn/registry`,
-`:quel.exec/registry`, `:quel.api/handlers`, `:quel.shell/app`,
+`:quel.exec/registry`, `:quel.export/registry`, `:quel.api/handlers`, `:quel.shell/app`,
 `:quel.shell/window`, `:quel.menu/menu`, `:quel.updates/updater`, `:quel.dev/loop`. Halting the system
-cancels running queries, closes open cursors, closes every pool, then the
-app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
+cancels running queries, closes open cursors, drops unfinished exports' part
+files, closes every pool, then the app database. `:quel.exec/registry` refs `:quel.conn/registry` to fix that
 order: closing a session that is still running a query waits for it.
 
 ## Connections and sessions
@@ -696,7 +696,17 @@ runs in the tab, nothing is exported and a toast says so. A `done`,
 `MAX_ROWS`, 100,000; a toast says "the first 100,000 rows" when it applies
 and "the N loaded rows" for a result that was closed before the click.
 
-The formats are pure functions over the columns and rows (`grid/export.ts`):
+A tab exports one result at a time, from the click on, and Copy and Save are
+disabled until it is done. Once rows are moving, the left end of the results
+footer shows how far it has come ("Saving 12,500 of 100,000 rows…", "Copying
+…"), after the same 300 ms delay as "Running…". A **Cancel** button sits
+beside it, and beside the rows text while the rest of the result loads. It stops
+at the next page or chunk and nothing goes out: a loading result keeps its
+cursor open, and a file being saved is dropped, leaving the target as it was.
+
+The formats are pure functions over the columns and rows (`grid/export.ts`).
+`formatChunks` makes the file a chunk at a time as it is read, so a large
+export neither holds the main thread nor keeps the whole text in memory:
 
 - **CSV**, RFC 4180: a header row, `\r\n` after every record, a field quoted
   when it holds the separator, `"`, CR or LF. NULL is an empty field. UTF-8,
@@ -709,11 +719,16 @@ The formats are pure functions over the columns and rows (`grid/export.ts`):
 - **Markdown**: a GitHub-flavoured table, `---:` for numeric columns. `\`
   and `|` are escaped, line breaks become `<br>`, NULL is `*NULL*`.
 
-Saving (`lib/save.ts`): in the app's webview the backend `export-result`
-opens the native save dialog and writes the file (Wails' macOS webview
-handles no browser downloads). In server mode and in a plain browser Wails'
-dialogs are unavailable, so the browser downloads a `Blob`. The suggested
-name is `result-YYYY-MM-DD-HHMM.<ext>` in local time.
+Saving (`lib/save.ts`): in the app's webview the backend opens the native
+save dialog and writes the file (Wails' macOS webview handles no browser
+downloads). Wails caps one runtime call at 64 MiB, so the frontend sends the
+file in chunks of at most `CHUNK_UNITS` code units. They go to
+`<path>.<id>.part` beside the target, which replaces the target only when the
+whole file is written, so a failed export leaves an existing file as it was.
+That needs write access to the target's directory: an App Sandbox would mean
+revisiting it. In server mode and in a plain browser Wails' dialogs are
+unavailable, so the browser downloads a `Blob`. The suggested name is
+`result-YYYY-MM-DD-HHMM.<ext>` in local time.
 
 ### Palettes and keys
 
@@ -868,7 +883,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
 | Structure | `list-schemas`, `describe-schema` (a schema's tables, views, functions, types and sequences), `describe-object` (an object's columns, indexes, keys and sequences), `completion-schema`; later `object-ddl`, `schema-ddl`, `diagram-model` |
 | Execution | `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
-| Export | `export-result` (the format, a suggested file name and the text; a save dialog; the path, or nil when canceled); `export-ddl` is planned and will open a save dialog too |
+| Export | `export-begin` (the format and a suggested file name; a save dialog; an id, or nil when canceled), `export-append` (the id and a chunk of text), `export-finish` (the id; the path), `export-abort` (the id); `export-ddl` is planned and will open a save dialog too |
 | History | `list-history`, `clear-history` |
 | Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
 | Updates | `check-update` (the current version, whether this copy can install, a newer release or nil, whether it is the skipped one), `skip-update`, `download-update` (blocks until staged and verified), `restart-to-update` |

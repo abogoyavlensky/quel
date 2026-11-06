@@ -1,8 +1,24 @@
-(ns quel.export)
+(ns quel.export
+  (:require [integrant.core :as ig]
+            [quel.conn :as conn]))
 
 ;; Results to files. Formatting happens in the frontend (the grid holds the
-;; rows); this side asks where to save and writes the text. DDL export
-;; comes later.
+;; rows), which sends the file a chunk at a time: Wails caps one runtime
+;; call at 64 MiB. This side says which file types a save dialog offers and
+;; writes the chunks. DDL export comes later.
+;;
+;; Writing goes to a part file beside the target, named after the export,
+;; which replaces the target only once it is whole: a failed export leaves
+;; a file the user agreed to overwrite as it was. The name is random, so it
+;; can match no file of the user's, and two exports to one path do not share
+;; a file (the last to finish wins). It sits in the target's directory for
+;; the rename to be atomic, which assumes no macOS App Sandbox: that would
+;; allow writing the chosen file only.
+;;
+;; The registry maps an export's id to its target path. Only begin! adds to
+;; it, so the frontend, which holds just the id, can write nowhere but where
+;; the save dialog said. Whoever removes an entry owns its part file. The
+;; registry is an atom; the component's value is the atom.
 
 (defn filters
   "The save dialog's file filters for an export format: \"csv\", \"json\"
@@ -14,7 +30,62 @@
     "markdown" [["Markdown" "*.md"]]
     (throw (ex-info (str "Unknown export format: " format) {:format format}))))
 
-(defn write!
-  "Save text to path."
-  [path text]
-  (spit path text))
+(defn- part-path [path id]
+  (str path "." id ".part"))
+
+(defn- not-open [id]
+  (ex-info "This export is no longer open." {:id id}))
+
+(defn- take-entry!
+  "Remove the export's entry and return its path, or nil if it is gone."
+  [exports id]
+  (let [[old _] (swap-vals! exports dissoc id)]
+    (get old id)))
+
+(defn begin!
+  "Start an export to path: create its part file and return its id. The
+   entry comes after the file, so a failed create leaves none."
+  [exports path]
+  (let [id (conn/new-id)]
+    (spit (part-path path id) "")
+    (swap! exports assoc id path)
+    id))
+
+(defn append!
+  "Add text to the export's part file. It opens and closes the file each
+   time, so no handle outlives a call."
+  [exports id text]
+  (let [path (or (get @exports id) (throw (not-open id)))]
+    (with-open [f (open (part-path path id) :append)]
+      (write! f text))
+    nil))
+
+(defn finish!
+  "Put the export's part file in place of its target and return the path.
+   If the rename fails the part file goes too."
+  [exports id]
+  (let [path (or (take-entry! exports id) (throw (not-open id)))
+        part (part-path path id)]
+    (try
+      (os/rename part path)
+      path
+      (catch e
+        (delete-file part)
+        (throw e)))))
+
+(defn abort!
+  "Drop the export and its part file. Nothing happens for an unknown id:
+   a failed finish! has already cleaned up."
+  [exports id]
+  (when-let [path (take-entry! exports id)]
+    (delete-file (part-path path id)))
+  nil)
+
+(defmethod ig/init-key ::registry [_ _]
+  (atom {}))
+
+;; A write in flight at this moment recreates its part file: a stray temp
+;; file on a quit in the middle of an export, which is accepted.
+(defmethod ig/halt-key! ::registry [_ exports]
+  (doseq [id (keys @exports)]
+    (abort! exports id)))

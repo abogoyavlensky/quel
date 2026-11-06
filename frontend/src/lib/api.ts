@@ -35,15 +35,20 @@ export const cancel = (queryId: string) => call<{ canceled: boolean }>("cancel",
 export const closeResult = (queryId: string) => call<void>("close-result", queryId);
 
 // The bridge lowers a nil reply to {} or null, so a call that may answer
-// nil (a canceled dialog) is a path only when it is a string.
-const pathOrNull = async (p: Promise<unknown>) => {
+// nil (a canceled dialog) has an answer only when it is a string.
+const answerOrNull = async (p: Promise<unknown>) => {
   const r = await p;
   return typeof r === "string" && r !== "" ? r : null;
 };
 
-// The path the export was saved to, or null when the user canceled the dialog.
-export const exportResult = (format: ExportFormat, filename: string, text: string) =>
-  pathOrNull(call("export-result", format, filename, text));
+// Saving a result. A runtime call is capped at 64 MiB, so a file goes in
+// chunks: begin asks where to save and gives an id, or null when the user
+// canceled the dialog; finish gives the path it was saved to.
+export const exportBegin = (format: ExportFormat, filename: string) =>
+  answerOrNull(call("export-begin", format, filename));
+export const exportAppend = (id: string, text: string) => call<void>("export-append", id, text);
+export const exportFinish = (id: string) => call<string>("export-finish", id);
+export const exportAbort = (id: string) => call<void>("export-abort", id);
 
 export const closeSession = (connId: string, sessionId: string) => call<void>("close-session", connId, sessionId);
 
@@ -104,7 +109,7 @@ export const testConnection = (input: ProfileInput) => call<{ ok: boolean; label
 export const connect = (profileId: string) => call<OpenResult>("connect", profileId);
 
 // The SQLite file the user picks in a native dialog, or null.
-export const chooseFile = () => pathOrNull(call("choose-file"));
+export const chooseFile = () => answerOrNull(call("choose-file"));
 
 // Each profile's saved editor tabs, and the selected profile. The bridge
 // lowers a nil reply to {} or null, so the calls that may answer nil

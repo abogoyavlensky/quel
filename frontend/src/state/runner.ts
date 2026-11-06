@@ -1,10 +1,10 @@
-import { type CsvSeparator, EXTENSIONS, type ExportFormat, formatResult } from "@/grid/export";
+import { type CsvSeparator, EXTENSIONS, type ExportFormat, collectChunks, formatChunks } from "@/grid/export";
 import * as api from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { type Lost, lostOf } from "@/lib/lost";
 import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
-import { saveText } from "@/lib/save";
+import { saveChunks } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
 import { gate } from "@/sql/guard";
@@ -22,6 +22,7 @@ import {
 import { showResults } from "./layout";
 import {
   type EditorTab,
+  type ExportProgress,
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
@@ -361,13 +362,19 @@ export async function fetchMore(tabId: string, resultId: string, maxRows = MAX_R
 
 // Load every page of an open result, up to maxRows in all. True once the
 // cursor is done or capped; false when the rows cannot all be had: the
-// result or tab is gone, another statement is running in the tab, or the
-// cursor closed (canceled, an error, a disconnect).
-export async function loadAll(tabId: string, resultId: string, maxRows = MAX_ROWS): Promise<boolean> {
+// result or tab is gone, another statement is running in the tab, the
+// cursor closed (canceled, an error, a disconnect), or the signal fired, which
+// stops between pages and leaves the cursor open.
+export async function loadAll(
+  tabId: string,
+  resultId: string,
+  maxRows = MAX_ROWS,
+  signal?: AbortSignal,
+): Promise<boolean> {
   const find = () => findRows(tabId, resultId);
   for (;;) {
     const result = find();
-    if (!result || result.cursor === "closed") return false;
+    if (signal?.aborted || !result || result.cursor === "closed") return false;
     if (result.cursor !== "open") return true;
     if (result.fetching) {
       // A page of this result is already coming (the grid asked for it).
@@ -512,7 +519,8 @@ export async function closeTab(tabId: string): Promise<void> {
     seed(tabId, text, selection);
     // As it was, less the run: cancelled above, and ended by the epoch, so
     // its statement shows as canceled. A result whose page was in flight is
-    // closed: that page is dropped, so reading on would skip its rows.
+    // closed: that page is dropped, so reading on would skip its rows. Less
+    // the export too: while the tab was gone it could not clear its own mark.
     for (const r of tab.results) {
       if (r.kind === "rows" && r.fetching && r.cursor === "open") void api.closeResult(r.id).catch(() => {});
     }
@@ -521,6 +529,7 @@ export async function closeTab(tabId: string): Promise<void> {
       runningQueryId: null,
       stopping: false,
       runStartedAt: null,
+      exporting: null,
       results: tab.results.map((r): ResultTab => {
         if (r.kind === "running") return { ...resultBase(r), kind: "canceled", text: "Query canceled." };
         return r.kind === "rows" && r.fetching
@@ -613,23 +622,61 @@ export function exportFilename(format: ExportFormat, now = new Date()): string {
 
 const FORMAT_NAMES: Record<ExportFormat, string> = { csv: "CSV", json: "JSON", markdown: "Markdown" };
 
+// What cancels the tab's export. In a map, not the store: it is no state to draw.
+const exportCancels = new Map<string, AbortController>();
+
+// Cancel the tab's export. It stops at the next page or chunk, and nothing
+// goes out: a file being saved is dropped, leaving the target as it was.
+export function cancelExport(tabId: string): void {
+  exportCancels.get(tabId)?.abort();
+}
+
 // Copy or save a result in the format the store holds. An open result is
-// loaded to the end first; if that cannot be done nothing goes out.
+// loaded to the end first; if that cannot be done nothing goes out. A tab
+// exports one result at a time, from the click on: a second click, on any of
+// its results, does nothing.
 export async function exportResult(
   tabId: string,
   resultId: string,
   action: "copy" | "save",
   maxRows = MAX_ROWS,
 ): Promise<void> {
+  if (findTab(tabId)?.exporting) return;
+  const setExporting = (exporting: ExportProgress | null) => updateTab(tabId, (t) => ({ ...t, exporting }));
+  setExporting({ action, rows: null, total: 0 });
+  const controller = new AbortController();
+  exportCancels.set(tabId, controller);
+  try {
+    const progress = (rows: number, total: number) => setExporting({ action, rows, total });
+    await exportRows(tabId, resultId, action, maxRows, progress, controller.signal);
+  } finally {
+    // A tab back from a failed close may have started another by now.
+    if (exportCancels.get(tabId) === controller) exportCancels.delete(tabId);
+    setExporting(null);
+  }
+}
+
+async function exportRows(
+  tabId: string,
+  resultId: string,
+  action: "copy" | "save",
+  maxRows: number,
+  progress: (rows: number, total: number) => void,
+  signal: AbortSignal,
+): Promise<void> {
   const find = () => findRows(tabId, resultId);
   const stopped = () => notify.error("Export stopped: not all rows could be loaded.");
-  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows))) return void stopped();
+  const canceled = () => notify.info("Export canceled.");
+  if (find()?.cursor === "open" && !(await loadAll(tabId, resultId, maxRows, signal))) {
+    return void (signal.aborted ? canceled() : stopped());
+  }
   const result = find();
   if (!result) return void stopped();
 
   const { format, separator } = store.getState().export;
-  const text = formatResult(format, result.columns, result.rows, separator);
+  const chunks = formatChunks(format, result.columns, result.rows, separator);
   const n = result.rows.length;
+  const onRows = (rows: number) => progress(rows, n);
   const rows = n === 1 ? "1 row" : `${n.toLocaleString("en-US")} rows`;
   const which =
     result.cursor === "capped"
@@ -638,13 +685,21 @@ export async function exportResult(
         ? `the ${n.toLocaleString("en-US")} loaded ${n === 1 ? "row" : "rows"}`
         : rows;
   if (action === "copy") {
-    if (await copyText(text)) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
+    let copied = false;
+    try {
+      const texts = await collectChunks(chunks, onRows, signal);
+      if (signal.aborted) return void canceled();
+      copied = await copyText(texts.join(""));
+    } catch {
+      // Past the engine's longest string: join throws.
+    }
+    if (copied) notify.success(`Copied ${which} as ${FORMAT_NAMES[format]}`);
     else notify.error("Couldn't copy to the clipboard.");
     return;
   }
   try {
-    const saved = await saveText(exportFilename(format), format, text);
-    if (saved === null) return;
+    const saved = await saveChunks(exportFilename(format), format, chunks, onRows, signal);
+    if (saved === null) return void (signal.aborted && canceled());
     notify.success(
       saved === "download" ? `Saved ${which} as ${FORMAT_NAMES[format]}` : `Saved ${which} to ${saved}`,
     );

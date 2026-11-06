@@ -4,6 +4,7 @@
             [quel.conn]
             [quel.dev]
             [quel.exec]
+            [quel.export]
             [quel.menu]
             [quel.secrets]
             [quel.shell]
@@ -44,8 +45,11 @@
    :quel.exec/sweeper {:execs (ig/ref :quel.exec/registry)
                        :idle-ms 300000
                        :every-ms 30000}
+   ;; Exports in progress; halting drops their part files.
+   :quel.export/registry {}
    :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
                        :execs (ig/ref :quel.exec/registry)
+                       :exports (ig/ref :quel.export/registry)
                        :store (ig/ref :quel.store/db)
                        :secrets (ig/ref :quel.secrets/store)
                        :app (ig/ref :quel.shell/app)

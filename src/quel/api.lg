@@ -91,16 +91,30 @@
   [{:keys [app]}]
   (w/open-file app {:title "Choose a Database File" :filters db-filters}))
 
-(defn export-result
+(defn export-begin
   "Ask where to save a result exported as format (\"csv\", \"json\" or
-   \"markdown\"), write text there, and return the path; nil when the user
-   cancels."
-  [{:keys [app]} format filename text]
+   \"markdown\") and return the id of a new export to that file; nil when
+   the user cancels."
+  [{:keys [app exports]} format filename]
   (when-let [path (w/save-file app {:title "Export Result"
                                     :filename filename
                                     :filters (export/filters format)})]
-    (export/write! path text)
-    path))
+    (export/begin! exports path)))
+
+(defn export-append
+  "Add a chunk of text to the export."
+  [{:keys [exports]} id text]
+  (export/append! exports id text))
+
+(defn export-finish
+  "Complete the export and return the path it was saved to."
+  [{:keys [exports]} id]
+  (export/finish! exports id))
+
+(defn export-abort
+  "Drop the export, leaving the target as it was."
+  [{:keys [exports]} id]
+  (export/abort! exports id))
 
 ;; Each profile's saved editor tabs (quel.workspace), and which profile
 ;; was selected.
@@ -187,7 +201,10 @@
    "test-connection" #'test-connection
    "connect" #'connect
    "choose-file" #'choose-file
-   "export-result" #'export-result
+   "export-begin" #'export-begin
+   "export-append" #'export-append
+   "export-finish" #'export-finish
+   "export-abort" #'export-abort
    "load-workspace" #'load-workspace
    "save-workspace" #'save-workspace
    "close-tab" #'close-tab

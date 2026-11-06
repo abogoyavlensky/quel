@@ -1,5 +1,7 @@
 # Large Result Export Implementation Plan
 
+**Status: completed, pending the manual check on a Mac (Task 8, Step 3)**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Save a result of any size up to `MAX_ROWS` as a file, by formatting and sending it to the backend a chunk at a time, so a file over 64 MiB no longer fails with "assembled body too large" and the results footer shows the export's progress.
@@ -306,7 +308,7 @@ Work on a branch `large-result-export`, cut from master.
 - Modify: `src/quel/export.lg`
 - Test: `test/quel/export_test.lg`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Replace `write-saves-the-text-as-it-is` and add, each on a `temp-dir` with `(ig/init-key :quel.export/registry {})`. To find part files, list the temp dir; the tests assert it holds only the expected files.
   - begin, append twice (one with `"Zoë — 日本"`), finish: the target holds the text exactly, `finish!` returns the path, the dir holds only the target.
   - An existing target keeps its content after `begin!` and `append!`, and after `abort!`; it is replaced only by `finish!`.
@@ -318,11 +320,11 @@ Work on a branch `large-result-export`, cut from master.
   - A rename failure: make the target a non-empty directory, begin, finish. `finish!` throws, the part file is gone, the registry is empty.
   - `(ig/halt-key! :quel.export/registry exports)` deletes the part file of an open export.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test`
   Expected: the new tests in `quel.export-test` FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   In `src/quel/export.lg`: require `integrant.core :as ig`, update the namespace comment (the frontend formats and sends the text in pieces; this side asks where to save and writes it), remove `write!`, and add `part-path` (of a path and an id), `begin!`, `append!`, `finish!`, `abort!` and the `::registry` `init-key` (`(atom {})`) and `halt-key!`, as the Design says.
 
 Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite cannot load until Task 2 replaces it, and removing `write!` cannot wait: it shadows the core `write!` that `append!` needs. Tasks 1 and 2 are one commit.
@@ -333,22 +335,22 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `src/quel/api.lg`, `src/quel/system.lg`
 - Test: `test/quel/api_test.lg`, `test/quel/system_test.lg`
 
-- [ ] **Step 1: Update the tests**
+- [x] **Step 1: Update the tests**
   - `api_test.lg` `with-env`: add `exports (ig/init-key :quel.export/registry {})`, pass `:exports exports`, halt it in `finally`. Update the comment that says `choose-file` is the one handler needing `:app` (`export-begin` needs it too).
   - `every-handler-is-a-var`: replace `"export-result"` with `"export-begin" "export-append" "export-finish" "export-abort"`.
   - Add a test that seeds with `quel.export/begin!` on a temp path, then calls `api/export-append` twice with its id and `api/export-finish` and checks the file, and one that `api/export-abort` leaves no part file.
   - `system_test.lg`: add `:quel.export/registry` to the expected keys, and check `:exports` is a ref to it in `the-handlers-see-the-store-secrets-and-app`.
 
-- [ ] **Step 2: Implement**
+- [x] **Step 2: Implement**
 
   - `src/quel/api.lg`: replace `export-result` with the four handlers and update the `handlers` map. Register by var as the map already does.
   - `src/quel/system.lg`: require `[quel.export]`, add `:quel.export/registry {}` to `config`, add `:exports (ig/ref :quel.export/registry)` to `:quel.api/handlers`.
 
-- [ ] **Step 3: Run the tests to verify they pass**
+- [x] **Step 3: Run the tests to verify they pass**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test`
   Expected: PASS, including every test from Task 1.
 
-- [ ] **Step 4: Commit Tasks 1 and 2 together**
+- [x] **Step 4: Commit Tasks 1 and 2 together**
   `git commit -m "Write exports through a part file, in begin, append and finish steps"`
 
 ### Task 3: Format in chunks
@@ -357,7 +359,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/grid/export.ts`
 - Test: `frontend/src/grid/export.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Keep the `toCsv`, `toJson` and `toMarkdown` tests as they are. Keep the `formatResult` tests, for now, and add a `formatChunks` block:
   - For each format, the chunks' text joined equals `toCsv`, `toJson` or `toMarkdown`, with a small `size` and with the default.
   - The last chunk's `rows` is `rows.length`, and `rows` never goes down.
@@ -367,18 +369,18 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - The worst case fits: for `CHUNK_UNITS` control characters, `new TextEncoder().encode(JSON.stringify(text)).length` stays under 64 MiB. Build it with `"\u0001".repeat(CHUNK_UNITS)`.
   - `collectChunks` returns the texts in order and reports 0, then each chunk's `rows`.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the new tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   In `frontend/src/grid/export.ts`, as the Design says. Keep `formatResult` until Task 4 replaces its caller. Run the JSON cell code (`rawJson`) per row as it does today.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: PASS, with the existing format tests unchanged.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Format exports a chunk at a time"`
 
 ### Task 4: Save chunks to the backend
@@ -387,7 +389,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/lib/api.ts`, `frontend/src/lib/api.test.ts`, `frontend/src/lib/save.ts`, `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`, `frontend/src/state/runner.test.ts`, `frontend/src/grid/export.ts`, `frontend/src/grid/export.test.ts`
 - Create: `frontend/src/lib/save.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `api.test.ts`: move the answer-or-nil cases to `exportBegin` (`bridge.call` receives `"export-begin", "csv", "result.csv"`), and keep `{}`, null, undefined and `""` meaning cancel.
 
   `save.test.ts`, with `vi.mock("@/lib/api")` and `vi.stubGlobal("window", { webkit: { messageHandlers: { external: { postMessage() {} } } } })`:
@@ -402,22 +404,22 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - `exporting` is null after a save, a canceled save, a failed save, a copy, a failed copy and a load that stopped.
   - `exporting` is set, with `rows` null, while `loadAll` is pending, and a second `exportResult` for another result of the tab then returns without saving or copying.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the new and updated tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `api.ts`: replace `exportResult` with `exportBegin`, `exportAppend`, `exportFinish`, `exportAbort`, rename `pathOrNull` to `answerOrNull`, and update the comments above them.
   - `save.ts`: `saveChunks` replaces `saveText`; `download` takes the parts. Update the file's header comment.
   - `store.ts`: add `exporting` to `EditorTab`, null in `newTabState`. `persist` saves named fields, so it stays in memory; check `state/persist.ts` to confirm.
   - `runner.ts`: `exportResult` as the Design says. Put the copy's `collectChunks` and join inside the `try` that toasts "Couldn't copy to the clipboard.", so a text too long for the engine's string limit gets that toast rather than failing silently.
   - `export.ts`: remove `formatResult`, and move its "picks the format" test to `formatChunks`. Keep the `EXTENSIONS` test.
 
-- [ ] **Step 4: Run the tests and the type check**
+- [x] **Step 4: Run the tests and the type check**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test && npm --prefix /home/agent/Projects/quel/frontend run build`
   Expected: PASS, and the build has no type errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Save exports to the backend in chunks"`
 
 ### Task 5: Show progress in the results footer
@@ -426,7 +428,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `frontend/src/state/status.ts`, `frontend/src/state/status.test.ts`, `frontend/src/components/ResultFooter.tsx`, `frontend/src/components/ExportMenu.tsx`
 - Test: `frontend/e2e/export.spec.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   `status.test.ts`: `exportWords` is null with no export and with `rows` null, and "Saving 12,500 of 100,000 rows…" and "Copying 12,500 of 100,000 rows…" with one.
 
   `export.spec.ts`, a test that shows progress while an export runs:
@@ -436,20 +438,20 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - Reopen the popover: Copy and Save are disabled. Close it.
   - Resolve the promise. Expect "Copied 2,000 rows as CSV", and the status gone.
 
-- [ ] **Step 2: Run the unit tests to verify they fail**
+- [x] **Step 2: Run the unit tests to verify they fail**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test`
   Expected: the `exportWords` tests FAIL.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   - `status.ts`: `exportWords`.
   - `ResultFooter.tsx`: gate the status with `useDelayed(exportWords(tab) !== null, 300)`, and factor the spinner and words into a small local component shared with the run branch. In the `result` branch the left end shows the status instead of the rows text, and the right end stays. Return null only when there are no run words, no status and no result. Pass `exporting={tab.exporting !== null}` to `ExportMenu`. Update the comment above the component.
   - `ExportMenu.tsx`: the `exporting` prop, the disabled buttons, `setOpen(false)` at the start of `run`. Remove `busy` and its comment.
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
   Run: `npm --prefix /home/agent/Projects/quel/frontend test && (cd /home/agent/Projects/quel && CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx e2e)`
   Expected: PASS, the whole of `export.spec.ts` included.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Show an export's progress in the results footer"`
 
 ### Task 6: Prove it past the cap in the smoke test
@@ -457,7 +459,7 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 **Files:**
 - Modify: `scripts/smoke.sh`
 
-- [ ] **Step 1: Add the step**
+- [x] **Step 1: Add the step**
   Put it inside the existing `if [[ -f "$NREPL_CLIENT" ]]` branch, before the handler redefinition, and add "and an export larger than the bridge's 64 MiB cap is saved" to the header comment.
   - Over the nREPL, start an export on `$tmp/big.csv` and keep its id:
     `(quel.export/begin! (:quel.export/registry @quel.system/system*) "<path>")`.
@@ -466,14 +468,14 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   - `call export-finish "[\"$id\"]"`, then compare the file's size and SHA-256 with Python's, and check `$tmp` holds no `*.part` file.
   - `call export-append '["no-such-id","x"]'` answers "This export is no longer open."
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx smoke`
   Expected: `smoke: ok`, with no "nREPL step skipped" line. Stop if the step was skipped: `letgo-packages` must be beside this repo, or `NREPL_CLIENT` set.
 
-- [ ] **Step 3: Confirm the test can fail**
+- [x] **Step 3: Confirm the test can fail**
   Temporarily send the 70 MiB as one `export-append` call and run the step: expected a failure with "assembled body too large". Put it back.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Smoke-test an export past the bridge's 64 MiB cap"`
 
 ### Task 7: Docs and backlog
@@ -482,25 +484,25 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
 - Modify: `docs/DESIGN.md`, `docs/backlog/export-past-row-cap.md`
 - Create: `docs/backlog/copy-past-bridge-limit.md`
 
-- [ ] **Step 1: Update `docs/DESIGN.md`**
+- [x] **Step 1: Update `docs/DESIGN.md`**
   - The formats paragraph of `### Export`: they make the file a chunk at a time (`formatChunks`).
   - The Saving paragraph: `saveChunks`; the backend opens the dialog, the frontend sends chunks of at most `CHUNK_UNITS` code units because Wails caps a runtime call at 64 MiB, and the file appears at its path only when all of it is written (`<path>.<id>.part` until then).
   - A new sentence in `### Export`: the results footer's left end shows "Saving 12,500 of 100,000 rows…" or the Copy equivalent, after the same 300 ms delay as "Running…".
   - The Export row of the handler table: `export-begin` (the format and a suggested file name; a save dialog; an id, or nil when canceled), `export-append` (the id and a piece of text), `export-finish` (the id; the path), `export-abort` (the id).
 
-- [ ] **Step 2: Update the backlog entry**
+- [x] **Step 2: Update the backlog entry**
   In `docs/backlog/export-past-row-cap.md`, change "next to `filters` and `write!`" to "next to `filters` and `begin!`". Add one sentence to "Proposed fix": saving already formats and sends the file in chunks (`docs/plans/2026-11-04-2239-large-result-export.md`), so a backend writer can reuse the registry and its part file. The status stays open.
 
-- [ ] **Step 3: Commit the docs**
+- [x] **Step 3: Commit the docs**
   `git commit -m "Docs: exports are saved in pieces"`
 
-- [ ] **Step 4: Add the backlog entry, in its own commit**
+- [x] **Step 4: Add the backlog entry, in its own commit**
   Create `docs/backlog/copy-past-bridge-limit.md`, titled "Copy fails for a result over 64 MiB", starting with `**Status: open**`. Problem: `copyText` falls back to Wails' `Clipboard.SetText`, a runtime call under the same 64 MiB cap, so a native webview that refuses `navigator.clipboard` shows "Couldn't copy to the clipboard." Save works. Origin: this plan.
   `git commit -m "Backlog: copying a result over the bridge's 64 MiB cap"`
 
 ### Task 8: Full verification
 
-- [ ] **Step 1: Run everything that runs here**
+- [x] **Step 1: Run everything that runs here**
   Run:
   ```
   CGO_ENABLED=0 GOFLAGS=-tags=server mise x -- lgx test
@@ -510,14 +512,40 @@ Do not commit yet. `quel.api` still calls `export/write!`, so the backend suite 
   ```
   Expected: all pass, including "saves a CSV with the chosen separator as a download".
 
-- [ ] **Step 2: Check that nothing refers to the old handler**
+- [x] **Step 2: Check that nothing refers to the old handler**
   Run: `grep -rn "export-result\|exportResult\|export/write!\|saveText\|formatResult" src test frontend/src scripts docs/DESIGN.md`
   Expected: only `exportResult` in `state/runner.ts`, `state/runner.test.ts` and `ExportMenu.tsx`, which is the runner's own function.
 
 - [ ] **Step 3: Manual check on a Mac**
-  This cannot run here, so hand it to the user and say so. Run `lgx run`, connect to a SQLite database, and run:
+  This cannot run here, so hand it to the user and say so. It must use the shipped build: `lgx package-macos`, then `lgx verify-macos`, then open the ad-hoc signed copy of `dist/Quel.app`. `lgx run` uses the VM and would miss a failure in the native build. Connect to a SQLite database and run:
   ```sql
   with recursive c(x) as (select 1 union all select x + 1 from c where x < 25000)
   select x, printf('%.*c', 4000, 'x') as payload from c
   ```
   Save as CSV. The footer's left end counts up ("Saving 8,000 of 25,000 rows…"), the window stays responsive, and a file of about 100 MB opens whole, with no part file beside it. Save again over the same file and cancel at the dialog: the file stays. Try a read-only directory: the toast shows the error.
+
+## Summary
+
+Saving a result no longer fails at Wails' 64 MiB cap on one runtime call. The frontend formats the file a chunk at a time and sends it through `export-begin`, `export-append`, `export-finish` and `export-abort`. The backend writes to a uniquely named part file and renames it over the target only when the file is whole. The results footer shows "Saving 12,500 of 100,000 rows…". `MAX_ROWS` stays at 100,000.
+
+Verified: 183 backend tests, 509 frontend tests, `lgx smoke` (over 70 MiB through the real transport, size and SHA-256 compared; sent as one call the same step fails with "assembled body too large"), and `lgx e2e` (30 passed, the Postgres-only spec skipped). One-off, not kept: in Chromium against server mode, with the webview check spoofed and `export-begin` redefined over the nREPL to skip the dialog, a 40,000-row, 106 MB CSV saved through `saveChunks` and the real bridge with a matching SHA-256 and the footer counting up.
+
+`lgx build` passes, with `quel.export` lowered. Its production binary has no nREPL to start an export, so a small native program built at the same let-go commit ran the same calls (`spit`, `open` with `:append`, `with-open`, `write!`, `os/rename`, `delete-file`, `swap-vals!`) and they behave as they do on the VM.
+
+Not verified: the native dialog and WKWebView, and the export code itself in the native binary, which need the Mac check in Task 8.
+
+Issues: the first backend commit leaves the frontend calling a removed handler until Task 4, as the plan's task order implies (Codex flagged it, and Task 4 resolves it).
+
+The whole-branch Codex review found one bug, fixed with a test: a tab restored after a failed close kept its `exporting` mark from the snapshot, which disabled Copy and Save for good.
+
+Deviations:
+- The plan was already committed on master (`b790a91`), so the branch starts from it.
+- `TaskCreate` was unavailable, so the plan document was the only tracker.
+- `exportResult` keeps the reservation and `finally`, and a new `exportRows` holds the old body.
+- The surrogate test uses a regex rather than `isWellFormed`, which this project's TypeScript `lib` target lacks.
+- The smoke step has its own `if` on the nREPL client, with its own skip message, rather than sitting inside the redefinition's branch.
+- `lgx e2e` takes no arguments, so Task 5's new test was confirmed in the full run.
+
+What the plan could have specified better: `formatResult` blocking the main thread should have been caught in the first design, since it made any progress UI impossible without chunking, and the plan should have checked its new let-go calls against the native build, which runs differently from every test task, and listed `closeTab`'s tab snapshot among the places a new `EditorTab` field must be handled.
+
+Added after the plan: a Cancel button beside the footer's status, which replaces the "Canceling an export" item under Out of scope. An `AbortController` per tab reaches `loadAll`, `collectChunks` and `saveChunks`, which stop at the next page or chunk and drop the export.
