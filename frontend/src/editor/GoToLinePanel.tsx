@@ -21,7 +21,7 @@ export function GoToLinePanel({ host }: { host: PanelHost; rev: number }) {
   }, [host]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && e.target === field.current) {
       e.preventDefault();
       const pos = goToLineTarget(view.state, text);
       if (pos === null) setInvalid(true);
