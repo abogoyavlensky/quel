@@ -281,7 +281,9 @@ the user still has to `ROLLBACK`.
 A dead connection (laptop sleep, a dropped network, a server timeout or
 restart) is replaced at once: Quel takes a new session for the tab
 before it replies. Connecting is bounded by pgx's connect timeout,
-10 s unless the profile sets `connect_timeout`. The error then says:
+10 s per resolved address unless the profile sets `connect_timeout`,
+and Stop ends it sooner (except after a page read, whose query is already
+gone). The error then says:
 
 - whether the statement ran. It was not run when the driver's message
   shows nothing took effect on the server: a failed write (`write

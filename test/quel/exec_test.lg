@@ -1,7 +1,7 @@
 (ns quel.exec-test
   (:require [integrant.core :as ig]
             [quel.conn :as conn]
-            [quel.conn-test :refer [temp-path]]
+            [quel.conn-test :refer [temp-path with-silent-port with-silent-entry ms-since]]
             [quel.api :as api]
             [quel.exec :as exec]
             [quel.system :as system]
@@ -491,3 +491,23 @@
   (let [m (lost {:reconnect {:error "dial tcp: no route to host"}})]
     (is (str/includes? m "Could not reconnect (dial tcp: no route to host): the next run tries again."))
     (is (not (str/includes? m "Reconnected")))))
+
+;; A tab's first run takes its session, which dials: Stop ends the dial.
+(deftest stop-ends-a-first-run-dial
+  (with-silent-port
+    (fn [port]
+      (with-silent-entry port
+        (fn [conns conn-id]
+          (let [execs (ig/init-key :quel.exec/registry {:conns conns})
+                qid (str (random-uuid))
+                t0 (System/nanoTime)
+                f (future (message-of #(exec/run! execs conns {:conn-id conn-id :session-id "s1"
+                                                               :query-id qid :sql "select 1"})))]
+            (try
+              (is (until #(contains? @execs qid)))
+              (sleep 200)
+              (is (true? (exec/cancel! execs qid)))
+              (is (str/starts-with? (str (deref f 3000 :timeout)) "Query canceled."))
+              (is (< (ms-since t0) 3500))
+              (is (empty? @execs))
+              (finally (ig/halt-key! :quel.exec/registry execs)))))))))

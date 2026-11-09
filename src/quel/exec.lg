@@ -308,15 +308,28 @@
 
 (defn- reconnect!
   "Take a new session for the tab in place of a dead one. {:ok true}, or
-   {:error msg} with anything password-like masked. Bounded by the
-   driver's connect timeout (10 s on Postgres unless the DSN sets
+   {:error msg} with anything password-like masked; {:error \"canceled\"}
+   for a Stop. The dial runs under a fresh ctx, put in the query's entry
+   while it is still :running, so cancel! reaches it: the run's own ctx
+   may be cancelled already (the user stopped the run). A page read's
+   entry is gone by now, so its reconnect is bounded only by the driver's
+   connect timeout (10 s per address on Postgres unless the DSN sets
    connect_timeout). A tab or database closed meanwhile makes session!
    close the new connection and throw, which reads as a failure here."
-  [conns conn-id session-id]
-  (try
-    (conn/session! conns conn-id session-id)
-    {:ok true}
-    (catch e {:error (conn/redact {} (ex-message e))})))
+  [execs conns conn-id session-id query-id]
+  (let [rctx (shim/NewCtx)]
+    (swap! execs (fn [m]
+                   (if (= :running (get-in m [query-id :state]))
+                     (assoc-in m [query-id :ctx] rctx)
+                     m)))
+    (try
+      (conn/session! conns conn-id session-id rctx)
+      {:ok true}
+      (catch e
+        (if (.Canceled rctx)
+          {:error "canceled"}
+          {:error (conn/redact {} (ex-message e))}))
+      (finally (.Cancel rctx)))))
 
 (defn- fail!
   "Throw for a failed run (kind :run) or page read (kind :page). The
@@ -324,13 +337,13 @@
    it. A dead one is replaced at once, and the error says what was lost
    (see lost-message). The statement is never run again: a new session
    has lost the old one's SET values, search_path among them."
-  [conns conn-id session-id kind canceled? query-id e]
+  [execs conns conn-id session-id kind canceled? query-id e]
   (let [session (conn/current-session conns conn-id session-id)]
     (if (and session (dead? session))
       (do (conn/reset-session! conns conn-id session-id)
           (let [driver-msg (ex-message e)
                 sent? (not (not-sent? driver-msg))
-                reconnect (reconnect! conns conn-id session-id)]
+                reconnect (reconnect! execs conns conn-id session-id query-id)]
             ;; :lost is the same story as data, for the frontend's notice
             ;; (the bridge sends ex-data as the error's cause).
             (throw (ex-info (lost-message {:kind kind :canceled? canceled? :error driver-msg
@@ -386,7 +399,9 @@
         (doseq [e previous] (dispose! e))
         (when (.Canceled ctx)
           (throw (ex-info "Query canceled." {:query-id query-id})))
-        (let [session (conn/session! conns conn-id session-id)
+        ;; Taking a new session dials under the run's ctx, so a Stop
+        ;; ends a dial that would wait out the connect timeout.
+        (let [session (conn/session! conns conn-id session-id ctx)
               t0 (System/nanoTime)
               {:keys [result rows types]} (if (rows? sql)
                                             (run-rows session ctx sql page-size)
@@ -397,7 +412,7 @@
               (dispose! {:engine engine :ctx ctx :rows rows})))
           (assoc result :elapsed-ms (quot (- (System/nanoTime) t0) 1000000)))
         (catch e
-          (fail! conns conn-id session-id :run (.Canceled ctx) query-id e))
+          (fail! execs conns conn-id session-id :run (.Canceled ctx) query-id e))
         (finally
           (when-not @kept
             (.Cancel ctx)
@@ -433,7 +448,7 @@
                         ;; Before dispose!, which cancels the ctx itself.
                         (let [canceled? (.Canceled ctx)]
                           (dispose! e)
-                          (fail! conns conn-id session-id :page canceled? query-id err)))))]
+                          (fail! execs conns conn-id session-id :page canceled? query-id err)))))]
          (cond
            (nil? page) closed-page
 
