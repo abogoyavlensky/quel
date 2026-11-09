@@ -38,14 +38,20 @@ async function fillSilent(page: Page) {
   await dialog(page).getByLabel("User").fill("x");
 }
 
-// The silent profile, saved once for the run (the port is this run's).
+// The silent profile, on this worker's port. Profiles outlive a worker
+// (a retry restarts it with a new server and port), so an existing one is
+// pointed at the current port.
 async function ensureSilent(page: Page) {
   await page.goto("/");
   await expect(saved(page).or(page.getByText("No saved connections."))).toBeVisible();
-  if ((await profileRow(page, name).count()) > 0) return;
-  await page.getByRole("button", { name: "New connection" }).first().click();
-  await dialog(page).getByLabel("Name").fill(name);
-  await fillSilent(page);
+  if ((await profileRow(page, name).count()) > 0) {
+    await saved(page).getByRole("button", { name: `Edit ${name}` }).click();
+    await dialog(page).getByLabel("Port").fill(String(port));
+  } else {
+    await page.getByRole("button", { name: "New connection" }).first().click();
+    await dialog(page).getByLabel("Name").fill(name);
+    await fillSilent(page);
+  }
   await dialog(page).getByRole("button", { name: "Save" }).click();
   await expect(dialog(page)).toHaveCount(0);
 }
