@@ -99,6 +99,54 @@ test("Stop cancels a runaway query", async ({ page }) => {
   await expect(footer(page)).toHaveCount(0);
 });
 
+test("renames a result tab", async ({ page }) => {
+  await open(page);
+  await write(page, "select id from t limit 3;");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  const result = resultTabs(page).nth(1);
+  const name = page.getByRole("textbox", { name: "Result name" });
+  await expect(result).toHaveText("select id from t limit 3");
+
+  // Double-click: an empty field, the statement as its placeholder.
+  await result.dblclick();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("");
+  await page.keyboard.type("First three");
+  await page.keyboard.press("Enter");
+  await expect(result).toHaveText("First three");
+  await expect(result).toHaveAttribute("title", "select id from t limit 3");
+
+  // From the menu, with the name in the field; Escape keeps it.
+  await result.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("First three");
+  await page.keyboard.type("nope");
+  await page.keyboard.press("Escape");
+  await expect(result).toHaveText("First three");
+
+  // A blank name gives back the statement.
+  await result.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await expect(name).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Enter");
+  await expect(result).toHaveText("select id from t limit 3");
+
+  // Named and kept from the menu, it outlives the next run.
+  await result.dblclick();
+  await expect(name).toBeFocused();
+  await page.keyboard.type("Kept");
+  await page.keyboard.press("Enter");
+  await result.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Keep result" }).click();
+  await expect(result.getByRole("button", { name: "Keep result" })).toHaveAttribute("aria-pressed", "true");
+  await write(page, "select 1 as one;");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(resultTabs(page)).toHaveText(["Messages", "Kept", "select 1 as one"]);
+});
+
 test("the Stop key cancels", async ({ page }) => {
   await open(page);
   await write(page, `${runaway};`);

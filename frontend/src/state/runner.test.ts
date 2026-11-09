@@ -408,6 +408,16 @@ describe("a lost connection", () => {
     );
   });
 
+  it("keeps a result's name when it becomes a notice", async () => {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts("select 2"));
+    runner.renameResult(tabId(), tab().results[0].id, "Orders");
+    reply.reject(lostErr({}));
+    await running;
+    expect(tab().results[0]).toMatchObject({ kind: "lost", title: "Orders" });
+  });
+
   it("Run again runs the rest, and the run dismisses the toast", async () => {
     api.run.mockRejectedValueOnce(lostErr({}));
     await runner.runStatements(tabId(), stmts("select 2; select 3"));
@@ -1482,6 +1492,7 @@ describe("closing and reopening", () => {
     api.run.mockReturnValueOnce(held.promise);
     const script = runner.runStatements(id, stmts("select 2; select 3"));
     const running = tab().runningQueryId;
+    runner.renameResult(id, running!, "Second");
     api.closeTab.mockRejectedValueOnce(new Error("disk full"));
     await runner.closeTab(id);
     expect(api.cancel).toHaveBeenCalledWith(running);
@@ -1490,7 +1501,7 @@ describe("closing and reopening", () => {
     expect(ws().nextTabNumber).toBe(3);
     expect(tab().id).toBe(id);
     expect(tab()).toMatchObject({ runningQueryId: null, stopping: false });
-    const canceled = { kind: "canceled", sql: "select 2", text: "Query canceled." };
+    const canceled = { kind: "canceled", sql: "select 2", text: "Query canceled.", title: "Second" };
     expect(tab().results).toMatchObject([canceled]);
     expect(tab().messages).toHaveLength(1);
     // The script's late reply is dropped, and it runs nothing more.
@@ -1586,6 +1597,78 @@ describe("closing and reopening", () => {
   it("with nothing closed, reopen does nothing", async () => {
     await runner.reopenTab();
     expect(api.reopenTab).not.toHaveBeenCalled();
+  });
+});
+
+describe("rename a result", () => {
+  // A run of sql whose reply is held; the running result's id.
+  function held(sql = "select 1") {
+    const reply = deferred<RunResult>();
+    api.run.mockReturnValueOnce(reply.promise);
+    const running = runner.runStatements(tabId(), stmts(sql));
+    return { reply, running, id: tab().results[0].id };
+  }
+
+  it("names a result, trimmed", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    runner.renameResult(tabId(), tab().results[0].id, "  Orders  ");
+    expect(tab().results[0].title).toBe("Orders");
+  });
+
+  it("a blank name gives back the statement", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const id = tab().results[0].id;
+    runner.renameResult(tabId(), id, "Orders");
+    runner.renameResult(tabId(), id, "   ");
+    expect("title" in tab().results[0]).toBe(false);
+  });
+
+  it("does nothing for a result that is gone", () => {
+    const before = tab();
+    expect(() => runner.renameResult(tabId(), "gone", "Orders")).not.toThrow();
+    expect(tab()).toBe(before);
+  });
+
+  it("keeps the name given while running when rows come", async () => {
+    const { reply, running, id } = held();
+    runner.renameResult(tabId(), id, "Orders");
+    reply.resolve(rowsResult(1, false));
+    await running;
+    expect(rowsAt(0)).toMatchObject({ id, title: "Orders" });
+  });
+
+  it("keeps the name when an update count comes", async () => {
+    const { reply, running, id } = held("update t set x = 1");
+    runner.renameResult(tabId(), id, "Fix");
+    reply.resolve(update(2));
+    await running;
+    expect(tab().results[0]).toMatchObject({ kind: "update", title: "Fix" });
+  });
+
+  it("keeps the name on an error and on a cancel", async () => {
+    let h = held();
+    runner.renameResult(tabId(), h.id, "Bad");
+    h.reply.reject(new Error("no such table"));
+    await h.running;
+    expect(tab().results[0]).toMatchObject({ kind: "error", title: "Bad" });
+    h = held();
+    runner.renameResult(tabId(), h.id, "Stopped");
+    h.reply.reject(new Error("Query canceled."));
+    await h.running;
+    expect(tab().results[0]).toMatchObject({ kind: "canceled", title: "Stopped" });
+  });
+
+  it("keeps the name across a pin and, kept, across the next run", async () => {
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1"));
+    const id = tab().results[0].id;
+    runner.renameResult(tabId(), id, "Kept");
+    runner.pin(tabId(), id);
+    api.run.mockResolvedValueOnce(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 2"));
+    expect(tab().results.map((r) => r.title)).toEqual(["Kept", undefined]);
   });
 });
 

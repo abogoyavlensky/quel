@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { HistoryIcon, PanelBottom, PanelLeft, PanelRight, Pin, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,8 +19,9 @@ import type { ClosedTab } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { sidebarShown, toggleResults, toggleSidebar } from "@/state/layout";
 import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin, toggleRowDetails } from "@/state/runner";
-import { type EditorTab, type Workspace, useApp } from "@/state/store";
+import { type Workspace, useApp } from "@/state/store";
 import { RESULTS_PANE_KEY, ROW_KEY, SIDEBAR_KEY } from "./keys";
+import { NameInput } from "./NameInput";
 
 // The selected workspace's editor tabs. Each is its own database session:
 // SET, temp tables and an open transaction stay in the tab they were made in.
@@ -66,7 +67,12 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
                   <span aria-label="running" className="size-1.5 animate-pulse rounded-full bg-foreground/70" />
                 )}
                 {editing === t.id ? (
-                  <TitleInput tab={t} onDone={() => setEditing(null)} />
+                  <NameInput
+                    value={t.title}
+                    label="Tab name"
+                    onCommit={(name) => renameTab(t.id, name)}
+                    onDone={() => setEditing(null)}
+                  />
                 ) : (
                   <span className="max-w-48 min-w-0 truncate">{t.title}</span>
                 )}
@@ -125,40 +131,6 @@ export function EditorTabs({ workspace }: { workspace: Workspace }) {
       <ResultsToggle />
       <RowDetailsToggle />
     </div>
-  );
-}
-
-// The tab's name, editable: Enter or leaving commits, Escape cancels, and
-// a blank name keeps the old one.
-function TitleInput({ tab, onDone }: { tab: EditorTab; onDone: () => void }) {
-  const input = useRef<HTMLInputElement>(null);
-  const done = useRef(false);
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-  }, []);
-  const finish = (commit: boolean) => {
-    if (done.current) return;
-    done.current = true;
-    if (commit && input.current) renameTab(tab.id, input.current.value);
-    onDone();
-  };
-  return (
-    <input
-      ref={input}
-      aria-label="Tab name"
-      defaultValue={tab.title}
-      size={Math.max(6, tab.title.length)}
-      onClick={(e) => e.stopPropagation()}
-      onDoubleClick={(e) => e.stopPropagation()}
-      onBlur={() => finish(true)}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") finish(true);
-        else if (e.key === "Escape") finish(false);
-      }}
-      className="h-5 rounded-sm border bg-background px-1 text-xs text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    />
   );
 }
 
