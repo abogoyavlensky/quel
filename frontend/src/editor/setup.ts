@@ -16,6 +16,7 @@ import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
 import { runCurrent } from "@/state/runner";
 import { columnCompletionSource } from "./columns";
+import { findExtension, goToLineField, panelKeymap, replacedKeys } from "./panels";
 import { statementHighlight } from "./statementHighlight";
 import type { Seed } from "./states";
 
@@ -156,6 +157,8 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       autocompletion(),
       statementHighlight,
       highlightSelectionMatches(),
+      findExtension,
+      goToLineField,
       // Tab accepts an open completion, otherwise it indents (Shift-Tab
       // dedents). Escape then Tab leaves the editor.
       keymap.of([
@@ -163,7 +166,8 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
         indentWithTab,
         ...closeBracketsKeymap,
         ...defaultKeymap,
-        ...searchKeymap,
+        ...panelKeymap,
+        ...searchKeymap.filter((b) => !replacedKeys.includes(b.key ?? "")),
         ...historyKeymap,
         ...completionKeymap,
       ]),
