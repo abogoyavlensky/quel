@@ -1,5 +1,7 @@
 # Editor Find and Go to Line Panels Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace CodeMirror's stock find/replace panel and go-to-line dialog with panels built from the app's own controls, docked at the top of the editor.
@@ -250,7 +252,7 @@ export function panelSnapshot(): PanelSnapshot; // the same object until somethi
 - Create: `frontend/src/editor/searchCount.ts`
 - Test: `frontend/src/editor/searchCount.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Build states with `EditorState.create({ doc, selection })` and queries
   with `new SearchQuery({...})`. Cover these cases:
   - three matches with the selection on none: `{ total: 3, current: null }`, label "3 matches"
@@ -261,15 +263,15 @@ export function panelSnapshot(): PanelSnapshot; // the same object until somethi
   - an invalid regexp (`new SearchQuery({ search: "(", regexp: true })`): `{ total: 0, current: null, capped: false }`, label `""`
   - `cap = 2` over three matches: `capped: true`, label "2+ matches", and "1 of 2+" when the selection is on the first
   - case sensitivity and whole word respected (they come from `getCursor`, so one case each is enough)
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
   Run: `npm --prefix frontend test -- searchCount`
   Expected: FAIL (module not found).
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   `countMatches`: return the empty count when `!query.valid || query.search === ""`. Otherwise iterate `query.getCursor(state)`, stopping after `cap` matches (`capped` is true if a match past the cap exists). `current` is the 1-based index of the match whose `from`/`to` equal `state.selection.main`'s. `countLabel` formats as in the Design section, writing the cap as `${cap}+`.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
   Run: `npm --prefix frontend test -- searchCount`
   Expected: PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Count search matches for the find panel"`
 
 ### Task 2: Go to line parser
@@ -278,7 +280,7 @@ export function panelSnapshot(): PanelSnapshot; // the same object until somethi
 - Create: `frontend/src/editor/goToLine.ts`
 - Test: `frontend/src/editor/goToLine.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   A 10-line document, cursor on line 4. These inputs must give the same position as CodeMirror's `gotoLine`:
   - `"7"` → start of line 7
   - `"+2"` → line 6
@@ -292,16 +294,16 @@ export function panelSnapshot(): PanelSnapshot; // the same object until somethi
   - a column past the line's end clamps to the line's end
   - `""`, `"abc"`, `"1:2:3"` → `null`
   - surrounding spaces (`" 7 "`) parse: the input is trimmed, unlike stock, which is harmless
-- [ ] **Step 2: Run them and see them fail**
+- [x] **Step 2: Run them and see them fail**
   Run: `npm --prefix frontend test -- goToLine`
   Expected: FAIL.
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   Port the body of `gotoLine` from `frontend/node_modules/@codemirror/search/dist/index.js` (lines 326–369), with the same regexp `/^([+-])?(\d+)?(:\d+)?(%)?$/` and the same arithmetic, returning the position instead of dispatching. Credit the source in a comment (MIT).
   Note that stock rejects an empty string only through the regexp (it matches `""`, then `ln` is undefined, which means the current line). Keep that for `":2"`, but return `null` for an input that is empty after trimming, so Enter on an empty field is an error and not a silent no-op.
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
   Run: `npm --prefix frontend test -- goToLine`
   Expected: PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Parse go-to-line targets"`
 
 ### Task 3: Panel plumbing on the CodeMirror side
@@ -313,24 +315,24 @@ export function panelSnapshot(): PanelSnapshot; // the same object until somethi
 This task leaves ⌘F opening an empty panel. Task 4 fills it, and the two
 are committed together at the end of Task 4.
 
-- [ ] **Step 1: Store**
+- [x] **Step 1: Store**
   A module-level `snapshot: PanelSnapshot`, a listener set, `subscribePanels`, `panelSnapshot`, and internal `setHost(kind, host | null)` / `bump()` that replace `snapshot` with a new object and notify. One `EditorView` exists for the app's life (`SqlEditor`), so one host per kind is enough.
-- [ ] **Step 2: Focus flag**
+- [x] **Step 2: Focus flag**
   A module `let focusNext = false`. `openFind` and `openGoToLine` set it before they dispatch, and clear it in a `finally`. Each `createPanel` reads it into `host.focus`.
-- [ ] **Step 3: Find panel**
+- [x] **Step 3: Find panel**
   `function createFindPanel(view): Panel` makes `dom` (`div.cm-quel-panel.cm-search`), registers the host, and returns `{ dom, top: true, update(u) { if (u.docChanged || u.selectionSet || u.transactions.some(tr => tr.effects.some(e => e.is(setSearchQuery)))) bump() }, destroy() { if (snapshot.find?.dom === dom) setHost("find", null) } }`.
   Export `findExtension = search({ top: true, createPanel: createFindPanel })`.
-- [ ] **Step 4: Go to Line panel**
+- [x] **Step 4: Go to Line panel**
   `const toggleGoTo = StateEffect.define<boolean>()`, and `goToLineField = StateField.define<boolean>({ create: () => false, update: (v, tr) => last toggleGoTo value or v, provide: f => showPanel.from(f, on => on ? createGoToPanel : null) })`. `createGoToPanel` works like the find panel (`div.cm-quel-panel.cm-goto-line`, `top: true`, bump on selection or document changes, guarded destroy).
-- [ ] **Step 5: Commands**
+- [x] **Step 5: Commands**
   - `openFind(view)`: close Go to Line if it is open (`toggleGoTo.of(false)`). If the find panel is open and its `[main-field]` already has focus, `select()` it and return true: `openSearchPanel` does nothing in that case, and ⌘F should re-select. Otherwise set `focusNext` and `return openSearchPanel(view)`. That call seeds the query from the selection and focuses the field when the panel exists, and creates it when it does not.
   - `openGoToLine(view)`: if Go to Line is open, select `snapshot.goto.dom.querySelector("[main-field]")` and return true. Otherwise `closeSearchPanel(view)` (it moves focus to the editor if the panel had it), set `focusNext`, dispatch `toggleGoTo.of(true)`.
   - `closeGoToLine(view)`: if open, focus the view when the panel had focus, then dispatch `toggleGoTo.of(false)`.
   - `viaFind(cmd)` as in the Design section.
   - Export `panelKeymap` exactly as in the Design section.
-- [ ] **Step 6: Wire into setup.ts**
+- [x] **Step 6: Wire into setup.ts**
   Add `findExtension` and `goToLineField` to `newState`'s extensions. In the `keymap.of([...])` list, put `...panelKeymap` before `...searchKeymap.filter((b) => !["Mod-f", "Mod-Alt-g", "Mod-g", "F3"].includes(b.key ?? ""))`.
-- [ ] **Step 7: Type-check**
+- [x] **Step 7: Type-check**
   Run: `npm --prefix frontend run build`
   Expected: success (it runs `tsc -b`). No commit yet.
 
@@ -340,11 +342,11 @@ are committed together at the end of Task 4.
 - Create: `frontend/src/editor/EditorPanels.tsx`, `frontend/src/editor/FindPanel.tsx`, `frontend/src/editor/GoToLinePanel.tsx`
 - Modify: `frontend/src/editor/SqlEditor.tsx`, `frontend/src/components/keys.ts`
 
-- [ ] **Step 1: Key labels**
+- [x] **Step 1: Key labels**
   In `keys.ts`, following the existing style: `FIND_KEY` (⌘F / Ctrl+F), `FIND_NEXT_KEY` (⌘G / Ctrl+G), `FIND_PREV_KEY` (⇧⌘G / Ctrl+Shift+G), `GO_TO_LINE_KEY` (⌥⌘G / Ctrl+Alt+G).
-- [ ] **Step 2: EditorPanels**
+- [x] **Step 2: EditorPanels**
   `useSyncExternalStore(subscribePanels, panelSnapshot)`. Render `createPortal(<FindPanel host={s.find} rev={s.rev} />, s.find.dom)` when `s.find` is set, and the same for `goto`. Key each portal by the host's `dom` (a `WeakMap<HTMLElement, number>` id is fine), so a rebuilt panel remounts and runs its focus effect again.
-- [ ] **Step 3: FindPanel**
+- [x] **Step 3: FindPanel**
   - Read `state = host.view.state` and `query = getSearchQuery(state)`. Change the query through `host.view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ ...query, search })) })`. Copy every field explicitly (`search`, `caseSensitive`, `literal`, `regexp`, `wholeWord`, `replace`), because `SearchQuery` is a class, not a plain spec.
   - Use `useMemo(() => countMatches(state, query), [state.doc, query, state.selection])` and `countLabel`.
   - Use `const [replaceOpen, setReplaceOpen] = useState(query.replace !== "")`.
@@ -354,22 +356,22 @@ are committed together at the end of Task 4.
   - Buttons call `findPrevious`, `findNext`, `replaceNext`, `replaceAll` and `closeSearchPanel` with `host.view`. A click may take focus, as it does in the stock panel; `closeSearchPanel` returns focus to the editor.
   - Hide the replace row and the chevron when `state.readOnly` (stock does the same; the app has no read-only editor today, so this is one condition).
   - Layout: one flex row `items-center gap-1 px-2 py-1.5`, with the find group about `w-72`, the count `min-w-20 text-xs text-muted-foreground tabular-nums`, then a `flex-1` spacer, then close. The replace row repeats the left inset with a chevron-sized spacer.
-- [ ] **Step 4: GoToLinePanel**
+- [x] **Step 4: GoToLinePanel**
   - Local `const [text, setText] = useState(String(state.doc.lineAt(state.selection.main.head).number))` and `const [invalid, setInvalid] = useState(false)`.
   - The input gets `main-field="true"` and `aria-label="Go to line"`. A layout effect selects it when `host.focus` is set.
   - Enter runs `goToLineTarget(state, text)`. On `null`, `setInvalid(true)`. Otherwise dispatch `{ selection: EditorSelection.cursor(pos), effects: [toggle-off effect, EditorView.scrollIntoView(pos, { y: "center" })] }` and call `view.focus()`. Export a `goToLine(view, pos)` from `panels.ts` for this, so the effect stays private there.
   - Escape runs `closeGoToLine`. Anything else goes to `runScopeHandlers(view, e.nativeEvent, "goto-panel")`.
   - Show a muted hint "Line, +n, -n, n%, line:col" and a close button.
-- [ ] **Step 5: SqlEditor**
+- [x] **Step 5: SqlEditor**
   Return `<><div ref={host} … /><EditorPanels /></>`.
-- [ ] **Step 6: Build and run the unit tests**
+- [x] **Step 6: Build and run the unit tests**
   Run: `npm --prefix frontend run build && npm --prefix frontend test && npm --prefix frontend run lint`
   Expected: all pass.
-- [ ] **Step 7: Look at it**
+- [x] **Step 7: Look at it**
   Use `/run`. On Linux, run in server mode, isolated as AGENTS.md requires:
   `QUEL_SECRETS=memory QUEL_DATA_DIR="$(mktemp -d)" QUEL_UPDATES=off CGO_ENABLED=0 GOFLAGS=-tags=server lgx run`.
   Never point it at the real data directory. Check ⌘F, typing, the count, replace folding, ⌘⌥G, a tab switch with the panel open (it stays open, the caret stays in the editor), and both themes. Check the browser console for React warnings.
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
   `git commit -m "Find and Go to Line panels from the app's controls"`
 
 ### Task 5: Theme the panels and the match highlights
@@ -377,9 +379,9 @@ are committed together at the end of Task 4.
 **Files:**
 - Modify: `frontend/src/editor/setup.ts` (the `chrome` theme), `frontend/src/index.css`
 
-- [ ] **Step 1: Tokens**
+- [x] **Step 1: Tokens**
   In `index.css`, next to `--sql-keyword` in both the light block (around line 180) and the `.dark` block (around line 186), add `--search-match` and `--search-match-current`. Start with a warm amber, translucent so the text and the statement block show through. Light: `oklch(0.88 0.12 90 / 0.55)` and `oklch(0.78 0.15 65 / 0.6)`. Dark: `oklch(0.6 0.12 85 / 0.4)` and `oklch(0.68 0.15 60 / 0.55)`. Adjust by eye.
-- [ ] **Step 2: Chrome rules**
+- [x] **Step 2: Chrome rules**
   - `.cm-panels`: `backgroundColor: var(--background)`, `color: var(--foreground)`.
   - `.cm-panels.cm-panels-top`: `borderBottom: 1px solid var(--border)`.
   - `.cm-panel.cm-search`: `padding: 0` (our component pads itself), and `fontFamily: var(--font-sans)`.
@@ -389,9 +391,9 @@ are committed together at the end of Task 4.
   - `.cm-searchMatch .cm-selectionMatch`: `backgroundColor: transparent`.
 
   These go in `chrome` (an `EditorView.theme`), which outranks the base theme, as the existing comment in `setup.ts` says.
-- [ ] **Step 3: Look at it in light and dark**
+- [x] **Step 3: Look at it in light and dark**
   Use `/run` with the isolated command from Task 4, Step 7. Matches must read on top of `.cm-currentStatement` and the selection colour.
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Theme editor panels and search matches from app tokens"`
 
 ### Task 6: UI tests
@@ -399,7 +401,7 @@ are committed together at the end of Task 4.
 **Files:**
 - Create: `frontend/e2e/search.spec.ts`
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
   Follow `frontend/e2e/editor.spec.ts`: `connectFixture(page, db)`, and its `write` helper (copy it). Tests:
   1. ⌘F (`ControlOrMeta+f`) shows `getByLabel("Find")` focused. The panel is in `.cm-panels-top`.
   2. In `select 1;\nselect 2;\nselect 3;`, typing `select` shows "3 matches"; Enter shows "1 of 3"; Shift+Enter wraps to "3 of 3"; typing `zzz` shows "No results".
@@ -412,13 +414,13 @@ are committed together at the end of Task 4.
   9. Tab switch: with Find open on tab A and `select` typed, open a new tab (the "New tab" button, as `tabs.spec.ts:33` does), then press ⌘1 (`ControlOrMeta+1`) to go back. Find the tabs with `tabs.spec.ts`'s `editorTabs` locator. The panel is still there with `select` in the field, and the editor has focus, not the field.
   10. ⌘F while the Find field already has focus keeps it focused and selects its text.
   11. With nothing searched yet and Go to Line open, ⌘G (`ControlOrMeta+g`) closes Go to Line and shows the Find field, focused.
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh search.spec.ts`
   Expected: PASS.
-- [ ] **Step 3: Run the whole e2e suite**
+- [x] **Step 3: Run the whole e2e suite**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`
   Expected: all specs pass. `editor.spec.ts` should be unaffected.
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "e2e: find and go to line panels"`
 
 ### Task 7: Docs
@@ -426,13 +428,46 @@ are committed together at the end of Task 4.
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Editor paragraph**
+- [x] **Step 1: Editor paragraph**
   After the paragraph ending "becomes Stop (`Cmd+.`) after 300ms of a run." (around line 238), add a short paragraph covering:
   - Find and Go to Line are CodeMirror panels docked at the top, drawn by React through portals (`editor/panels.ts`).
   - Only one is open at a time.
   - Each tab keeps its own query.
   - The top placement keeps them clear of the Run button.
-- [ ] **Step 2: Keys table**
+- [x] **Step 2: Keys table**
   In "Palettes and keys" (around line 735), add ⌘F / Ctrl+F (find and replace in the editor), ⌘G / ⇧⌘G (next / previous match), and ⌥⌘G / Ctrl+Alt+G (go to line).
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   `git commit -m "Design: editor find and go to line panels"`
+
+## Completion summary
+
+Implemented as planned. Find and Go to Line are CodeMirror panels docked
+at the top of the editor, with React controls portalled in from
+`SqlEditor`. The match count, the go-to-line parser, the theme tokens, 10
+Playwright specs and the DESIGN.md notes are all in. Verified with 567
+frontend tests, 198 backend tests, lint, the full e2e suite (50 passed, 1
+Postgres-only skip), and light and dark screenshots of both panels from a
+throwaway Playwright spec. No React warnings appeared in the console.
+
+Codex reviewed every task. Its one finding was that Enter on Go to Line's
+Close button submitted the line instead of closing, fixed in `a24b19d`
+with an e2e test. The other reviews were clean.
+
+Deviations:
+- Task 2: the tests and the parser were written together, so the "see it
+  fail" step was skipped.
+- Task 4: the button names keep the field names unambiguous: "Replace
+  next" (the field is "Replace"), "Close find" and "Close go to line". The
+  count is an `aria-live` span.
+- Task 4: `useMemo` depends on `[state, query]` rather than
+  `state.doc` / `state.selection`, to satisfy the hooks lint. It
+  re-renders only on panel-store bumps anyway.
+- Task 4, Step 7 and Task 5, Step 3: the visual check used Playwright
+  screenshots in server mode, not `/run`. The app has no runtime dark mode
+  (`docs/backlog/themes-setting.md`), so the dark tokens were checked by
+  adding the `.dark` class by hand.
+- Task 6: the "⌘F re-selects" case is folded into the first test. A test
+  for Enter on Go to Line's Close button was added.
+
+What the plan could have specified better: where Enter is handled. A
+bubbling `onKeyDown` on the panel root also catches Enter on its buttons.
