@@ -73,22 +73,28 @@
    tested. With an attempt-id, cancel-connect stops the dial."
   ([env m] (test-connection env m nil))
   ([{:keys [store secrets attempts]} m attempt-id]
-   (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
-         t (profiles/target p (profiles/effective-password store secrets p))]
-     (conn/attempt! attempts attempt-id #(conn/check! t %))
-     {:ok true :label (:label t)})))
+   ;; Registered before the Keychain read, so a cancel during it stops
+   ;; the dial before it starts.
+   (conn/attempt! attempts attempt-id
+                  (fn [ctx]
+                    (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
+                          t (profiles/target p (profiles/effective-password store secrets p))]
+                      (conn/check! t ctx)
+                      {:ok true :label (:label t)})))))
 
 (defn connect
   "Open the profile's database. With an attempt-id, cancel-connect stops
-   the dial; it then throws \"Connecting canceled.\". The Keychain read
-   comes first and is not cancellable."
+   it; it then throws \"Connecting canceled.\". The attempt is registered
+   before the Keychain read, which cannot be interrupted, so a cancel
+   during that read stops the dial before it starts."
   ([env profile-id] (connect env profile-id nil))
   ([{:keys [conns store secrets attempts]} profile-id attempt-id]
-   (let [p (or (profiles/fetch store profile-id)
-               (throw (ex-info "This connection no longer exists." {:id profile-id})))
-         t (profiles/target p (profiles/saved-password secrets p))]
-     (assoc (conn/attempt! attempts attempt-id #(conn/open-target! conns t %))
-            :profile-id profile-id))))
+   (conn/attempt! attempts attempt-id
+                  (fn [ctx]
+                    (let [p (or (profiles/fetch store profile-id)
+                                (throw (ex-info "This connection no longer exists." {:id profile-id})))
+                          t (profiles/target p (profiles/saved-password secrets p))]
+                      (assoc (conn/open-target! conns t ctx) :profile-id profile-id))))))
 
 (defn cancel-connect
   "Stop a connect or test in flight. {:canceled false} when none runs

@@ -365,3 +365,18 @@
             (is (some? msg))
             (is (< (ms-since t0) 3000))
             (is (nil? (conn/current-session registry conn-id "s1")))))))))
+
+;; A cancel that lands before the dial (during the Keychain read, say)
+;; stops it before it starts.
+(deftest a-ctx-cancelled-before-the-dial-never-dials
+  (with-silent-port
+    (fn [port]
+      (with-registry
+        (fn [registry _]
+          (let [ctx (shim/NewCtx)
+                t0 (System/nanoTime)]
+            (.Cancel ctx)
+            (is (= "Connecting canceled."
+                   (message-of #(conn/open-target! registry {:engine :postgres :dsn (silent-dsn port) :label "silent"} ctx))))
+            (is (< (ms-since t0) 500))
+            (is (empty? @registry))))))))
