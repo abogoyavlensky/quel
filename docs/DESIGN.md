@@ -351,6 +351,14 @@ script's results are replaced together. A **pinned** tab is never replaced
 and keeps its rows until closed; its cursor closes on the next run in its
 tab, as above.
 
+A result tab shows its statement until it is given a name: double-click it,
+or right-click for Rename, Keep result and Close. The name is shown in the UI
+font, not the SQL one, and the tooltip is always the statement. A blank name
+gives the statement back. The name lives in memory with its result, through
+the change from running to what the statement came to. Renaming does not
+keep a result: a named tab that is not kept is replaced by the next run like
+any other.
+
 A run's first statement takes focus, from a pinned tab too. A later one
 takes it only from the statement before it, so a user who picked another
 tab mid-script stays there, until an error or a cancel takes focus. Every
