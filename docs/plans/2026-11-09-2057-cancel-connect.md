@@ -1,5 +1,7 @@
 # Cancel a Stuck Connect Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Every place Quel dials a database can be stopped by the user,
@@ -355,33 +357,33 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `sql/shim/shim.go`, `sql/README.md`
 - Test: `postgres/test/postgres/core_test.lg`, `sqlite/test/sqlite/core_test.lg`
 
-- [ ] **Step 1: Branch.** The local clone may be behind (it lacked
+- [x] **Step 1: Branch.** The local clone may be behind (it lacked
   `wails-v0.8.0`/`v0.9.0` until a fetch).
   `git switch master && git pull --tags && git switch -c sql-conn-ctx`
 
-- [ ] **Step 2: Write the failing tests:**
+- [x] **Step 2: Write the failing tests:**
   `conn-ctx-stops-a-stalled-dial` (postgres) and
   `conn-ctx-session-outlives-its-ctx` (sqlite), as in Design → Testing.
 
-- [ ] **Step 3: Run them to see them fail.**
+- [x] **Step 3: Run them to see them fail.**
   Run: `cd postgres && lgx test` and `cd sqlite && lgx test` (with the
   packages' server-mode or tag flags if their READMEs say so).
   Expected: both fail, because `shim/ConnCtx` does not exist.
 
-- [ ] **Step 4: Implement `ConnCtx`** as in the Design, and register it
+- [x] **Step 4: Implement `ConnCtx`** as in the Design, and register it
   in the shim's `init()`: `ns.Def("ConnCtx", vm.MustBox(ConnCtx))`, next
   to `Conn`. The namespace is registered by hand, so a Go function alone
   doesn't reach let-go. Update the package comment's context bullet
   ("QueryCtx, ExecCtx and ConnCtx take it").
 
-- [ ] **Step 5: Run the tests.** Run the same two commands, and also
+- [x] **Step 5: Run the tests.** Run the same two commands, and also
   `cd sql && lgx test`. Expected: PASS, the old tests included.
 
-- [ ] **Step 6: Document.** Add a row to `sql/README.md`'s table:
+- [x] **Step 6: Document.** Add a row to `sql/README.md`'s table:
   `(shim/ConnCtx db ctx)`, "`Conn` under `ctx`: a cancel stops the wait
   and the dial. The session outlives `ctx`." Use /writing-clearly.
 
-- [ ] **Step 7: Commit, push, PR.**
+- [x] **Step 7: Commit, push, PR.**
   ```bash
   git add sql postgres sqlite
   git commit -m "sql: ConnCtx takes a session under a cancellable context"
@@ -390,7 +392,7 @@ Quel work goes on the branch `cancel-connect`
   ```
   Link the PR (`link_pull_request`) and watch it (`watch_pull_request`).
 
-- [ ] **Step 8: Merge and tag** once the checks pass:
+- [x] **Step 8: Merge and tag** once the checks pass:
   ```bash
   gh pr merge --merge --delete-branch
   git switch master && git pull
@@ -404,20 +406,20 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `sqlite/lgx.edn`, `postgres/lgx.edn`, `duckdb/lgx.edn`,
   `ragtime/lgx.edn`, and any READMEs found by the grep in File Structure
 
-- [ ] **Step 1: Branch and bump.** `git switch -c sql-v0.4.0-dependents`.
+- [x] **Step 1: Branch and bump.** `git switch -c sql-v0.4.0-dependents`.
   Set each `letgo-sql` coord to `"sql-v0.4.0"`, byte for byte the same
   in all four, and update the install snippets that name the old tags.
 
-- [ ] **Step 2: Check.** Run `lgx test` in `sqlite`, `postgres` and
+- [x] **Step 2: Check.** Run `lgx test` in `sqlite`, `postgres` and
   `ragtime`. ragtime resolves `sql` through the tag, so this checks that
   the tag resolves. For duckdb, run its tests if a C toolchain is present;
   otherwise note that they were skipped. Expected: PASS.
 
-- [ ] **Step 3: Commit, push, PR, merge** as in Task 1, with the commit
+- [x] **Step 3: Commit, push, PR, merge** as in Task 1, with the commit
   message `Point sqlite, postgres, duckdb and ragtime at sql-v0.4.0`.
   Link, watch and unwatch the PR.
 
-- [ ] **Step 4: Tag the merge commit** on master, one push per tag:
+- [x] **Step 4: Tag the merge commit** on master, one push per tag:
   ```bash
   git switch master && git pull
   for t in sqlite-v0.4.0 postgres-v0.5.0 duckdb-v0.4.0 ragtime-v0.4.0; do
@@ -430,18 +432,18 @@ Quel work goes on the branch `cancel-connect`
 **Files:**
 - Modify: `lgx.edn`
 
-- [ ] **Step 1: Branch.** In Quel:
+- [x] **Step 1: Branch.** In Quel:
   `git switch master && git pull && git switch -c cancel-connect`
 
-- [ ] **Step 2: Bump** the sqlite, postgres and ragtime coords and their
+- [x] **Step 2: Bump** the sqlite, postgres and ragtime coords and their
   comments. Check `docs/` and `README.md` for pins of the old tags that
   describe the current version (not history), and update them.
 
-- [ ] **Step 3: Run the tests.**
+- [x] **Step 3: Run the tests.**
   Run: `lgx test && lgx test-pg`. Expected: PASS, with nothing else
   changed.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   `git commit -am "Pin sql-v0.4.0's dependents (ConnCtx)"`
 
 ### Task 4: Connect attempts and dialing under a ctx (`quel.conn`)
@@ -450,27 +452,29 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `src/quel/conn.lg`, `src/quel/system.lg`
 - Test: `test/quel/conn_test.lg`
 
-- [ ] **Step 1: Write the failing tests** from Design → Testing for
+- [x] **Step 1: Write the failing tests** from Design → Testing for
   `open-target!`, `check!`, `attempt!`/`cancel-attempt!` and `session!`.
   Write a `with-silent-port` helper first and check that it stalls a
   plain `open-target!` with `connect_timeout='2'` for about 2 s. If it
   doesn't, use the python3 server.
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `lgx test`. Expected: the new tests fail (no ctx arities, no
   `attempt!`).
 
-- [ ] **Step 3: Implement** `ping!` with `ExecCtx`, the ctx arities,
+- [x] **Step 3: Implement** `ping!` with `ExecCtx`, the ctx arities,
   `attempt!`, `cancel-attempt!`, and the `::attempts` component with its
   `halt-key!`. Wire `:quel.conn/attempts {}` into `system.lg`'s config,
   and `:attempts (ig/ref :quel.conn/attempts)` into the handlers' env.
   Update the namespace comment: what `:attempts` is for, and that dials
   run under a ctx.
 
-- [ ] **Step 4: Run the tests.** Run: `lgx test`. Expected: PASS.
+- [x] **Step 4: Run the tests.** Run: `lgx test`. Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Dial under a cancellable context, and track connect attempts"`
+
+> Deviation: the `quel.conn` code was written before its tests (while the upstream PRs waited on CI), so the tests never ran red first. A silent-port check confirms they test a real stall. The `quel.exec` tests were run against the old `exec.lg` and fail there.
 
 ### Task 5: A tab's first run and the reconnect (`quel.exec`)
 
@@ -478,14 +482,14 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `src/quel/exec.lg`
 - Test: `test/quel/exec_test.lg`, `test/quel/pg_test.lg`
 
-- [ ] **Step 1: Write the failing tests:** the `run!` cancel during the
+- [x] **Step 1: Write the failing tests:** the `run!` cancel during the
   dial (`exec_test.lg`), and the stalled reconnect (`pg_test.lg`).
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `lgx test-pg`. Expected: both hang until their timeout (keep it at
   30 s or less, so the failure is quick), then fail.
 
-- [ ] **Step 3: Implement.**
+- [x] **Step 3: Implement.**
   - `run!` passes `ctx` to `session!`.
   - `reconnect!` takes `execs` and `query-id`, swaps `rctx` into the
     entry when it is `:running`, maps a cancel to `{:error "canceled"}`,
@@ -495,9 +499,9 @@ Quel work goes on the branch `cancel-connect`
     is bounded by..." sentence: Stop now ends it too, except during a
     page read.
 
-- [ ] **Step 4: Run the tests.** Run: `lgx test-pg`. Expected: PASS.
+- [x] **Step 4: Run the tests.** Run: `lgx test-pg`. Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Stop ends a tab's session dial and its reconnect"`
 
 ### Task 6: The handlers (`quel.api`)
@@ -506,19 +510,21 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `src/quel/api.lg`
 - Test: `test/quel/api_test.lg`
 
-- [ ] **Step 1: Write the failing tests** from Design → Testing.
+- [x] **Step 1: Write the failing tests** from Design → Testing.
 
-- [ ] **Step 2: Run them to see them fail.** Run: `lgx test`.
+- [x] **Step 2: Run them to see them fail.** Run: `lgx test`.
 
-- [ ] **Step 3: Implement** `connect`, `test-connection` with
+- [x] **Step 3: Implement** `connect`, `test-connection` with
   `attempt-id`, and `cancel-connect`, registered by var in `handlers`.
 
-- [ ] **Step 4: Run the tests and the smoke test.**
+- [x] **Step 4: Run the tests and the smoke test.**
   Run: `lgx test && lgx smoke`. Expected: PASS. Smoke calls `connect`
   without an attempt id, if it calls it at all.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Add cancel-connect, and take an attempt id on connect and test"`
+
+> Deviation (from the Task 7 review): `connect` and `test-connection` now register the attempt before the Keychain read, not just around the dial. A cancel during that read was lost and the dial still ran. Commit "Register a connect attempt before its Keychain read", with a test that a context cancelled before the dial never dials.
 
 ### Task 7: Cancel in the frontend state
 
@@ -528,25 +534,27 @@ Quel work goes on the branch `cancel-connect`
 - Test: `frontend/src/state/runner.test.ts`, `profiles.test.ts`,
   `commands.test.ts`
 
-- [ ] **Step 1: Write the failing tests** from Design → Testing.
+- [x] **Step 1: Write the failing tests** from Design → Testing.
   `runner.test.ts` mocks all of `@/lib/api`, so add `cancelConnect` to
   that mock, and to the mocks in `profiles.test.ts` and
   `commands.test.ts`.
 
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `npm --prefix frontend test`. Expected: the new tests fail.
 
-- [ ] **Step 3: Implement** the api functions, the attempt map,
+- [x] **Step 3: Implement** the api functions, the attempt map,
   `connectProfile`, `cancelConnect`, `deleteProfile` and the palette
   command, as in the Design. Rewrite `connectProfile`'s comment and
   `deleteProfile`'s ("Refused while it connects..." becomes "A connect in
   flight is cancelled first").
 
-- [ ] **Step 4: Run the tests.**
+- [x] **Step 4: Run the tests.**
   Run: `npm --prefix frontend test`. Expected: PASS.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
   `git commit -am "Cancel a connect in flight from the frontend"`
+
+> Deviation: the dialog's Test/Cancel moved into this task's commit, because `testConnection`'s new argument would otherwise leave the commit failing the typecheck. The button reads "Cancel test", not "Cancel", since the footer already has a Cancel that closes the dialog. An edit to the form cancels a running Test too.
 
 ### Task 8: Cancel in the UI
 
@@ -554,7 +562,7 @@ Quel work goes on the branch `cancel-connect`
 - Modify: `frontend/src/components/ConnectionsPanel.tsx`, `ResultTabs.tsx`,
   `StructureTree.tsx`, `ProfileDialog.tsx`
 
-- [ ] **Step 1: Implement:**
+- [x] **Step 1: Implement:**
   - the row button and the context menu item;
   - the banner button;
   - the tree's Cancel;
@@ -566,12 +574,14 @@ Quel work goes on the branch `cancel-connect`
   and muted ink for the icon. Use /frontend-design only if the × reads
   wrong next to the plug and stop icons.
 
-- [ ] **Step 2: Type check, lint and test.**
+- [x] **Step 2: Type check, lint and test.**
   Run: `npm --prefix frontend run build && npm --prefix frontend run lint && npm --prefix frontend test`
   (use the repo's script names if they differ). Expected: PASS.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
   `git commit -am "Show Cancel while connecting or testing a connection"`
+
+> Deviation: committed as "Show Cancel while connecting" (the Test part went with Task 7). The banner keeps "isn't connected." and shows "Connecting…" before its Cancel button.
 
 ### Task 9: End to end, and docs
 
@@ -579,16 +589,16 @@ Quel work goes on the branch `cancel-connect`
 - Create: `frontend/e2e/cancel-connect.spec.ts`
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Write the spec** as in Design → Testing. Use
+- [x] **Step 1: Write the spec** as in Design → Testing. Use
   `e2e/connect.ts` helpers where they fit; `lost-connection.spec.ts`
   shows how to fill a Postgres profile.
 
-- [ ] **Step 2: Run it.**
+- [x] **Step 2: Run it.**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh cancel-connect.spec.ts`
   (without the prefix on a box with GTK). Expected: PASS. Then run
   `lgx e2e`; expected: the whole suite passes.
 
-- [ ] **Step 3: DESIGN.md.** Where connecting and profiles are described,
+- [x] **Step 3: DESIGN.md.** Where connecting and profiles are described,
   add a paragraph covering:
   - every dial runs under a cancellable context;
   - Connect and Test show Cancel while they run, and a cancelled connect
@@ -600,5 +610,40 @@ Quel work goes on the branch `cancel-connect`
 
   Use /writing-clearly.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
   `git commit -am "Test cancelling a connect end to end, and document it"`
+
+> Deviation (from the Task 9 review): the spec points an existing silent profile at the current worker's port. Profiles outlive a Playwright worker, so a retry would otherwise dial a dead port (refused, not stalled).
+
+## Completion summary
+
+What shipped:
+- **letgo-packages:**
+  - `sql`: `shim/ConnCtx`, which takes a session under a cancellable context ([PR #20](https://github.com/abogoyavlensky/letgo-packages/pull/20)), tagged `sql-v0.4.0`.
+  - Dependents ([PR #21](https://github.com/abogoyavlensky/letgo-packages/pull/21)): `sqlite-v0.4.0`, `postgres-v0.5.0`, `duckdb-v0.4.0` and `ragtime-v0.4.0` name it.
+- **Quel backend:**
+  - Every dial runs under a shim Ctx. The ping is now a cancellable `select 1`.
+  - `:quel.conn/attempts` with `attempt!` and `cancel-attempt!`, and a new `cancel-connect` handler.
+  - `connect` and `test-connection` take an optional attempt id.
+  - A tab's first run dials under the run's ctx. A reconnect dials under a fresh ctx swapped into the run's entry, so Stop ends both.
+- **Quel frontend:**
+  - `cancelConnect` makes the row not connected at once; a late success is closed and a late failure is ignored.
+  - Cancel shows on the row (an ×), in its context menu, the empty-tab banner, the structure tree and the palette.
+  - The dialog's Test becomes Cancel test; closing the dialog or editing the form cancels it.
+  - Deleting a profile while it connects cancels the connect.
+
+Verified:
+- `lgx test` (209) and `lgx test-pg` (209, 745 assertions);
+- the frontend tests (574), typecheck and lint;
+- `lgx smoke` and `lgx smoke-pg`;
+- `lgx e2e` (54 passed, 1 skipped without Postgres), including the new `cancel-connect.spec.ts`, which drives a real stalled connect and Test in the app;
+- the letgo-packages tests for sql, sqlite, postgres, ragtime and duckdb.
+
+Deviations, together:
+- Task 4's tests were written after the code (it was written while CI ran). They still check a real stall.
+- The attempt is registered before the Keychain read (from codex's Task 7 review).
+- The Test/Cancel UI went into Task 7's commit; the button reads "Cancel test".
+- The e2e spec re-points the silent profile's port (from codex's Task 9 review).
+- The session's task list wasn't available, so progress was tracked in this document only.
+
+What the plan could have specified better: it put the attempt around the dial only and called the race before registration harmless. The Keychain read sits before the dial and can take seconds, so the attempt should have wrapped the whole handler from the start.
