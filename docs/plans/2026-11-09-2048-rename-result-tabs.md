@@ -2,6 +2,8 @@
 
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status: completed**
+
 **Goal:** A result tab can be given a name of its own, by double-click or from a
 new right-click menu, the same way an editor tab is renamed. The name shows in
 place of the statement until the result goes away.
@@ -160,7 +162,7 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
 - Modify: `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
   Add a `describe("rename a result", …)` after "rename and pin", using the
   file's existing run helpers (the reply stubs used by "shows a running tab
   until the reply fills it" and "keeps a pin set while the statement runs").
@@ -179,12 +181,12 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
   canceled (find it with `grep -n "Query canceled" runner.test.ts` near the
   `closeTab` tests). Rename the running result first in each.
 
-- [ ] **Step 2: Run them to see them fail**
+- [x] **Step 2: Run them to see them fail**
   Run: `npm --prefix frontend test -- src/state/runner.test.ts`
   Expected: FAIL (`renameResult` is not a function; the type error on `title`
   shows in the editor, not in vitest).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   Add `title?: string` to `ResultBase` with its comment. Make `resultBase`
   copy `title`. Add `renameResult` after `pin` as specified in the Design:
   look the result up with `findTab(tabId)?.results.find(…)`, return when it
@@ -192,13 +194,15 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
   `updateResult` with the title set, or removed by destructuring
   (`const { title: _, ...rest } = r`) when blank.
 
-- [ ] **Step 4: Run the tests to see them pass**
+- [x] **Step 4: Run the tests to see them pass**
   Run: `npm --prefix frontend test -- src/state/runner.test.ts && (cd frontend && npx tsc -b)`
   Expected: PASS, no type errors. Existing `toEqual` assertions on results
   still pass (an absent `title` is `undefined`, which `toEqual` ignores).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -am "Add result names to the store"`
+
+> Deviation: the lost-connection case is its own test ("keeps a result's name when it becomes a notice"), since it needs a held reply to rename the running result; the existing lost test is unchanged.
 
 ### Task 2: The shared name input
 
@@ -206,7 +210,7 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
 - Create: `frontend/src/components/NameInput.tsx`
 - Modify: `frontend/src/components/EditorTabs.tsx`
 
-- [ ] **Step 1: Extract**
+- [x] **Step 1: Extract**
   Move `TitleInput` out of `EditorTabs.tsx` into `NameInput.tsx` as
   `NameInput`, with the props from the Design:
 
@@ -229,13 +233,13 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
   `<NameInput value={t.title} label="Tab name" onCommit={(n) => renameTab(t.id, n)} onDone={() => setEditing(null)} />`
   and drop the old component and any imports that are left unused.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `(cd frontend && npx tsc -b) && npm --prefix frontend run lint && CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh tabs.spec.ts`
   Expected: no errors; `tabs.spec.ts` passes unchanged. (`lgx e2e` runs every
   spec and takes no arguments; `scripts/e2e.sh` passes its arguments to
   Playwright.)
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   `git add frontend/src/components/NameInput.tsx && git commit -am "Share the tab name input"`
 
 ### Task 3: Rename in the result tab strip
@@ -243,13 +247,13 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
 **Files:**
 - Modify: `frontend/src/components/ResultTabs.tsx`
 
-- [ ] **Step 1: Make `TabButton` a menu trigger**
+- [x] **Step 1: Make `TabButton` a menu trigger**
   Change its props to `{ selected: boolean; onSelect: () => void } & React.ComponentProps<"div">`,
   spread the rest onto the div, and merge `className` with `cn`. Guard its
   `onKeyDown` with `e.target === e.currentTarget`. The Messages tab keeps
   using it as now.
 
-- [ ] **Step 2: Wrap each result tab in a context menu**
+- [x] **Step 2: Wrap each result tab in a context menu**
   Import `ContextMenu`, `ContextMenuContent`, `ContextMenuItem`,
   `ContextMenuSeparator` and `ContextMenuTrigger` from
   `@/components/ui/context-menu`, and `renameResult` from `@/state/runner`.
@@ -260,7 +264,7 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
   items Rename (sets the ref), "Keep result" / "Don't keep result"
   (`pin`), a separator, and Close (`closeResult`).
 
-- [ ] **Step 3: Double-click and the input**
+- [x] **Step 3: Double-click and the input**
   `TabButton` gets `onDoubleClick` that sets `editing` to the result id,
   unless the event started inside a button
   (`(e.target as HTMLElement).closest("button")`). While editing, the label
@@ -270,11 +274,11 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
   when `r.title` is unset. Keep `title={r.sql}` as the tooltip. Update the
   component's header comment to mention renaming and the menu.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
   Run: `npm --prefix frontend test && (cd frontend && npx tsc -b) && npm --prefix frontend run lint`
   Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -am "Rename result tabs"`
 
 ### Task 4: End-to-end test
@@ -282,7 +286,7 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
 **Files:**
 - Modify: `frontend/e2e/query-loop.spec.ts`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
   Add `test("renames a result tab", …)` using the file's `open`, `write` and
   `resultTabs` helpers. Steps and checks:
   1. Run `select id from t limit 3;`. Double-click
@@ -299,25 +303,54 @@ so `lgx` tasks take the `CGO_ENABLED=0 GOFLAGS=-tags=server` prefix.
      `select 1 as one;`. `resultTabs` text is
      `["Messages", "Kept", "select 1 as one"]`.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`
   Expected: the new test and all existing specs pass (`lost-connection` may
   skip, as before).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   `git commit -am "Test result tab rename end to end"`
+
+> Deviation: the tooltip is the statement as split, without its `;`, so the test expects `select id from t limit 3`. Each rename waits for the input to be focused before typing (the menu's Rename opens it only after the menu lets go of focus).
 
 ### Task 5: Docs
 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Describe it**
+- [x] **Step 1: Describe it**
   In "Results and pinning", after the paragraph on pinning, add a short
   paragraph: a result tab can be renamed by double-click or from its
   right-click menu (Rename, Keep result, Close); the name lives as long as the
   result, in memory only; a blank name gives back the statement; renaming does
   not keep the result; the tooltip is always the statement.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
   `git commit -am "Document result tab names"`
+
+## Summary
+
+Implemented as planned, frontend only. A result tab takes a name by
+double-click or from its new right-click menu (Rename, Keep result / Don't
+keep result, Close). A blank name gives the statement back. The name lives
+in memory and survives every change of kind and a pin. Editor tabs and
+result tabs share `NameInput`.
+
+Results: 575 unit tests pass, `lgx e2e` has 51 passed and 1 skipped,
+`lgx test` has 198 tests and 0 failures. Codex reviewed the code commits
+and found nothing to fix (Tasks 1–4; the docs commits were not reviewed).
+
+Deviations and notes:
+- Task 1: the lost-connection name check is a new test, not an assertion in
+  the existing one.
+- Task 4: the tooltip has no trailing `;`; the test waits for focus before
+  typing.
+- Process: each codex review ran in the background while the next task,
+  which touched other files, went on. All came back clean, so nothing had to
+  be redone. There was no session task list tool, so this document was the
+  only tracker.
+- Environment: `lgx` tasks need Go on PATH here; `eval "$(mise env -s bash)"`
+  first.
+
+What the plan could have specified better: the tooltip text without the
+`;`, and that an e2e step after a menu Rename must wait for focus.
