@@ -1,7 +1,9 @@
 (ns quel.conn-test
   (:require [integrant.core :as ig]
+            [postgres.core :as pg]
             [quel.conn :as conn]
             [sql.core :as sql]
+            [sql.shim :as shim]
             [string :as str]
             [clojure.test :refer [deftest is]]))
 
@@ -22,6 +24,34 @@
 
 (defn- message-of [f]
   (try (f) nil (catch e (ex-message e))))
+
+(defn- thrown-of [f]
+  (try (f) nil (catch e e)))
+
+(defn with-silent-port
+  "Run (f port) with a TCP port on 127.0.0.1 that takes connections and
+   never answers: the kernel completes the handshake and nothing accepts,
+   so a Postgres dial waits for the server's reply until its timeout."
+  [f]
+  (let [l (net/listen "127.0.0.1" 0)]
+    (try
+      (f (:port (net/local-address l)))
+      (finally (net/close! l)))))
+
+(defn silent-dsn
+  "A DSN for the silent port that only a cancel ends soon."
+  ([port] (silent-dsn port 30))
+  ([port timeout-s]
+   (str "host='127.0.0.1' port='" port "' user='u' dbname='d' sslmode='disable'"
+        " connect_timeout='" timeout-s "'")))
+
+(defn ms-since [t0]
+  (quot (- (System/nanoTime) t0) 1000000))
+
+(defn cancel-after
+  "Cancel the shim Ctx ctx after ms, on a future."
+  [ms ctx]
+  (future (sleep ms) (.Cancel ctx)))
 
 (deftest open-returns-an-id-the-engine-and-a-label
   (with-registry
@@ -244,3 +274,94 @@
       (finally
         (ig/halt-key! :quel.conn/registry registry)
         (os/sh "rm" "-rf" dir)))))
+
+;; Dials under a ctx.
+
+(deftest the-silent-port-stalls-a-dial
+  (with-silent-port
+    (fn [port]
+      (let [t0 (System/nanoTime)
+            msg (message-of #(conn/check! {:engine :postgres :dsn (silent-dsn port 2) :label "silent"}))]
+        (is (some? msg))
+        (is (<= 1500 (ms-since t0)) "the dial waited for connect_timeout")))))
+
+(deftest a-cancel-stops-open-target
+  (with-silent-port
+    (fn [port]
+      (with-registry
+        (fn [registry _]
+          (let [ctx (shim/NewCtx)
+                t0 (System/nanoTime)
+                _ (cancel-after 300 ctx)
+                e (thrown-of #(conn/open-target! registry {:engine :postgres :dsn (silent-dsn port) :label "silent"} ctx))]
+            (is (= "Connecting canceled." (ex-message e)))
+            (is (= {:canceled true} (ex-data e)))
+            (is (< (ms-since t0) 3000))
+            (is (empty? @registry))))))))
+
+(deftest a-cancel-stops-check
+  (with-silent-port
+    (fn [port]
+      (let [ctx (shim/NewCtx)
+            t0 (System/nanoTime)
+            _ (cancel-after 300 ctx)
+            msg (message-of #(conn/check! {:engine :postgres :dsn (silent-dsn port) :label "silent"} ctx))]
+        (is (= "Connecting canceled." msg))
+        (is (< (ms-since t0) 3000))))))
+
+(deftest an-attempt-can-be-cancelled
+  (with-silent-port
+    (fn [port]
+      (let [attempts (ig/init-key :quel.conn/attempts {})
+            t0 (System/nanoTime)
+            f (future (message-of #(conn/attempt! attempts "a1"
+                                                  (fn [ctx] (conn/check! {:engine :postgres :dsn (silent-dsn port) :label "silent"} ctx)))))]
+        (is (loop [n 0] (cond (contains? @attempts "a1") true (> n 200) false :else (do (sleep 10) (recur (inc n))))))
+        (is (true? (conn/cancel-attempt! attempts "a1")))
+        (is (= "Connecting canceled." (deref f 3000 :timeout)))
+        (is (< (ms-since t0) 3000))
+        (is (empty? @attempts) "the attempt deregistered")))))
+
+(deftest attempts-are-refused-twice-and-unknown-cancels-are-false
+  (let [attempts (ig/init-key :quel.conn/attempts {})]
+    (is (false? (conn/cancel-attempt! attempts "nope")))
+    (conn/attempt! attempts "a1"
+                   (fn [_]
+                     (is (str/includes? (str (message-of #(conn/attempt! attempts "a1" (fn [_] :inner))))
+                                        "already running"))
+                     (is (contains? @attempts "a1") "the first is still registered")))
+    (is (empty? @attempts))
+    (is (= :ok (conn/attempt! attempts nil (fn [ctx] (is (some? ctx)) :ok))) "no id: not registered")
+    (is (empty? @attempts))))
+
+(deftest halting-attempts-cancels-them
+  (let [attempts (ig/init-key :quel.conn/attempts {})
+        ctx (shim/NewCtx)]
+    (swap! attempts assoc "a1" ctx)
+    (ig/halt-key! :quel.conn/attempts attempts)
+    (is (.Canceled ctx))))
+
+(defn with-silent-entry
+  "Run (f registry conn-id) with a hand-built Postgres entry whose pools
+   dial the silent port (opening is lazy, so nothing dials yet)."
+  [port f]
+  (let [registry (ig/init-key :quel.conn/registry {})
+        pool (fn [] (pg/open (silent-dsn port) {:postgres/cancel :request}))]
+    (swap! registry assoc "silent" {:db (pool) :sessions-db (pool) :engine :postgres
+                                    :label "silent" :sessions {} :retired #{}})
+    (try
+      (f registry "silent")
+      (finally (ig/halt-key! :quel.conn/registry registry)))))
+
+(deftest a-cancel-stops-a-session-dial
+  (with-silent-port
+    (fn [port]
+      (with-silent-entry port
+        (fn [registry conn-id]
+          (let [ctx (shim/NewCtx)
+                t0 (System/nanoTime)
+                _ (cancel-after 300 ctx)
+                msg (message-of #(conn/session! registry conn-id "s1" ctx))]
+            (is (some? msg))
+            (is (< (ms-since t0) 3000))
+            (is (nil? (conn/current-session registry conn-id "s1")))))))))
