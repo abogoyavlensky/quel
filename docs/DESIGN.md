@@ -172,6 +172,26 @@ sidebar's +, the File menu, the Command Palette); for a SQLite file,
 Browse… names an unnamed one after the file. The `open-db` handler still
 opens a bare path or URL, for the smoke test.
 
+Every dial runs under a cancellable context, so a host that never
+answers does not hold the UI until pgx's connect timeout (10 s per
+resolved address):
+
+- Connect and Test send an attempt id, and `cancel-connect` stops that
+  attempt. The attempt is registered before the Keychain read, so a
+  cancel during the read stops the dial before it starts.
+- While a profile connects, its row's button is an ×, and the empty tab,
+  the structure tree and the Command Palette offer Cancel. While a Test
+  runs, its button reads Cancel test. Closing the dialog or editing the
+  form cancels it too.
+- A cancelled connect leaves the row not connected, with no error, at
+  once. The frontend does not wait for the backend: a connection that
+  lands anyway (the cancel arrived before its attempt registered) is
+  closed. Deleting a profile while it connects cancels the connect.
+- A tab's first run takes its session under the run's own context, and
+  the reconnect after a lost session under a fresh one put in the run's
+  entry, so Stop ends either dial. A reconnect after a page read cannot
+  be stopped: the read's entry is gone by then.
+
 ### The app database
 
 `quel.store` keeps SQLite at `~/Library/Application Support/Quel/quel.db`
@@ -893,8 +913,8 @@ with string keys); errors reject the frontend's promise with the message.
 
 | Area | Handlers |
 |---|---|
-| Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
-| Connections | `connect` (a profile id), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
+| Profiles | `list-profiles`, `save-profile`, `delete-profile`, `test-connection` (the form as it stands, saved or not, and an optional attempt id; saves nothing), `choose-file` (a SQLite file, through a native dialog) |
+| Connections | `connect` (a profile id and an optional attempt id), `cancel-connect` (an attempt id: stops that connect or test), `close-db` (disconnect), `connection-status`; `open-db` (a bare path or URL, used by the smoke test, not the UI) |
 | Structure | `list-schemas`, `describe-schema` (a schema's tables, views, functions, types and sequences), `describe-object` (an object's columns, indexes, keys and sequences), `completion-schema`; later `object-ddl`, `schema-ddl`, `diagram-model` |
 | Execution | `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-begin` (the format and a suggested file name; a save dialog; an id, or nil when canceled), `export-append` (the id and a chunk of text), `export-finish` (the id; the path), `export-abort` (the id); `export-ddl` is planned and will open a save dialog too |
@@ -1037,6 +1057,7 @@ package feature, not app glue.
 | Where | Change | Needed by |
 |---|---|---|
 | `letgo-packages/sql` | Done in `sql-v0.3.0`: `NewCtx`/`QueryCtx`/`ExecCtx` (cancellable queries), `Conn` (sessions), a `Connectable` covering `*sql.Conn`, `ColumnTypeNames`; the shim ships in-tree | cancellation, per-tab sessions, column types |
+| `letgo-packages/sql` | Done in `sql-v0.4.0`: `ConnCtx` (a session taken under a cancellable context); sqlite-v0.4.0, postgres-v0.5.0, duckdb-v0.4.0 and ragtime-v0.4.0 name it | cancelling a session dial |
 | `letgo-packages/postgres` | Done in `postgres-v0.4.0`: `:postgres/cancel :request` (a cancel keeps the connection), a 10 s connect timeout unless one is set | sessions that survive a cancel |
 | `letgo-packages/sql` | Not needed: let-go keeps a `[]byte` as a string with the same bytes; `quel.cells` hex-encodes it | the bytea / BLOB values |
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
