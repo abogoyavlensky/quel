@@ -57,6 +57,9 @@ test("replace folds out and Replace all rewrites every match", async ({ page }) 
   await findField(page).fill("select");
   await expect(replaceField(page)).toHaveCount(0);
   await page.getByRole("button", { name: "Toggle replace" }).click();
+  // The two fields line up.
+  const [find, replace] = await Promise.all([findField(page).boundingBox(), replaceField(page).boundingBox()]);
+  expect(replace!.x).toBe(find!.x);
   await replaceField(page).fill("SELECT");
   await page.getByRole("button", { name: "Replace all" }).click();
   await expect(lines(page)).toHaveText(["SELECT 1;", "SELECT 2;", "SELECT 3;"]);

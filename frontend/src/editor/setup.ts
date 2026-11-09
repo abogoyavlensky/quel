@@ -92,7 +92,13 @@ const chrome = EditorView.theme({
   // background, a rule under them. Their padding is the components' own.
   ".cm-panels": { backgroundColor: "var(--background)", color: "var(--foreground)" },
   ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
-  ".cm-panel.cm-search": { padding: "0", fontFamily: "var(--font-sans)" },
+  // The base theme's margins on the stock panel's inputs and buttons would
+  // push ours apart: the replace field would not line up under find.
+  ".cm-panel.cm-search": {
+    padding: "0",
+    fontFamily: "var(--font-sans)",
+    "& input, & button, & label": { margin: "0" },
+  },
   // Matches from index.css tokens: the base theme's dark colours never
   // apply (the app does not set EditorView.darkTheme).
   ".cm-searchMatch": { backgroundColor: "var(--search-match)", borderRadius: "2px" },
