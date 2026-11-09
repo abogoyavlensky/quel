@@ -27,6 +27,7 @@ interface ResultBase {
   id: string; // the query-id, which is also the backend's result id
   sql: string;
   pinned: boolean;
+  title?: string; // the user's name for the tab; none: it shows its statement
 }
 
 // A statement's rows.

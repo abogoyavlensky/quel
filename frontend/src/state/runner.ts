@@ -78,7 +78,7 @@ function stillOn(profileId: string, connId: string): boolean {
 }
 
 // What every kind of result has, to make a result of another kind.
-const resultBase = ({ id, sql, pinned }: ResultTab) => ({ id, sql, pinned });
+const resultBase = ({ id, sql, pinned, title }: ResultTab) => ({ id, sql, pinned, title });
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -710,6 +710,20 @@ async function exportRows(
 
 export function pin(tabId: string, resultId: string): void {
   updateResult(tabId, resultId, (r) => ({ ...r, pinned: !r.pinned }));
+}
+
+// Name a result tab; a blank name gives it back its statement. Results
+// live in memory only, so nothing is saved. A result gone meanwhile (the
+// name input can blur after a run replaced it) is left alone.
+export function renameResult(tabId: string, resultId: string, name: string): void {
+  const r = findTab(tabId)?.results.find((x) => x.id === resultId);
+  const title = name.trim();
+  if (!r || (r.title ?? "") === title) return;
+  updateResult(tabId, resultId, (r) => {
+    if (title) return { ...r, title };
+    const { title: _, ...rest } = r;
+    return rest as ResultTab;
+  });
 }
 
 export function closeResult(tabId: string, resultId: string): void {

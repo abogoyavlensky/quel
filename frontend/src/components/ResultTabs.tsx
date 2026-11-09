@@ -1,10 +1,19 @@
+import { useRef, useState } from "react";
 import { MessageSquare, Pin, PinOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { ResultGrid } from "@/grid/ResultGrid";
 import { cn } from "@/lib/utils";
-import { closeResult, connectProfile, pin, selectResult } from "@/state/runner";
+import { closeResult, connectProfile, pin, renameResult, selectResult } from "@/state/runner";
 import { type EditorTab, MESSAGES, selectedWorkspace, useApp } from "@/state/store";
 import { MessagesView } from "./MessagesView";
+import { NameInput } from "./NameInput";
 import { ResultFooter } from "./ResultFooter";
 import { ResultOutcome } from "./ResultOutcome";
 import { RUN_KEY } from "./keys";
@@ -15,32 +24,27 @@ function label(sql: string): string {
   return line.length > 32 ? `${line.slice(0, 31)}…` : line;
 }
 
+// Other props (a context menu trigger's handlers and ref) go to the div.
 function TabButton({
   selected,
   onSelect,
-  children,
-  title,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  children: React.ReactNode;
-  title?: string;
-}) {
+  className,
+  ...props
+}: { selected: boolean; onSelect: () => void } & React.ComponentProps<"div">) {
   return (
     <div
       role="tab"
       aria-selected={selected}
       tabIndex={0}
-      title={title}
       onClick={onSelect}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect()}
+      onKeyDown={(e) => e.target === e.currentTarget && (e.key === "Enter" || e.key === " ") && onSelect()}
+      {...props}
       className={cn(
         "group flex h-[30px] shrink-0 cursor-default items-center gap-1.5 rounded-full pr-1.5 pl-2.5 text-xs select-none",
         selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        className,
       )}
-    >
-      {children}
-    </div>
+    />
   );
 }
 
@@ -86,8 +90,13 @@ function NotConnected({ banner }: { banner: boolean }) {
 // until closed. While the profile is not connected, the empty tab says so
 // instead of the run hint, and a refused run puts a banner above the
 // results. The footer under them says what a run is doing, or the shown
-// result's rows and time.
+// result's rows and time. Double-click a result tab to name it; right-click
+// for Rename, Keep and Close. A blank name gives back the statement.
 export function ResultTabs({ tab }: { tab: EditorTab }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  // Rename chosen in a tab's menu: the input appears once the menu has
+  // closed and let go of focus, or it would not keep it.
+  const renameAfterMenu = useRef<string | null>(null);
   const current = tab.results.find((r) => r.id === tab.active);
   const empty = tab.results.length === 0 && tab.messages.length === 0;
   const w = useApp(selectedWorkspace);
@@ -106,41 +115,72 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
           <span className="pr-1">Messages</span>
         </TabButton>
         {tab.results.map((r) => (
-          <TabButton
-            key={r.id}
-            selected={r.id === tab.active}
-            onSelect={() => selectResult(tab.id, r.id)}
-            title={r.sql}
-          >
-            <span className="max-w-56 truncate font-mono text-[14px]">{label(r.sql)}</span>
-            <button
-              type="button"
-              aria-label="Keep result"
-              title="Keep result across runs"
-              aria-pressed={r.pinned}
-              onClick={(e) => {
-                e.stopPropagation();
-                pin(tab.id, r.id);
+          <ContextMenu key={r.id}>
+            <ContextMenuTrigger asChild>
+              <TabButton
+                selected={r.id === tab.active}
+                onSelect={() => selectResult(tab.id, r.id)}
+                onDoubleClick={(e) => !(e.target as HTMLElement).closest("button") && setEditing(r.id)}
+                title={r.sql}
+              >
+                {editing === r.id ? (
+                  <NameInput
+                    value={r.title ?? ""}
+                    placeholder={label(r.sql)}
+                    label="Result name"
+                    onCommit={(name) => renameResult(tab.id, r.id, name)}
+                    onDone={() => setEditing(null)}
+                  />
+                ) : (
+                  <span className={cn("max-w-56 truncate text-[14px]", r.title === undefined && "font-mono")}>
+                    {r.title ?? label(r.sql)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-label="Keep result"
+                  title="Keep result across runs"
+                  aria-pressed={r.pinned}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pin(tab.id, r.id);
+                  }}
+                  className={cn(
+                    "rounded-full p-0.5 hover:bg-background/70",
+                    r.pinned ? "text-foreground" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+                  )}
+                >
+                  {r.pinned ? <Pin className="size-3.5 fill-current" /> : <PinOff className="size-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  aria-label="Close result"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeResult(tab.id, r.id);
+                  }}
+                  className="rounded-full p-0.5 opacity-0 group-hover:opacity-100 group-aria-selected:opacity-60 hover:bg-background/70 focus-visible:opacity-100"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </TabButton>
+            </ContextMenuTrigger>
+            <ContextMenuContent
+              onCloseAutoFocus={(e) => {
+                if (renameAfterMenu.current !== r.id) return;
+                e.preventDefault();
+                renameAfterMenu.current = null;
+                setEditing(r.id);
               }}
-              className={cn(
-                "rounded-full p-0.5 hover:bg-background/70",
-                r.pinned ? "text-foreground" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
-              )}
             >
-              {r.pinned ? <Pin className="size-3.5 fill-current" /> : <PinOff className="size-3.5" />}
-            </button>
-            <button
-              type="button"
-              aria-label="Close result"
-              onClick={(e) => {
-                e.stopPropagation();
-                closeResult(tab.id, r.id);
-              }}
-              className="rounded-full p-0.5 opacity-0 group-hover:opacity-100 group-aria-selected:opacity-60 hover:bg-background/70 focus-visible:opacity-100"
-            >
-              <X className="size-3.5" />
-            </button>
-          </TabButton>
+              <ContextMenuItem onSelect={() => (renameAfterMenu.current = r.id)}>Rename</ContextMenuItem>
+              <ContextMenuItem onSelect={() => pin(tab.id, r.id)}>
+                {r.pinned ? "Don't keep result" : "Keep result"}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => closeResult(tab.id, r.id)}>Close</ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
         ))}
       </div>
       <div className="min-h-0 flex-1">
