@@ -1,7 +1,7 @@
 (ns quel.api-test
   (:require [integrant.core :as ig]
             [quel.api :as api]
-            [quel.conn-test :refer [temp-path]]
+            [quel.conn-test :refer [temp-path with-silent-port ms-since]]
             [quel.export :as export]
             [quel.secrets :as secrets]
             [quel.store-test :refer [temp-dir]]
@@ -20,6 +20,7 @@
 
 (defn- with-env [f]
   (let [conns (ig/init-key :quel.conn/registry {})
+        attempts (ig/init-key :quel.conn/attempts {})
         execs (ig/init-key :quel.exec/registry {:conns conns})
         dir (temp-dir)
         store (ig/init-key :quel.store/db {:dir dir})
@@ -30,13 +31,14 @@
       ;; :app stays nil: choose-file and export-begin, the handlers that
       ;; need it, open a dialog and are not called here.
       ;; Update checks are off: nothing here reaches GitHub.
-      (f {:conns conns :execs execs :store store :secrets secrets :exports exports :app nil :window @window
+      (f {:conns conns :attempts attempts :execs execs :store store :secrets secrets :exports exports :app nil :window @window
           :updates {:enabled? false :store store :version "1.0.0"}}
          path)
       (finally
         (ig/halt-key! :quel.export/registry exports)
         (ig/halt-key! :quel.exec/registry execs)
         (ig/halt-key! :quel.conn/registry conns)
+        (ig/halt-key! :quel.conn/attempts attempts)
         (ig/halt-key! :quel.store/db store)
         (os/sh "rm" "-rf" dir)
         (os/sh "rm" "-f" path)))))
@@ -47,7 +49,7 @@
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
-           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "choose-file"
+           "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "cancel-connect" "choose-file"
            "export-begin" "export-append" "export-finish" "export-abort"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
            "zoom" "restore-zoom" "save-window-state"
@@ -178,6 +180,39 @@
         (is (nil? (api/delete-profile env (:id p))))
         (is (= [] (api/list-profiles env)))
         (is (= "This connection no longer exists." (message-of #(api/connect env (:id p)))))))))
+
+(defn- cancel-when-running
+  "On a future: wait for attempt-id to run, then cancel-connect it. Its
+   reply, or :never-ran."
+  [env attempt-id]
+  (future
+    (loop [n 0]
+      (cond
+        (contains? @(:attempts env) attempt-id) (api/cancel-connect env attempt-id)
+        (> n 300) :never-ran
+        :else (do (sleep 10) (recur (inc n)))))))
+
+(deftest connect-and-test-can-be-cancelled
+  (with-silent-port
+    (fn [port]
+      (with-env
+        (fn [env _]
+          (let [form {"name" "Silent" "engine" "postgres" "host" "127.0.0.1" "port" (str port)
+                      "database" "d" "user" "u" "ssl-mode" "disable"}
+                p (api/save-profile env form)]
+            (let [t0 (System/nanoTime)
+                  c (cancel-when-running env "a1")]
+              (is (= "Connecting canceled." (message-of #(api/connect env (:id p) "a1"))))
+              (is (= {:canceled true} (deref c 3000 :timeout)))
+              (is (< (ms-since t0) 3000))
+              (is (empty? @(:conns env)) "nothing kept"))
+            (let [t0 (System/nanoTime)
+                  c (cancel-when-running env "a2")]
+              (is (= "Connecting canceled." (message-of #(api/test-connection env form "a2"))))
+              (is (= {:canceled true} (deref c 3000 :timeout)))
+              (is (< (ms-since t0) 3000)))
+            (is (empty? @(:attempts env)))
+            (is (= {:canceled false} (api/cancel-connect env "a1")) "an attempt that ended")))))))
 
 (deftest test-connection-saves-nothing
   (with-env
