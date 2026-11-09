@@ -1,11 +1,14 @@
 (ns quel.pg-test
   (:require [integrant.core :as ig]
+            [postgres.core :as pg]
             [quel.api :as api]
             [quel.conn :as conn]
             [quel.exec :as exec]
             [quel.meta :as meta]
             [quel.meta.postgres]
+            [quel.conn-test :refer [with-silent-port silent-dsn]]
             [sql.core :as sql]
+            [sql.shim :as shim]
             [string :as str]
             [clojure.test :refer [deftest is]]))
 
@@ -547,3 +550,40 @@
                (meta/describe-object :postgres db schema "item_labels")))
         (is (= {:columns [] :indexes [] :keys [] :sequences []}
                (meta/describe-object :postgres db schema "nope")))))))
+
+;; A reconnect that stalls can be stopped: the tab's session is a real
+;; one that dies, and its entry's session pool dials a port that never
+;; answers.
+(deftest stop-ends-a-stalled-reconnect
+  (with-pg
+    (with-silent-port
+      (fn [port]
+        (let [conns (ig/init-key :quel.conn/registry {})
+              execs (ig/init-key :quel.exec/registry {:conns conns})
+              main (:conn-id (conn/open! conns pg-url))
+              real (pg/open pg-url {:postgres/cancel :request})
+              session (shim/Conn (:sql/handle real))
+              pid (:pid (first (sql/execute! {:sql/handle session} ["select pg_backend_pid() as pid"])))
+              qid (str (random-uuid))]
+          (swap! conns assoc "mixed" {:db (pg/open pg-url) :engine :postgres :label "mixed"
+                                      :sessions-db (pg/open (silent-dsn port) {:postgres/cancel :request})
+                                      :sessions {"s1" session} :retired #{}})
+          (try
+            (terminate! conns main pid)
+            (let [f (future (try (exec/run! execs conns {:conn-id "mixed" :session-id "s1"
+                                                         :query-id qid :sql "select 1"})
+                                 nil
+                                 (catch e e)))]
+              ;; The dead session is dropped just before the reconnect dials.
+              (is (until #(nil? (conn/current-session conns "mixed" "s1"))))
+              (sleep 300)
+              (is (true? (exec/cancel! execs qid)))
+              (let [e (deref f 5000 :timeout)
+                    msg (str (ex-message e))]
+                (is (not= :timeout e) "the reconnect stopped")
+                (is (false? (:reconnected (:lost (ex-data e)))))
+                (is (str/includes? msg "Could not reconnect (canceled)") (str "got " (pr-str msg)))))
+            (finally
+              (ig/halt-key! :quel.exec/registry execs)
+              (ig/halt-key! :quel.conn/registry conns)
+              (pg/close! real))))))))

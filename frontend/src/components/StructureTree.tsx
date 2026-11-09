@@ -23,7 +23,7 @@ import * as api from "@/lib/api";
 import { metaKeys, queryClient } from "@/lib/query";
 import type { ObjectDetails, SchemaContents } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { connectProfile, setTreeExpanded } from "@/state/runner";
+import { cancelConnect, connectProfile, setTreeExpanded } from "@/state/runner";
 import { type Workspace, selectedWorkspace, useApp } from "@/state/store";
 import {
   type ItemIcon,
@@ -81,7 +81,12 @@ export function StructureTree() {
       {!w ? null : connId ? (
         <Tree workspace={w} connId={connId} />
       ) : w.status === "connecting" ? (
-        <p className="px-3 py-1 text-xs text-muted-foreground">Connecting…</p>
+        <div className="flex items-center gap-2 px-3 py-1">
+          <p className="text-xs text-muted-foreground">Connecting…</p>
+          <Button size="xs" variant="ghost" onClick={() => cancelConnect(w.profileId)}>
+            Cancel
+          </Button>
+        </div>
       ) : (
         <div className="flex flex-col items-start gap-2 px-3 py-1">
           <p className="text-xs text-muted-foreground">Not connected.</p>

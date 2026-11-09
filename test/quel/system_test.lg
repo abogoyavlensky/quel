@@ -8,7 +8,7 @@
 
 (deftest the-config-names-every-component
   (is (= #{:quel.store/db :quel.secrets/store
-           :quel.conn/registry :quel.exec/registry :quel.exec/sweeper :quel.export/registry
+           :quel.conn/registry :quel.conn/attempts :quel.exec/registry :quel.exec/sweeper :quel.export/registry
            :quel.api/handlers
            :quel.shell/app :quel.shell/window :quel.menu/menu :quel.dev/loop
            :quel.updates/updater}

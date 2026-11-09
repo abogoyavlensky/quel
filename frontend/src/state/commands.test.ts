@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/editor/states", () => ({ focusEditor: vi.fn() }));
 const runner = vi.hoisted(() => ({
   cancel: vi.fn(),
+  cancelConnect: vi.fn(),
   closeTab: vi.fn(),
   connectProfile: vi.fn(),
   disconnectProfile: vi.fn(),
@@ -98,6 +99,13 @@ describe("commands", () => {
     }
   });
 
+  it("offers Cancel Connecting only while connecting", () => {
+    expect(ids(state("connecting"))).toContain("cancel-connect");
+    for (const status of ["disconnected", "connected", "disconnecting"] as const) {
+      expect(ids(state(status))).not.toContain("cancel-connect");
+    }
+  });
+
   it("offers Cancel, not Run, while the active tab runs", () => {
     const got = ids(state("connected", (w) => (w.tabs[0].runningQueryId = "q1")));
     expect(got).toContain("cancel");
@@ -188,6 +196,8 @@ describe("run", () => {
     expect(runner.connectProfile).toHaveBeenCalledWith("p");
     void find(state("connected"), "disconnect").run();
     expect(runner.disconnectProfile).toHaveBeenCalledWith("p");
+    void find(state("connecting"), "cancel-connect").run();
+    expect(runner.cancelConnect).toHaveBeenCalledWith("p");
   });
 
   it("runs the current tab's query and cancels it", () => {

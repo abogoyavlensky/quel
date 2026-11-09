@@ -1,4 +1,4 @@
-import { PencilIcon, PlugIcon, PlusIcon, SquareIcon } from "lucide-react";
+import { PencilIcon, PlugIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { openProfileDialog } from "@/state/profiles";
-import { connectProfile, disconnectProfile, selectProfile } from "@/state/runner";
+import { cancelConnect, connectProfile, disconnectProfile, selectProfile } from "@/state/runner";
 import { type ConnStatus, useApp } from "@/state/store";
 import { engineLabel } from "./colors";
 import { ConnMark } from "./ConnMark";
@@ -23,7 +23,8 @@ const statusLabel: Record<ConnStatus, string> = {
 
 // The left panel: the saved connections. A click selects one and shows its
 // workspace; each connects (a plug) and disconnects (a stop) on its
-// own button, always shown, and several can be connected at once. The
+// own button, always shown, and several can be connected at once. While
+// it connects, that button is an × that cancels the connect. The
 // pencil shows on hover; right-click a row for Connect or Disconnect,
 // Edit and Delete. New ones come from the + button.
 export function ConnectionsPanel() {
@@ -62,7 +63,11 @@ export function ConnectionsPanel() {
               const w = workspaces[p.id];
               const status = w?.status ?? "disconnected";
               const pending = status === "connecting" || status === "disconnecting";
+              const connecting = status === "connecting";
               const plugged = status === "connected" || status === "disconnecting";
+              const toggle = () =>
+                void (connecting ? cancelConnect(p.id) : plugged ? disconnectProfile(p.id) : connectProfile(p.id));
+              const toggleLabel = connecting ? "Cancel connecting" : plugged ? "Disconnect" : "Connect";
               return (
                 <li key={p.id} className="group flex flex-col">
                   <ContextMenu>
@@ -88,13 +93,15 @@ export function ConnectionsPanel() {
                         <Button
                           size="icon-xs"
                           variant="ghost"
-                          aria-label={`${plugged ? "Disconnect" : "Connect"} ${p.name}`}
-                          title={plugged ? "Disconnect" : "Connect"}
-                          disabled={pending}
+                          aria-label={`${toggleLabel} ${p.name}`}
+                          title={connecting ? "Cancel" : toggleLabel}
+                          disabled={status === "disconnecting"}
                           className={cn(pending && "animate-pulse")}
-                          onClick={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
+                          onClick={toggle}
                         >
-                          {plugged ? (
+                          {connecting ? (
+                            <XIcon className="text-muted-foreground" />
+                          ) : plugged ? (
                             <SquareIcon className="size-3.5 fill-current text-muted-foreground" />
                           ) : (
                             <PlugIcon className="text-muted-foreground" />
@@ -113,11 +120,8 @@ export function ConnectionsPanel() {
                       </div>
                     </ContextMenuTrigger>
                     <ContextMenuContent>
-                      <ContextMenuItem
-                        disabled={pending}
-                        onSelect={() => void (plugged ? disconnectProfile(p.id) : connectProfile(p.id))}
-                      >
-                        {plugged ? "Disconnect" : "Connect"}
+                      <ContextMenuItem disabled={status === "disconnecting"} onSelect={toggle}>
+                        {toggleLabel}
                       </ContextMenuItem>
                       <ContextMenuItem onSelect={() => openProfileDialog({ mode: "edit", id: p.id })}>
                         Edit…
@@ -125,7 +129,7 @@ export function ConnectionsPanel() {
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         variant="destructive"
-                        disabled={pending}
+                        disabled={status === "disconnecting"}
                         onSelect={() => openProfileDialog({ mode: "edit", id: p.id, confirmDelete: true })}
                       >
                         Delete…

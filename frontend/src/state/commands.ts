@@ -21,6 +21,7 @@ import { focusResult, openPalette } from "./palette";
 import { openProfileDialog } from "./profiles";
 import {
   cancel,
+  cancelConnect,
   closeTab,
   connectProfile,
   disconnectProfile,
@@ -155,6 +156,16 @@ export function commands(s: AppState): Command[] {
         group: "Connection",
         title: "Connect",
         run: () => connectProfile(selected),
+      },
+  );
+  add(
+    selected !== null &&
+      w?.status === "connecting" && {
+        id: "cancel-connect",
+        keepsFocus: true,
+        group: "Connection",
+        title: "Cancel Connecting",
+        run: () => cancelConnect(selected),
       },
   );
   add(

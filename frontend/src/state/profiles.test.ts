@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
   deleteProfile: vi.fn(),
   testConnection: vi.fn(),
   connect: vi.fn(),
+  cancelConnect: vi.fn(),
   closeDb: vi.fn(),
   closeSession: vi.fn(),
   loadWorkspace: vi.fn(),
@@ -174,9 +175,28 @@ describe("profiles", () => {
     expect(store.getState().selected).toBeNull();
   });
 
-  it("deleting is refused while that profile connects or disconnects", async () => {
-    store.setState({ workspaces: { a: { ...newWorkspace("a"), status: "connecting" } } });
-    await expect(profiles.deleteProfile("a")).rejects.toThrow("Wait for the connection to finish opening.");
+  it("deleting while connecting cancels the connect and deletes", async () => {
+    store.setState({ profiles: [p("a")], selected: "a", workspaces: { a: newWorkspace("a") } });
+    let land!: () => void;
+    api.connect.mockReturnValue(
+      new Promise((res) => {
+        land = () => res({ "conn-id": "c4", engine: "postgres", label: "P a", "profile-id": "a" });
+      }),
+    );
+    api.cancelConnect.mockResolvedValue({ canceled: true });
+    api.listProfiles.mockResolvedValue([]);
+    const connecting = runner.connectProfile("a");
+    await vi.waitFor(() => expect(store.getState().workspaces.a?.status).toBe("connecting"));
+    await profiles.deleteProfile("a");
+    expect(api.cancelConnect).toHaveBeenCalledWith(api.connect.mock.calls[0][1]);
+    expect(api.deleteProfile).toHaveBeenCalledWith("a");
+    land();
+    await connecting;
+    expect(api.closeDb).toHaveBeenCalledWith("c4");
+    expect(store.getState().workspaces.a).toBeUndefined();
+  });
+
+  it("deleting is refused while that profile disconnects", async () => {
     store.setState({ workspaces: { a: { ...connected("a", "c1"), status: "disconnecting" } } });
     await expect(profiles.deleteProfile("a")).rejects.toThrow("Wait for the connection to finish closing.");
     expect(api.deleteProfile).not.toHaveBeenCalled();

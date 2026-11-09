@@ -1,7 +1,7 @@
 import * as api from "@/lib/api";
 import type { Profile, ProfileInput } from "@/lib/types";
 import { dropState } from "@/editor/states";
-import { disconnectProfile, forgetWorkspace, selectProfile } from "./runner";
+import { cancelConnect, disconnectProfile, forgetWorkspace, selectProfile } from "./runner";
 import { type ProfileDialog, store } from "./store";
 
 // Saved connection profiles: loading, saving and deleting them, which one
@@ -50,13 +50,13 @@ export async function saveProfile(input: ProfileInput): Promise<Profile> {
 }
 
 // Delete a profile, disconnecting it first if it is connected, and drop
-// its workspace with its tabs. Refused while it connects or disconnects:
-// a connect in flight would land after the delete. When it was the
-// selected one, the first remaining profile is selected. Its saved tabs go
-// with it (the backend deletes them with the profile).
+// its workspace with its tabs. A connect in flight is cancelled first (one
+// that lands anyway closes its connection). Refused while it disconnects.
+// When it was the selected one, the first remaining profile is selected.
+// Its saved tabs go with it (the backend deletes them with the profile).
 export async function deleteProfile(id: string): Promise<void> {
   const status = store.getState().workspaces[id]?.status;
-  if (status === "connecting") throw new Error("Wait for the connection to finish opening.");
+  if (status === "connecting") cancelConnect(id);
   if (status === "disconnecting") throw new Error("Wait for the connection to finish closing.");
   if (status === "connected") await disconnectProfile(id);
   await api.deleteProfile(id);
@@ -81,9 +81,13 @@ export async function deleteProfile(id: string): Promise<void> {
 }
 
 // Connect with the form as it stands and close again; saves nothing.
-// Throws the (redacted) error.
-export async function testConnection(input: ProfileInput): Promise<void> {
-  await api.testConnection(input);
+// Throws the (redacted) error. cancelTest(attemptId) stops it.
+export async function testConnection(input: ProfileInput, attemptId: string): Promise<void> {
+  await api.testConnection(input, attemptId);
+}
+
+export function cancelTest(attemptId: string): void {
+  void api.cancelConnect(attemptId).catch(() => {});
 }
 
 export function openProfileDialog(dialog: Exclude<ProfileDialog, null>): void {

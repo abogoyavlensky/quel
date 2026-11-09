@@ -38,6 +38,8 @@
    :quel.store/db {:dir nil}
    :quel.secrets/store {:backend (secrets-backend)}
    :quel.conn/registry {}
+   ;; Connects and Tests in flight, so cancel-connect can stop their dial.
+   :quel.conn/attempts {}
    ;; The ref orders the halt: queries are cancelled before their sessions
    ;; close.
    :quel.exec/registry {:conns (ig/ref :quel.conn/registry)}
@@ -48,6 +50,7 @@
    ;; Exports in progress; halting drops their part files.
    :quel.export/registry {}
    :quel.api/handlers {:conns (ig/ref :quel.conn/registry)
+                       :attempts (ig/ref :quel.conn/attempts)
                        :execs (ig/ref :quel.exec/registry)
                        :exports (ig/ref :quel.export/registry)
                        :store (ig/ref :quel.store/db)

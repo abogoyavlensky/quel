@@ -14,7 +14,7 @@
             [wails.core :as w]))
 
 ;; What the frontend calls, one fn per call. Each takes the component's
-;; env, {:conns :execs :store :secrets :app :updates}, first, then the plain values
+;; env, {:conns :attempts :execs :store :secrets :app :updates}, first, then the plain values
 ;; JavaScript sends (objects arrive as maps with string keys). A throw
 ;; rejects the frontend's promise with the message.
 
@@ -70,18 +70,37 @@
 (defn test-connection
   "Connect with the form as it stands, saved or not, and close again.
    Saves nothing. No uniqueness check: an unsaved or renamed form can be
-   tested."
-  [{:keys [store secrets]} m]
-  (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
-        t (profiles/target p (profiles/effective-password store secrets p))]
-    (conn/check! t)
-    {:ok true :label (:label t)}))
+   tested. With an attempt-id, cancel-connect stops the dial."
+  ([env m] (test-connection env m nil))
+  ([{:keys [store secrets attempts]} m attempt-id]
+   ;; Registered before the Keychain read, so a cancel during it stops
+   ;; the dial before it starts.
+   (conn/attempt! attempts attempt-id
+                  (fn [ctx]
+                    (let [p (profiles/validate store (profiles/normalize m) {:unique? false})
+                          t (profiles/target p (profiles/effective-password store secrets p))]
+                      (conn/check! t ctx)
+                      {:ok true :label (:label t)})))))
 
-(defn connect [{:keys [conns store secrets]} profile-id]
-  (let [p (or (profiles/fetch store profile-id)
-              (throw (ex-info "This connection no longer exists." {:id profile-id})))
-        t (profiles/target p (profiles/saved-password secrets p))]
-    (assoc (conn/open-target! conns t) :profile-id profile-id)))
+(defn connect
+  "Open the profile's database. With an attempt-id, cancel-connect stops
+   it; it then throws \"Connecting canceled.\". The attempt is registered
+   before the Keychain read, which cannot be interrupted, so a cancel
+   during that read stops the dial before it starts."
+  ([env profile-id] (connect env profile-id nil))
+  ([{:keys [conns store secrets attempts]} profile-id attempt-id]
+   (conn/attempt! attempts attempt-id
+                  (fn [ctx]
+                    (let [p (or (profiles/fetch store profile-id)
+                                (throw (ex-info "This connection no longer exists." {:id profile-id})))
+                          t (profiles/target p (profiles/saved-password secrets p))]
+                      (assoc (conn/open-target! conns t ctx) :profile-id profile-id))))))
+
+(defn cancel-connect
+  "Stop a connect or test in flight. {:canceled false} when none runs
+   under attempt-id (it ended, or has not started)."
+  [{:keys [attempts]} attempt-id]
+  {:canceled (conn/cancel-attempt! attempts attempt-id)})
 
 (def db-filters
   [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
@@ -200,6 +219,7 @@
    "delete-profile" #'delete-profile
    "test-connection" #'test-connection
    "connect" #'connect
+   "cancel-connect" #'cancel-connect
    "choose-file" #'choose-file
    "export-begin" #'export-begin
    "export-append" #'export-append

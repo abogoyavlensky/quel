@@ -36,6 +36,14 @@
 ;; never reused; the set goes with its connection.
 ;;
 ;; The registry is an atom; the component's value is the atom.
+;;
+;; Every dial runs under a cancellable shim Ctx: connecting, Test, taking
+;; a session. Connect and Test register theirs in ::attempts, an atom of
+;; {attempt-id <shim Ctx>} keyed by an id the frontend makes, so
+;; cancel-attempt! can stop a dial that would otherwise wait out pgx's
+;; connect timeout (10 s per resolved address). A cancel that arrives
+;; before its attempt registers finds nothing; the frontend has given the
+;; attempt up by then and closes a connection that lands late.
 
 (defn new-id
   "A random UUID as its bare 36-character string. let-go 1.13.0's (str
@@ -142,18 +150,26 @@
     (pg/close! db)))
 
 (defn- ping!
-  "Make a connection on db, throwing the redacted error if it fails."
-  [t db]
-  (when-let [err (.Ping (:sql/handle db))]
-    (throw (ex-info (redact t (.Error err)) {}))))
+  "Make a connection on db under ctx (a select 1, which works on Postgres
+   and Redshift). Throws \"Connecting canceled.\" when ctx was cancelled,
+   else the redacted error."
+  [t db ctx]
+  (try
+    (shim/ExecCtx (:sql/handle db) ctx "select 1" [])
+    nil
+    (catch e
+      (if (.Canceled ctx)
+        (throw (ex-info "Connecting canceled." {:canceled true}))
+        (throw (ex-info (redact t (ex-message e)) {}))))))
 
 (defn- connect
   "The shared pool and the session pool for target. A Postgres pool is
-   pinged, so a wrong password or host fails here, not at the first run."
-  [{:keys [engine] :as t}]
+   pinged under ctx, so a wrong password or host fails here, not at the
+   first run, and a cancel stops the dial."
+  [{:keys [engine] :as t} ctx]
   (let [db (open-pool t)]
     (when (not= :sqlite engine)
-      (try (ping! t db)
+      (try (ping! t db ctx)
            (catch e (close-pool! engine db) (throw e))))
     (let [sessions-db (try (open-pool t)
                            (catch e (close-pool! engine db) (throw e)))]
@@ -163,13 +179,15 @@
 (defn open-target!
   "Open target t: {:engine (:path | :url | :dsn) :label [:secret]}, where
    :secret is the password a :dsn carries, for redact. Returns
-   {:conn-id :engine :label}."
-  [registry t]
+   {:conn-id :engine :label}. Connecting runs under ctx, a shim Ctx; a
+   cancel throws \"Connecting canceled.\" and keeps nothing."
+  ([registry t] (open-target! registry t (shim/NewCtx)))
+  ([registry t ctx]
   (let [id (new-id)
-        e (merge (connect t)
+        e (merge (connect t ctx)
                  {:engine (:engine t) :label (:label t) :sessions {} :retired #{}})]
     (swap! registry assoc id e)
-    {:conn-id id :engine (:engine e) :label (:label e)}))
+    {:conn-id id :engine (:engine e) :label (:label e)})))
 
 (defn open!
   "Open what `s` names (see `target`). Returns {:conn-id :engine :label}."
@@ -179,15 +197,41 @@
 
 (defn check!
   "Connect to target t once and close again; throws the redacted error if
-   that fails. Nothing is kept: this backs the Test button."
-  [{:keys [engine] :as t}]
-  (let [db (open-pool t)]
+   that fails. Nothing is kept: this backs the Test button. The dial runs
+   under ctx, a shim Ctx (a SQLite file is not dialled)."
+  ([t] (check! t (shim/NewCtx)))
+  ([{:keys [engine] :as t} ctx]
+   (let [db (open-pool t)]
+     (try
+       (if (= :sqlite engine)
+         (sql/execute! db ["select 1"])
+         (ping! t db ctx))
+       nil
+       (finally (close-pool! engine db))))))
+
+(defn attempt!
+  "Call (f ctx) with a fresh shim Ctx, registered under attempt-id (when
+   given) so cancel-attempt! can stop it. Deregisters and cancels it when
+   f returns. An attempt-id still running is refused."
+  [attempts attempt-id f]
+  (let [ctx (shim/NewCtx)]
+    (when-not (str/blank? attempt-id)
+      (let [[old _] (swap-vals! attempts (fn [m] (if (contains? m attempt-id) m (assoc m attempt-id ctx))))]
+        (when (contains? old attempt-id)
+          (throw (ex-info (str "Attempt " attempt-id " is already running.") {:attempt-id attempt-id})))))
     (try
-      (if (= :sqlite engine)
-        (sql/execute! db ["select 1"])
-        (ping! t db))
-      nil
-      (finally (close-pool! engine db)))))
+      (f ctx)
+      (finally
+        (when-not (str/blank? attempt-id)
+          (swap! attempts (fn [m] (if (identical? ctx (get m attempt-id)) (dissoc m attempt-id) m))))
+        (.Cancel ctx)))))
+
+(defn cancel-attempt!
+  "Cancel the attempt; true if one was running."
+  [attempts attempt-id]
+  (if-let [ctx (get @attempts attempt-id)]
+    (do (.Cancel ctx) true)
+    false))
 
 (defn- entry [registry conn-id]
   (or (get @registry conn-id)
@@ -209,14 +253,17 @@
 
 (defn session!
   "The tab's session, taken from the session pool on first use. Throws for
-   an unknown database or a retired session-id."
-  [registry conn-id session-id]
+   an unknown database or a retired session-id. Taking it dials under ctx,
+   a shim Ctx, when one is given, so a cancel stops the dial."
+  ([registry conn-id session-id] (session! registry conn-id session-id nil))
+  ([registry conn-id session-id ctx]
   (check-session-id session-id)
   (let [e (entry registry conn-id)]
     (when (contains? (:retired e) session-id)
       (throw (ex-info "This tab was closed." {:session-id session-id})))
     (or (get-in e [:sessions session-id])
-        (let [fresh (shim/Conn (:sql/handle (:sessions-db e)))
+        (let [handle (:sql/handle (:sessions-db e))
+              fresh (if ctx (shim/ConnCtx handle ctx) (shim/Conn handle))
               [_ now] (swap-vals! registry
                                   (fn [m]
                                     (let [cur (get m conn-id)]
@@ -233,7 +280,7 @@
           (or winner
               (if (contains? (get-in now [conn-id :retired]) session-id)
                 (throw (ex-info "This tab was closed." {:session-id session-id}))
-                (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id}))))))))
+                (throw (ex-info (str "No open database " conn-id ".") {:conn-id conn-id})))))))))
 
 (defn current-session
   "The tab's session if one was taken, else nil. Takes none."
@@ -301,3 +348,10 @@
 (defmethod ig/halt-key! ::registry [_ registry]
   (doseq [id (keys @registry)]
     (close! registry id)))
+
+(defmethod ig/init-key ::attempts [_ _]
+  (atom {}))
+
+(defmethod ig/halt-key! ::attempts [_ attempts]
+  (doseq [ctx (vals @attempts)]
+    (.Cancel ctx)))

@@ -36,18 +36,20 @@
 
         ;; SQLite over Go's database/sql; brings the sql layer (sessions,
         ;; cancellation) and the modernc.org/sqlite driver in transitively.
-        ;; sqlite-v0.3.0 is the first with sql-v0.3.0's context support.
+        ;; sqlite-v0.4.0 is the first with sql-v0.4.0's ConnCtx (a session
+        ;; taken under a cancellable context).
         abogoyavlensky/letgo-sqlite
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "sqlite-v0.3.0"
+         :git/tag "sqlite-v0.4.0"
          :deps/root "sqlite"}
 
         ;; Postgres (and Redshift, which speaks its protocol) through pgx.
-        ;; postgres-v0.4.0 is the first whose pools can keep a session
-        ;; alive across a cancelled query (:postgres/cancel :request).
+        ;; postgres-v0.4.0 was the first whose pools keep a session alive
+        ;; across a cancelled query (:postgres/cancel :request);
+        ;; postgres-v0.5.0 is on sql-v0.4.0 (ConnCtx).
         abogoyavlensky/letgo-postgres
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "postgres-v0.4.0"
+         :git/tag "postgres-v0.5.0"
          :deps/root "postgres"}
 
         ;; Profile passwords in the macOS Keychain (the Secret Service on
@@ -58,11 +60,11 @@
          :deps/root "keyring"}
 
         ;; Migrations for the app database (profiles, later history and
-        ;; the workspace). It names sql-v0.3.0, the tag sqlite and postgres
+        ;; the workspace). It names sql-v0.4.0, the tag sqlite and postgres
         ;; name, so the three resolve to one checkout.
         abogoyavlensky/letgo-ragtime
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
-         :git/tag "ragtime-v0.3.0"
+         :git/tag "ragtime-v0.4.0"
          :deps/root "ragtime"}
 
         ;; integrant wires the registries, the handlers, the window, the

@@ -832,24 +832,48 @@ export function forgetWorkspace(profileId: string): void {
   cancelSave(profileId);
 }
 
+// The connect in flight for each profile, by attempt id: what
+// cancelConnect stops. A connect whose id is no longer here was given up.
+const connectAttempts = new Map<string, string>();
+
 // Connect the profile's workspace; the selection stays where it is. A
 // connect while one is in flight, or on a connected profile, is dropped.
+// Its reply counts only while it is the profile's current attempt: one
+// cancelled (or whose workspace was dropped) closes a connection that
+// lands late and shows no error.
 export async function connectProfile(id: string): Promise<void> {
   await ensureWorkspace(id);
   if (store.getState().workspaces[id]?.status !== "disconnected") return;
+  const attemptId = newId();
+  connectAttempts.set(id, attemptId);
+  const current = () => connectAttempts.get(id) === attemptId && !!store.getState().workspaces[id];
   updateWorkspace(id, (w) => ({ ...w, status: "connecting", error: null }));
   try {
-    const opened = await api.connect(id);
-    if (!store.getState().workspaces[id]) {
-      // Dropped meanwhile: nothing will use this connection.
+    const opened = await api.connect(id, attemptId);
+    if (!current()) {
+      // Given up meanwhile: nothing will use this connection.
       void api.closeDb(opened["conn-id"]).catch(() => {});
       return;
     }
     updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
     notify.dismiss("not-connected");
   } catch (e) {
+    if (!current()) return;
     updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: errorText(e) }));
+  } finally {
+    if (connectAttempts.get(id) === attemptId) connectAttempts.delete(id);
   }
+}
+
+// Give up the profile's connect in flight. The row is not connected at
+// once, whatever the backend is doing: the cancel stops its dial, and a
+// connection that lands anyway is closed (connectProfile).
+export function cancelConnect(id: string): void {
+  if (store.getState().workspaces[id]?.status !== "connecting") return;
+  const attemptId = connectAttempts.get(id);
+  connectAttempts.delete(id);
+  updateWorkspace(id, (w) => ({ ...w, status: "disconnected", connId: null, error: null }));
+  if (attemptId) void api.cancelConnect(attemptId).catch(() => {});
 }
 
 // Disconnect the profile: its open results close, a run in flight there
