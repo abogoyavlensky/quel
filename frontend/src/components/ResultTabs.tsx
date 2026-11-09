@@ -2,7 +2,7 @@ import { MessageSquare, Pin, PinOff, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ResultGrid } from "@/grid/ResultGrid";
 import { cn } from "@/lib/utils";
-import { closeResult, connectProfile, pin, selectResult } from "@/state/runner";
+import { cancelConnect, closeResult, connectProfile, pin, selectResult } from "@/state/runner";
 import { type EditorTab, MESSAGES, selectedWorkspace, useApp } from "@/state/store";
 import { MessagesView } from "./MessagesView";
 import { ResultFooter } from "./ResultFooter";
@@ -66,14 +66,14 @@ function NotConnected({ banner }: { banner: boolean }) {
       <span>
         <b className={cn("font-medium", !banner && "text-foreground")}>{profile.name}</b> isn't connected.
       </span>
+      {connecting && <span>Connecting…</span>}
       <Button
         size="xs"
         variant="outline"
-        aria-label={`Connect to ${profile.name}`}
-        disabled={connecting}
-        onClick={() => void connectProfile(profile.id)}
+        aria-label={connecting ? `Cancel connecting to ${profile.name}` : `Connect to ${profile.name}`}
+        onClick={() => (connecting ? cancelConnect(profile.id) : void connectProfile(profile.id))}
       >
-        {connecting ? "Connecting…" : "Connect"}
+        {connecting ? "Cancel" : "Connect"}
       </Button>
       {w.error && <span className="text-destructive">{w.error}</span>}
     </div>
