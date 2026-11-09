@@ -5,6 +5,7 @@ import type { RowsResult } from "./store";
 
 const api = vi.hoisted(() => ({
   connect: vi.fn(),
+  cancelConnect: vi.fn(),
   closeDb: vi.fn(),
   run: vi.fn(),
   fetchPage: vi.fn(),
@@ -105,6 +106,7 @@ beforeEach(() => {
   api.closeSession.mockResolvedValue(undefined);
   api.closeDb.mockResolvedValue(undefined);
   api.cancel.mockResolvedValue({ canceled: true });
+  api.cancelConnect.mockResolvedValue({ canceled: true });
   api.closeTab.mockResolvedValue(null);
   api.saveWorkspace.mockResolvedValue(undefined);
   api.selectProfile.mockResolvedValue(undefined);
@@ -1670,5 +1672,75 @@ describe("cached structure", () => {
     expect(ws("p2").treeExpanded).toBeNull();
     await runner.disconnectProfile("p1");
     expect(ws().treeExpanded).toEqual(["a", "b"]);
+  });
+});
+
+describe("cancelConnect", () => {
+  type Opened = { "conn-id": string; engine: string; label: string };
+  const opened = (id: string): Opened => ({ "conn-id": id, engine: "postgres", label: "P1" });
+
+  async function startConnect() {
+    await runner.disconnectProfile("p1");
+    const opening = deferred<Opened>();
+    api.connect.mockReturnValueOnce(opening.promise);
+    const connecting = runner.connectProfile("p1");
+    await vi.waitFor(() => expect(ws().status).toBe("connecting"));
+    const attemptId = api.connect.mock.calls.at(-1)![1] as string;
+    return { opening, connecting, attemptId };
+  }
+
+  it("is not connected at once, and cancels the attempt the connect was given", async () => {
+    const { attemptId, opening, connecting } = await startConnect();
+    expect(attemptId).toEqual(expect.any(String));
+    runner.cancelConnect("p1");
+    expect(ws().status).toBe("disconnected");
+    expect(ws().error).toBeNull();
+    expect(api.cancelConnect).toHaveBeenCalledWith(attemptId);
+    opening.reject(new Error("Connecting canceled."));
+    await connecting;
+  });
+
+  it("closes a connection that lands after the cancel", async () => {
+    const { opening, connecting } = await startConnect();
+    runner.cancelConnect("p1");
+    opening.resolve(opened("late"));
+    await connecting;
+    expect(api.closeDb).toHaveBeenCalledWith("late");
+    expect(ws().status).toBe("disconnected");
+    expect(ws().connId).toBeNull();
+  });
+
+  it("shows no error for a connect that fails after the cancel", async () => {
+    const { opening, connecting } = await startConnect();
+    runner.cancelConnect("p1");
+    opening.reject(new Error("Connecting canceled."));
+    await connecting;
+    expect(ws().status).toBe("disconnected");
+    expect(ws().error).toBeNull();
+  });
+
+  it("a connect after a cancel is a new attempt, and only it counts", async () => {
+    const first = await startConnect();
+    runner.cancelConnect("p1");
+    const second = deferred<Opened>();
+    api.connect.mockReturnValueOnce(second.promise);
+    const connecting = runner.connectProfile("p1");
+    await vi.waitFor(() => expect(ws().status).toBe("connecting"));
+    const secondId = api.connect.mock.calls.at(-1)![1];
+    expect(secondId).not.toBe(first.attemptId);
+    first.opening.resolve(opened("old"));
+    await first.connecting;
+    expect(api.closeDb).toHaveBeenCalledWith("old");
+    expect(ws().status).toBe("connecting");
+    second.resolve(opened("new"));
+    await connecting;
+    expect(ws().status).toBe("connected");
+    expect(ws().connId).toBe("new");
+  });
+
+  it("does nothing unless the profile is connecting", () => {
+    runner.cancelConnect("p1");
+    expect(ws().status).toBe("connected");
+    expect(api.cancelConnect).not.toHaveBeenCalled();
   });
 });

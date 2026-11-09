@@ -104,9 +104,15 @@ export const saveProfile = (input: ProfileInput) => call<Profile>("save-profile"
 export const deleteProfile = (id: string) => call<void>("delete-profile", id);
 
 // Connects with the form as it stands and closes again; saves nothing.
-export const testConnection = (input: ProfileInput) => call<{ ok: boolean; label: string }>("test-connection", input);
+// cancelConnect(attemptId) stops it, as it stops a connect.
+export const testConnection = (input: ProfileInput, attemptId: string) =>
+  call<{ ok: boolean; label: string }>("test-connection", input, attemptId);
 
-export const connect = (profileId: string) => call<OpenResult>("connect", profileId);
+export const connect = (profileId: string, attemptId: string) => call<OpenResult>("connect", profileId, attemptId);
+
+// Stop the connect or test running under attemptId; canceled is false when
+// none runs (it ended, or its call has not reached the backend yet).
+export const cancelConnect = (attemptId: string) => call<{ canceled: boolean }>("cancel-connect", attemptId);
 
 // The SQLite file the user picks in a native dialog, or null.
 export const chooseFile = () => answerOrNull(call("choose-file"));

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,7 +41,7 @@ import {
   withEngine,
 } from "@/state/profileForm";
 import { textOf } from "@/editor/states";
-import { closeProfileDialog, deleteProfile, saveProfile, testConnection } from "@/state/profiles";
+import { cancelTest, closeProfileDialog, deleteProfile, saveProfile, testConnection } from "@/state/profiles";
 import { useApp } from "@/state/store";
 import { tagColor } from "./colors";
 
@@ -50,7 +50,7 @@ function errorText(e: unknown): string {
 }
 
 // The result of the last Test: running, passed, or the error. Any edit
-// clears it.
+// clears it. While it runs, the Test button cancels it.
 type TestState = { state: "idle" } | { state: "testing" } | { state: "ok" } | { state: "failed"; error: string };
 
 // Creates and edits a connection profile. One labelled input per field;
@@ -89,11 +89,9 @@ function ProfileEditor({
   const [test, setTest] = useState<TestState>({ state: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // A profile cannot be deleted while it connects or disconnects.
-  const pending = useApp((s) => {
-    const status = editing ? s.workspaces[editing.id]?.status : undefined;
-    return status === "connecting" || status === "disconnecting";
-  });
+  // A profile cannot be deleted while it disconnects. (A connect in flight
+  // is cancelled by the delete.)
+  const pending = useApp((s) => (editing ? s.workspaces[editing.id]?.status === "disconnecting" : false));
   const [confirmDelete, setConfirmDelete] = useState(askDelete);
   // Set when Delete is confirmed: that also closes the confirmation, but
   // the editor stays until the delete succeeds or can show its error.
@@ -108,8 +106,20 @@ function ProfileEditor({
   // Bumped on every edit: a Test that finishes after the form changed
   // answers for settings that are gone, so its result is dropped.
   const revision = useRef(0);
+  // The Test in flight, by its attempt id: an edit, Cancel test or closing
+  // the dialog cancels it, and only its own reply may set the result.
+  const testAttempt = useRef<string | null>(null);
+
+  function stopTest() {
+    if (testAttempt.current) cancelTest(testAttempt.current);
+    testAttempt.current = null;
+  }
+
+  // Closing the dialog unmounts the editor: a Test still running stops.
+  useEffect(() => stopTest, []);
 
   const set = (patch: Partial<ProfileForm>) => {
+    stopTest();
     revision.current += 1;
     setForm((f) => ({ ...f, ...patch }));
     setTest({ state: "idle" });
@@ -121,15 +131,24 @@ function ProfileEditor({
 
   async function onTest() {
     const at = revision.current;
+    const attemptId = crypto.randomUUID();
+    testAttempt.current = attemptId;
     setTest({ state: "testing" });
     let result: TestState;
     try {
-      await testConnection(toInput(form));
+      await testConnection(toInput(form), attemptId);
       result = { state: "ok" };
     } catch (e) {
       result = { state: "failed", error: errorText(e) };
     }
+    if (testAttempt.current !== attemptId) return;
+    testAttempt.current = null;
     if (revision.current === at) setTest(result);
+  }
+
+  function onCancelTest() {
+    stopTest();
+    setTest({ state: "idle" });
   }
 
   async function onSave(e: React.FormEvent) {
@@ -372,10 +391,10 @@ function ProfileEditor({
             <Button
               type="button"
               variant="outline"
-              disabled={!!incomplete || test.state === "testing" || busy}
-              onClick={() => void onTest()}
+              disabled={test.state === "testing" ? false : !!incomplete || busy}
+              onClick={() => (test.state === "testing" ? onCancelTest() : void onTest())}
             >
-              {test.state === "testing" ? "Testing…" : "Test"}
+              {test.state === "testing" ? "Cancel test" : "Test"}
             </Button>
             {editing && (
               <Button
@@ -383,7 +402,7 @@ function ProfileEditor({
                 variant="ghost"
                 className="text-destructive"
                 disabled={busy || pending}
-                title={pending ? "Wait for the connection to finish opening or closing" : undefined}
+                title={pending ? "Wait for the connection to finish closing" : undefined}
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete
