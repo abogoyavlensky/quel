@@ -88,6 +88,17 @@ const chrome = EditorView.theme({
     backgroundColor: "color-mix(in oklab, var(--muted) 55%, var(--background))",
     boxShadow: "0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04)",
   },
+  // Find and Go to Line (editor/panels.ts): our controls on the editor's
+  // background, a rule under them. Their padding is the components' own.
+  ".cm-panels": { backgroundColor: "var(--background)", color: "var(--foreground)" },
+  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
+  ".cm-panel.cm-search": { padding: "0", fontFamily: "var(--font-sans)" },
+  // Matches from index.css tokens: the base theme's dark colours never
+  // apply (the app does not set EditorView.darkTheme).
+  ".cm-searchMatch": { backgroundColor: "var(--search-match)", borderRadius: "2px" },
+  ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--search-match-current)" },
+  ".cm-selectionMatch": { backgroundColor: "color-mix(in oklab, var(--muted-foreground) 18%, transparent)" },
+  ".cm-searchMatch .cm-selectionMatch": { backgroundColor: "transparent" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--ring) 35%, transparent)",
