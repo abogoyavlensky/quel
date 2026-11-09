@@ -238,6 +238,15 @@ text is selected). The editor's face is JetBrains Mono (bundled, OFL). The Run
 button in the editor runs it too, and becomes Stop (`Cmd+.`) after 300ms
 of a run.
 
+Find (`Cmd+F`, with replace behind a chevron) and Go to Line
+(`Cmd+Alt+G`) are CodeMirror panels docked at the top of the editor, clear
+of the Run button. CodeMirror owns their lifecycle, and React draws their
+controls into them through portals (`editor/panels.ts`,
+`editor/EditorPanels.tsx`). Only one is open at a time. Each tab keeps its
+own query and open panel, which a tab switch restores without taking the
+editor's focus. Select all matches is left out: the editor has a single
+selection.
+
 ### Running
 
 `run` takes the tab's session-id and a frontend-generated `query-id`, so
@@ -742,6 +751,9 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⌘J / Ctrl+J | Hides or shows the results pane |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
+| ⌘F / Ctrl+F | Opens Find (and replace) in the editor |
+| ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match |
+| ⌥⌘G / Ctrl+Alt+G | Opens Go to Line |
 
 Tabs count left to right as the tab bar shows them (pinned first). A digit
 past the last tab does nothing.

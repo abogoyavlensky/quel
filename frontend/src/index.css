@@ -181,10 +181,14 @@
     --sql-type: oklch(0.5 0.1 200);
     --sql-string: oklch(0.5 0.12 145);
     --sql-number: oklch(0.55 0.14 55);
+    --search-match: oklch(0.88 0.12 90 / 0.55);
+    --search-match-current: oklch(0.78 0.15 65 / 0.6);
 }
 .dark {
     --sql-keyword: oklch(0.76 0.12 290);
     --sql-type: oklch(0.78 0.08 200);
     --sql-string: oklch(0.78 0.12 145);
     --sql-number: oklch(0.8 0.12 70);
+    --search-match: oklch(0.6 0.12 85 / 0.4);
+    --search-match-current: oklch(0.68 0.15 60 / 0.55);
 }

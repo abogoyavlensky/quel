@@ -16,6 +16,7 @@ import type { CompletionSchema, Engine } from "@/lib/types";
 import { onEdit } from "@/state/persist";
 import { runCurrent } from "@/state/runner";
 import { columnCompletionSource } from "./columns";
+import { findExtension, goToLineField, panelKeymap, replacedKeys } from "./panels";
 import { statementHighlight } from "./statementHighlight";
 import type { Seed } from "./states";
 
@@ -87,6 +88,23 @@ const chrome = EditorView.theme({
     backgroundColor: "color-mix(in oklab, var(--muted) 55%, var(--background))",
     boxShadow: "0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.04)",
   },
+  // Find and Go to Line (editor/panels.ts): our controls on the editor's
+  // background, a rule under them. Their padding is the components' own.
+  ".cm-panels": { backgroundColor: "var(--background)", color: "var(--foreground)" },
+  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
+  // The base theme's margins on the stock panel's inputs and buttons would
+  // push ours apart: the replace field would not line up under find.
+  ".cm-panel.cm-search": {
+    padding: "0",
+    fontFamily: "var(--font-sans)",
+    "& input, & button, & label": { margin: "0" },
+  },
+  // Matches from index.css tokens: the base theme's dark colours never
+  // apply (the app does not set EditorView.darkTheme).
+  ".cm-searchMatch": { backgroundColor: "var(--search-match)", borderRadius: "2px" },
+  ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--search-match-current)" },
+  ".cm-selectionMatch": { backgroundColor: "color-mix(in oklab, var(--muted-foreground) 18%, transparent)" },
+  ".cm-searchMatch .cm-selectionMatch": { backgroundColor: "transparent" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--primary)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
     backgroundColor: "color-mix(in oklab, var(--ring) 35%, transparent)",
@@ -156,6 +174,8 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
       autocompletion(),
       statementHighlight,
       highlightSelectionMatches(),
+      findExtension,
+      goToLineField,
       // Tab accepts an open completion, otherwise it indents (Shift-Tab
       // dedents). Escape then Tab leaves the editor.
       keymap.of([
@@ -163,7 +183,8 @@ export function newState(engine: Engine | null, seed?: Seed, tabId?: string): Ed
         indentWithTab,
         ...closeBracketsKeymap,
         ...defaultKeymap,
-        ...searchKeymap,
+        ...panelKeymap,
+        ...searchKeymap.filter((b) => !replacedKeys.includes(b.key ?? "")),
         ...historyKeymap,
         ...completionKeymap,
       ]),

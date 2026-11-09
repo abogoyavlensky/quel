@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { EditorView } from "@codemirror/view";
 import type { Engine } from "@/lib/types";
+import { EditorPanels } from "./EditorPanels";
 import { type Completion, language, languageFor, newState } from "./setup";
 import { mountView, savedState, seedOf, unmountView } from "./states";
 
@@ -55,5 +56,10 @@ export function SqlEditor({
     view.current?.dispatch({ effects: language.reconfigure(languageFor(engine, completion)) });
   }, [engine, completion]);
 
-  return <div ref={host} className="h-full min-h-0 overflow-hidden" />;
+  return (
+    <>
+      <div ref={host} className="h-full min-h-0 overflow-hidden" />
+      <EditorPanels />
+    </>
+  );
 }

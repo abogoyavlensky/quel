@@ -16,3 +16,7 @@ export const RESULTS_PANE_KEY = isMac ? "⌘J" : "Ctrl+J";
 export const ZOOM_IN_KEY = isMac ? "⌘=" : "Ctrl+=";
 export const ZOOM_OUT_KEY = isMac ? "⌘-" : "Ctrl+-";
 export const ZOOM_RESET_KEY = isMac ? "⌘0" : "Ctrl+0";
+export const FIND_KEY = isMac ? "⌘F" : "Ctrl+F";
+export const FIND_NEXT_KEY = isMac ? "⌘G" : "Ctrl+G";
+export const FIND_PREV_KEY = isMac ? "⇧⌘G" : "Ctrl+Shift+G";
+export const GO_TO_LINE_KEY = isMac ? "⌥⌘G" : "Ctrl+Alt+G";
