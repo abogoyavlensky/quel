@@ -1,4 +1,6 @@
 import { type CsvSeparator, EXTENSIONS, type ExportFormat, collectChunks, formatChunks } from "@/grid/export";
+import { isNumericType } from "@/grid/format";
+import { nextSort, sortRows } from "@/grid/sort";
 import * as api from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
 import { type Lost, lostOf } from "@/lib/lost";
@@ -23,6 +25,7 @@ import { showResults } from "./layout";
 import {
   type EditorTab,
   type ExportProgress,
+  type GridFind,
   MAX_CLOSED,
   MESSAGES,
   type ResultTab,
@@ -207,6 +210,9 @@ export async function runStatements(tabId: string, statements: Statement[]): Pro
             fetching: false,
             elapsedMs: r["elapsed-ms"],
             selectedRow: null,
+            sort: null,
+            unsorted: null,
+            find: null,
           }));
           // Its tab closed while it ran, and the cancel came too late.
           if (r["has-more"] && live && !hasTab()) void api.closeResult(queryId).catch(() => {});
@@ -600,6 +606,27 @@ export function selectRow(tabId: string, resultId: string, index: number | null)
   updateRows(tabId, resultId, (r) => ({ ...r, selectedRow: index }));
 }
 
+// The find bar over a result's grid. Its state lives on the result, so it
+// survives tab switches and hidden results; closing keeps the query.
+const NEW_FIND: GridFind = { open: true, search: "", caseSensitive: false, wholeWord: false, regexp: false, current: null };
+
+export function openFind(tabId: string, resultId: string): void {
+  updateRows(tabId, resultId, (r) => ({ ...r, find: r.find ? { ...r.find, open: true } : NEW_FIND }));
+}
+
+// A change to the query or a toggle forgets the current match.
+export function setFind(tabId: string, resultId: string, patch: Partial<Omit<GridFind, "open">>): void {
+  updateRows(tabId, resultId, (r) => {
+    if (!r.find) return r;
+    const query = Object.keys(patch).some((k) => k !== "current");
+    return { ...r, find: { ...r.find, ...(query ? { current: null } : {}), ...patch } };
+  });
+}
+
+export function closeFind(tabId: string, resultId: string): void {
+  updateRows(tabId, resultId, (r) => (r.find ? { ...r, find: { ...r.find, open: false } } : r));
+}
+
 export function toggleRowDetails(): void {
   store.setState((s) => ({ rowDetails: !s.rowDetails }));
 }
@@ -642,18 +669,67 @@ export async function exportResult(
   maxRows = MAX_ROWS,
 ): Promise<void> {
   if (findTab(tabId)?.exporting) return;
+  await withLoadLock(tabId, action, (signal, setExporting) => {
+    const progress = (rows: number, total: number) => setExporting({ action, rows, total });
+    return exportRows(tabId, resultId, action, maxRows, progress, signal);
+  });
+}
+
+// Run f as the tab's one export or sort: tab.exporting is set meanwhile
+// (Copy, Save and the headers do nothing, the footer has Cancel), and
+// cancelExport fires the signal f gets.
+async function withLoadLock(
+  tabId: string,
+  action: ExportProgress["action"],
+  f: (signal: AbortSignal, setExporting: (p: ExportProgress | null) => void) => Promise<void>,
+): Promise<void> {
   const setExporting = (exporting: ExportProgress | null) => updateTab(tabId, (t) => ({ ...t, exporting }));
   setExporting({ action, rows: null, total: 0 });
   const controller = new AbortController();
   exportCancels.set(tabId, controller);
   try {
-    const progress = (rows: number, total: number) => setExporting({ action, rows, total });
-    await exportRows(tabId, resultId, action, maxRows, progress, controller.signal);
+    await f(controller.signal, setExporting);
   } finally {
     // A tab back from a failed close may have started another by now.
     if (exportCancels.get(tabId) === controller) exportCancels.delete(tabId);
     setExporting(null);
   }
+}
+
+// A click on a result's column header: ascending, descending, then the
+// order the rows came in (grid/sort.ts). An open result loads the rest
+// first, as an export does, under the same lock; if it cannot all be had,
+// nothing is sorted. The statement never runs again.
+export async function sortResult(tabId: string, resultId: string, column: number, maxRows = MAX_ROWS): Promise<void> {
+  const result = findRows(tabId, resultId);
+  if (!result || findTab(tabId)?.exporting) return;
+  const next = nextSort(result.sort, column);
+  if (result.cursor === "open") {
+    let ok = false;
+    let aborted = false;
+    await withLoadLock(tabId, "sort", async (signal) => {
+      ok = await loadAll(tabId, resultId, maxRows, signal);
+      aborted = signal.aborted;
+    });
+    if (!ok) {
+      if (aborted) notify.info("Sort canceled.");
+      else notify.error("Sort stopped: not all rows could be loaded.");
+      return;
+    }
+  }
+  updateRows(tabId, resultId, (r) => {
+    const base = r.unsorted ?? r.rows;
+    const rows = next ? sortRows(base, next, isNumericType(r.columns[next.column]?.type ?? "")) : base;
+    const selected = r.selectedRow === null ? null : rows.indexOf(r.rows[r.selectedRow]);
+    return {
+      ...r,
+      rows,
+      sort: next,
+      unsorted: next ? base : null,
+      selectedRow: selected === null || selected < 0 ? null : selected,
+      find: r.find && { ...r.find, current: null },
+    };
+  });
 }
 
 async function exportRows(

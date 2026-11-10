@@ -27,7 +27,7 @@ export function countMatches(state: EditorState, query: SearchQuery, cap = 1000)
   return { total, current, capped: false };
 }
 
-export function countLabel(query: SearchQuery, count: MatchCount): string {
+export function countLabel(query: { valid: boolean; search: string }, count: MatchCount): string {
   if (!query.valid || query.search === "") return "";
   if (count.total === 0) return "No results";
   const total = count.capped ? `${count.total}+` : String(count.total);

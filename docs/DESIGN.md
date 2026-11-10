@@ -719,6 +719,44 @@ JSON) and is disabled for NULL. "Copy row as JSON" maps column names to
 cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
 `navigator.clipboard` and falls back to the Wails runtime's clipboard.
 
+### Sort and find in results
+
+A click on a column header sorts the result by it: ascending, then
+descending, then back to the order the rows came in. A click on another
+column starts it at ascending. One column sorts at a time, and the header
+shows an arrow and `aria-sort`. The resize handle stops its click, so a
+resize never sorts.
+
+The sort runs in the app and never runs the statement again, so it works
+for anything that returns rows. An `open` result loads the rest first,
+as Export does (`loadAll`, up to `MAX_ROWS`). The footer shows "loading
+more…" and a Cancel button. Sort and Export share one lock per tab
+(`tab.exporting`, action `"sort"`), so they never load at once. A cancel,
+or a load that cannot finish, sorts nothing and says so in a toast.
+
+The sorted rows replace `rows` in the store, and `unsorted` keeps the
+arrival order. A re-sort starts from it, and the sort is stable. Row
+numbers, ↑/↓, the row details panel and Export all follow the shown
+order. The selected row stays selected. A sorted result's cursor is never
+`open`, so no page is appended to sorted rows. Values compare raw
+(`grid/sort.ts`). Kinds go boolean, number, text, NULL. NULL is the
+largest value, so it is last ascending and first descending, the
+Postgres default. Numeric strings in numeric columns (big integers,
+decimals) compare exactly. Text uses one `Intl.Collator`.
+
+⌘F (Ctrl+F) while the result grid has focus opens a find bar over the
+result. It is the editor's Find without replace: Match case, Match whole
+word, regular expression, a count, previous/next. A match is a whole
+cell, tested on its raw value (NULL never matches), and the matching
+cells are highlighted with the editor's `--search-match` tokens. Enter
+and Shift+Enter, or ⌘G and ⇧⌘G, move to the next or previous match. The
+search runs row by row in the shown order and wraps at the ends. A move
+selects the match's row and scrolls the cell into view. Find covers the
+loaded rows only ("… in loaded rows" while more are available), and
+counting stops at 1,000. Escape closes the bar and focuses the grid. The
+query lives on the result (`RowsResult.find`, in memory), so it survives
+tab switches. Closing keeps it.
+
 ### Export
 
 The grid footer has an **Export** button that opens a popover: a format
@@ -726,7 +764,8 @@ The grid footer has an **Export** button that opens a popover: a format
 semicolon or tab), and **Copy** and **Save**. The choice is app-wide and
 in memory (`AppState.export`), so the popover opens as it was left.
 
-Which rows go out is decided at the click. An `open` result loads the rest
+Which rows go out is decided at the click, in the order the grid shows
+them (a sorted result goes out sorted). An `open` result loads the rest
 first, page by page with `fetchMore` (the footer shows the progress, Cancel
 stops it). If the cursor ends `done` or `capped` the rows are exported; if
 it ends `closed` (a cancel, an error, a disconnect), or another statement
@@ -781,8 +820,8 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⌘J / Ctrl+J | Hides or shows the results pane |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
-| ⌘F / Ctrl+F | Opens Find (and replace) in the editor |
-| ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match |
+| ⌘F / Ctrl+F | Opens Find: in the editor (with replace), or in the result when its grid has focus |
+| ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match, in the editor or the result |
 | ⌥⌘G / Ctrl+Alt+G | Opens Go to Line |
 
 Tabs count left to right as the tab bar shows them (pinned first). A digit

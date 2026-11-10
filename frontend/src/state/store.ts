@@ -30,6 +30,29 @@ interface ResultBase {
   title?: string; // the user's name for the tab; none: it shows its statement
 }
 
+// A result's sort: one column, either way. None is the order the rows came in.
+export type SortDir = "asc" | "desc";
+export interface RowsSort {
+  column: number;
+  dir: SortDir;
+}
+
+// A cell by its position in the rows as shown.
+export interface CellPos {
+  row: number;
+  col: number;
+}
+
+// The find bar over a result's grid.
+export interface GridFind {
+  open: boolean;
+  search: string;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  regexp: boolean;
+  current: CellPos | null; // the match Next/Previous last moved to
+}
+
 // A statement's rows.
 export interface RowsResult extends ResultBase {
   kind: "rows";
@@ -41,6 +64,15 @@ export interface RowsResult extends ResultBase {
   // The row the details panel shows, by index; in memory only. A new run
   // makes new results, so it starts over.
   selectedRow: number | null;
+  // The sort, done in memory. rows is always the order the grid shows, so
+  // row numbers, ↑/↓, row details and export follow it. A sorted result's
+  // cursor is never open (it loads the rest first), so no page is ever
+  // appended to sorted rows. unsorted: the rows in the order they came,
+  // while sorted; a re-sort starts from it, so ties keep that order.
+  sort: RowsSort | null;
+  unsorted: Cell[][] | null;
+  // The find bar; null until it first opens. Closing keeps the query.
+  find: GridFind | null;
 }
 
 // One statement of a run: running until its reply comes, then what it
@@ -71,7 +103,7 @@ export interface Message {
 // An export in progress. rows is null until rows are moving: while the rest
 // of the result loads and while the save dialog is open.
 export interface ExportProgress {
-  action: "copy" | "save";
+  action: "copy" | "save" | "sort"; // sort: the rest loading before a sort; rows stays null
   rows: number | null;
   total: number;
 }
