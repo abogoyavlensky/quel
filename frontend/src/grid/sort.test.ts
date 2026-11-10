@@ -25,6 +25,12 @@ describe("compareCells", () => {
     expect(compareCells("NaN", "NaN", true)).toBe(0);
     expect(compareCells(5, "6", true)).toBeLessThan(0);
     expect(compareCells("-Infinity", "-1e300", true)).toBeLessThan(0);
+    // Equal as doubles, yet ordered.
+    expect(compareCells("Infinity", "1" + "0".repeat(400), true)).toBeGreaterThan(0);
+    expect(compareCells("-" + "1".repeat(400), "-Infinity", true)).toBeGreaterThan(0);
+    expect(compareCells("Infinity", "Infinity", true)).toBe(0);
+    expect(compareCells(9007199254740992, "9007199254740993", true)).toBeLessThan(0);
+    expect(compareCells("9007199254740993", 9007199254740992, true)).toBeGreaterThan(0);
   });
 
   it("keeps two NaN rows in arrival order either way", () => {

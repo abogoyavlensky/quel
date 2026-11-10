@@ -58,8 +58,29 @@ function compareNumbers(a: number | string, b: number | string): number {
   const ny = Number.isNaN(y);
   if (nx || ny) return nx === ny ? 0 : nx ? 1 : -1; // NaN above all, as in Postgres
   if (x !== y) return x < y ? -1 : 1;
-  if (typeof a === "string" && typeof b === "string") return compareDecimal(a, b);
-  return 0;
+  // Equal doubles. A written Infinity is past every finite value, even one
+  // too long for a double (Postgres numeric).
+  const ia = infinity(a);
+  const ib = infinity(b);
+  if (ia !== 0 || ib !== 0) return ia - ib;
+  const da = exact(a);
+  const db = exact(b);
+  return da !== null && db !== null ? compareDecimal(da, db) : 0;
+}
+
+// 1 for Infinity, -1 for -Infinity (as text or a number), 0 otherwise.
+function infinity(v: number | string): number {
+  if (typeof v === "number") return v === Infinity ? 1 : v === -Infinity ? -1 : 0;
+  return v === "Infinity" || v === "+Infinity" ? 1 : v === "-Infinity" ? -1 : 0;
+}
+
+// The value as exact decimal text: strings as they are, and integers as
+// String() writes them; null for a fractional double, whose shortest text
+// is not its exact value.
+function exact(v: number | string): string | null {
+  if (typeof v === "string") return v;
+  const s = String(v);
+  return Number.isInteger(v) && !s.includes("e") ? s : null;
 }
 
 // Ascending order of two cells of a column.
