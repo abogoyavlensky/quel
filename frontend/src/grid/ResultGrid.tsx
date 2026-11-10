@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import type { RowsResult } from "@/state/store";
-import { fetchMore, openRowDetails, selectRow } from "@/state/runner";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import { fetchMore, openRowDetails, selectRow, sortResult } from "@/state/runner";
 import { display, isNumericType } from "./format";
 import { initialWidths, numberWidth } from "./widths";
 
@@ -56,6 +57,15 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
   useEffect(() => {
     cols.measure();
   }, [widths, cols]);
+
+  // A new sort shows its first rows. Not on mount: a result tab switch
+  // remounts the grid, already at the top.
+  const shownSort = useRef(result.sort);
+  useEffect(() => {
+    if (shownSort.current === result.sort) return;
+    shownSort.current = result.sort;
+    if (scroller.current) scroller.current.scrollTop = 0;
+  }, [result.sort]);
 
   const items = rows.getVirtualItems();
   const lastIndex = items.at(-1)?.index ?? -1;
@@ -121,21 +131,38 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
             <div className="sticky left-0 z-10 h-full border-r bg-background" style={{ width: numW }} />
             {colItems.map((c) => {
               const col = result.columns[c.index];
+              const dir = result.sort?.column === c.index ? result.sort.dir : null;
               return (
                 <div
                   key={c.key}
                   role="columnheader"
-                  title={`${col.name} ${col.type}`}
+                  aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"}
+                  title={`${col.name} ${col.type} — click to sort`}
+                  onClick={() => void sortResult(tabId, result.id, c.index)}
                   className={cn(
-                    "absolute top-0 flex h-full flex-col justify-center border-r px-2.5",
+                    "absolute top-0 flex h-full cursor-pointer flex-col justify-center border-r px-2.5 select-none hover:bg-muted/40",
                     numeric[c.index] && "items-end text-right",
                   )}
                   style={{ left: numW + c.start, width: c.size }}
                 >
-                  <span className="w-full truncate font-sans text-[14.5px] font-medium text-foreground">{col.name}</span>
+                  <span
+                    className={cn(
+                      "flex w-full min-w-0 items-center gap-1 font-sans text-[14.5px] font-medium text-foreground",
+                      numeric[c.index] && "flex-row-reverse",
+                    )}
+                  >
+                    <span className="min-w-0 truncate">{col.name}</span>
+                    {dir === "asc" ? (
+                      <ArrowUp aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                    ) : dir === "desc" ? (
+                      <ArrowDown aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                    ) : null}
+                  </span>
                   <span className="w-full truncate text-[12.5px] text-muted-foreground">{col.type.toLowerCase()}</span>
                   <div
                     aria-hidden
+                    // A resize ends in a click here; it must not sort.
+                    onClick={(e) => e.stopPropagation()}
                     onPointerDown={(e) => startResize(c.index, e)}
                     className="absolute top-0 -right-1 z-10 h-full w-2 cursor-col-resize hover:bg-ring/40"
                   />
