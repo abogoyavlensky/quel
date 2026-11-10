@@ -30,6 +30,29 @@ interface ResultBase {
   title?: string; // the user's name for the tab; none: it shows its statement
 }
 
+// A result's sort: one column, either way. None is the order the rows came in.
+export type SortDir = "asc" | "desc";
+export interface RowsSort {
+  column: number;
+  dir: SortDir;
+}
+
+// A cell by its position in the rows as shown.
+export interface CellPos {
+  row: number;
+  col: number;
+}
+
+// The find bar over a result's grid.
+export interface GridFind {
+  open: boolean;
+  search: string;
+  caseSensitive: boolean;
+  wholeWord: boolean;
+  regexp: boolean;
+  current: CellPos | null; // the match Next/Previous last moved to
+}
+
 // A statement's rows.
 export interface RowsResult extends ResultBase {
   kind: "rows";
