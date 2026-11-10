@@ -30,12 +30,14 @@ export function GridFind({
   onStep: (dir: 1 | -1) => void;
   onClose: () => void;
 }) {
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // On the whole bar, so the keys still work after a click on a toggle or
+  // an arrow. Enter only in the field: on a button it presses it.
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const key = e.key.toLowerCase();
-    if (e.key === "Enter" && !modKey(e)) onStep(e.shiftKey ? -1 : 1);
+    if (e.key === "Enter" && !modKey(e) && e.target === fieldRef.current) onStep(e.shiftKey ? -1 : 1);
     else if (e.key === "Escape") onClose();
     else if (modKey(e) && key === "g") onStep(e.shiftKey ? -1 : 1);
-    else if (modKey(e) && !e.shiftKey && key === "f") e.currentTarget.select();
+    else if (modKey(e) && !e.shiftKey && key === "f") fieldRef.current?.select();
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -58,6 +60,7 @@ export function GridFind({
     <div
       role="search"
       aria-label="Find in result"
+      onKeyDown={onKeyDown}
       className="flex shrink-0 items-center gap-1 border-b bg-background px-2 py-1.5"
     >
       <InputGroup className="h-7 w-72">
@@ -69,7 +72,6 @@ export function GridFind({
           className={fieldClass}
           value={find.search}
           onChange={(e) => onChange({ search: e.target.value })}
-          onKeyDown={onKeyDown}
         />
         <InputGroupAddon align="inline-end" className="gap-0.5">
           {option(find.caseSensitive, "Match case", <CaseSensitive />, { caseSensitive: !find.caseSensitive })}

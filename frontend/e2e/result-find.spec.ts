@@ -39,6 +39,11 @@ test("⌘F in the grid finds cells, steps between them and closes with Escape", 
   await expect(count(page)).toHaveText("11 of 11");
   await expect(selected(page)).toContainText("customer 29");
 
+  // The keys work from the bar's buttons too.
+  await page.getByRole("button", { name: "Match case" }).click();
+  // A toggle forgets the current match: ⌘G starts at the selected row.
+  await page.keyboard.press("ControlOrMeta+g");
+  await expect(count(page)).toHaveText("11 of 11");
   await page.keyboard.press("Escape");
   await expect(field(page)).toHaveCount(0);
   await expect(grid(page)).toBeFocused();
