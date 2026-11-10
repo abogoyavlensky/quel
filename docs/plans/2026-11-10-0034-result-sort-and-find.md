@@ -1,5 +1,7 @@
 # Result Sort and Find Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Sort a result by any column with a header click, and find text in a result with ⌘F (Ctrl+F) while its grid has focus.
@@ -280,7 +282,7 @@ replace in results, and a Command Palette entry for result find.
 - Create: `frontend/src/grid/sort.ts`
 - Test: `frontend/src/grid/sort.test.ts`
 
-- [ ] **Step 1: Write the failing tests** for:
+- [x] **Step 1: Write the failing tests** for:
   - Kind rank: `[null, "b", 2, true]` ascending in a non-numeric column
     gives `true, 2, "b", null`.
   - NULL is last ascending and first descending.
@@ -296,14 +298,14 @@ replace in results, and a Command Palette entry for result find.
     and descending. It returns a new array and leaves the input as it is.
   - `nextSort`: `null` → asc on column 2; asc 2 → desc 2; desc 2 → null;
     desc 2 + click on column 0 → asc 0.
-- [ ] **Step 2: Run them and see them fail.**
+- [x] **Step 2: Run them and see them fail.**
   Run: `npm --prefix frontend test -- src/grid/sort.test.ts`
   Expected: FAIL (module missing)
-- [ ] **Step 3: Implement `grid/sort.ts`** as in the Design (signatures
+- [x] **Step 3: Implement `grid/sort.ts`** as in the Design (signatures
   and the Number-then-decimal comparison above). Keep one module-level
   `Intl.Collator`.
-- [ ] **Step 4: Run the tests.** Same command. Expected: PASS
-- [ ] **Step 5: Commit** — `git commit -m "Add result cell comparison and stable row sort"`
+- [x] **Step 4: Run the tests.** Same command. Expected: PASS
+- [x] **Step 5: Commit** — `git commit -m "Add result cell comparison and stable row sort"`
 
 ### Task 2: Sort state, the shared load lock, `sortResult`
 
@@ -311,7 +313,7 @@ replace in results, and a Command Palette entry for result find.
 - Modify: `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts` (plus fixtures in `store.test.ts`, `status.test.ts`)
 
-- [ ] **Step 1: Types.** Add `SortDir`, `RowsSort`, `CellPos` and
+- [x] **Step 1: Types.** Add `SortDir`, `RowsSort`, `CellPos` and
   `GridFind` to `store.ts`. Add `sort`, `unsorted` and `find` to
   `RowsResult`, with the invariants from the Design as comments. Add
   `"sort"` to `ExportProgress.action`. At the creation site in
@@ -320,7 +322,7 @@ replace in results, and a Command Palette entry for result find.
   --prefix frontend run build`) and add the three fields wherever a test
   fixture builds a `RowsResult` (`grep -n 'kind: "rows"'
   frontend/src/state/*.test.ts`).
-- [ ] **Step 2: Extract the lock.** Move the lock setup and teardown from
+- [x] **Step 2: Extract the lock.** Move the lock setup and teardown from
   `exportResult` (`setExporting`, the `AbortController` in
   `exportCancels`, the `finally` cleanup) into a private
   `withLoadLock(tabId, action, f: (signal) => Promise<void>)`.
@@ -328,7 +330,7 @@ replace in results, and a Command Palette entry for result find.
   tests; they must pass unchanged.
   Run: `npm --prefix frontend test -- src/state/runner.test.ts`
   Expected: PASS
-- [ ] **Step 3: Write the failing `sortResult` tests** (a new
+- [x] **Step 3: Write the failing `sortResult` tests** (a new
   `describe("sortResult")`, using the `fetchPage` mocks the `loadAll`
   tests use):
   - `done` result: a click sorts ascending at once. The second click sorts
@@ -344,8 +346,8 @@ replace in results, and a Command Palette entry for result find.
     "Sort stopped…" toast shows. A click after that sorts the loaded rows.
   - A click while `tab.exporting` is set does nothing.
   - `capped` result: sorts what it holds.
-- [ ] **Step 4: Run them and see them fail.** Same command. Expected: FAIL
-- [ ] **Step 5: Implement `sortResult(tabId, resultId, column, maxRows =
+- [x] **Step 4: Run them and see them fail.** Same command. Expected: FAIL
+- [x] **Step 5: Implement `sortResult(tabId, resultId, column, maxRows =
   MAX_ROWS)`** next to `exportResult`. It works out `nextSort` from the
   current sort at the click. When the result is `open`, it runs `loadAll`
   under `withLoadLock(tabId, "sort", …)` and shows the outcome toasts. It
@@ -354,8 +356,10 @@ replace in results, and a Command Palette entry for result find.
   isNumericType(r.columns[column].type))` or `base` when `next` is null,
   `unsorted` is set when sorted, `selectedRow` is remapped by identity,
   and `find.current` is set to null.
-- [ ] **Step 6: Run the tests.** Same command. Expected: PASS
-- [ ] **Step 7: Commit** — `git commit -m "Sort results in the app, loading the rest first"`
+- [x] **Step 6: Run the tests.** Same command. Expected: PASS
+- [x] **Step 7: Commit** — `git commit -m "Sort results in the app, loading the rest first"`
+
+> Deviation: the shared types (`RowsSort`, `CellPos`, `GridFind`) went into `store.ts` in Task 1, because `grid/sort.ts` imports them. Task 5's setters and tests landed here, because the `sortResult` test that clears `find.current` needs them.
 
 ### Task 3: Sortable headers
 
@@ -363,12 +367,12 @@ replace in results, and a Command Palette entry for result find.
 - Modify: `frontend/src/grid/ResultGrid.tsx`
 - Create: `frontend/e2e/result-sort.spec.ts`
 
-- [ ] **Step 1: Header click and indicator.** Add an `onClick` on the
+- [x] **Step 1: Header click and indicator.** Add an `onClick` on the
   `columnheader`, `aria-sort`, `cursor-pointer`, the title, and the
   `ArrowUp`/`ArrowDown` icon on the sorted column. Stop clicks from
   bubbling out of the resize handle. Add the scroll-to-top effect on
   `result.sort` change, with braces, skipped on mount.
-- [ ] **Step 2: Write the e2e spec** on fixture table `t` (2,000 rows,
+- [x] **Step 2: Write the e2e spec** on fixture table `t` (2,000 rows,
   500-row pages, so the first page leaves the cursor `open`). Follow
   `e2e/results.spec.ts` for setup (`connectFixture`, `insertText`, and
   `ControlOrMeta+Enter`).
@@ -380,10 +384,10 @@ replace in results, and a Command Palette entry for result find.
   - A drag on the resize handle does not change `aria-sort`.
   - Copy as CSV after a descending sort (as `export.spec.ts` does)
     starts with `id,name\r\n2000,` (export follows the shown order).
-- [ ] **Step 3: Build and run the spec.**
+- [x] **Step 3: Build and run the spec.**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh result-sort`
   Expected: PASS
-- [ ] **Step 4: Commit** — `git commit -m "Sort a result by a header click"`
+- [x] **Step 4: Commit** — `git commit -m "Sort a result by a header click"`
 
 ### Task 4: Find logic
 
@@ -392,7 +396,7 @@ replace in results, and a Command Palette entry for result find.
 - Test: `frontend/src/grid/find.test.ts`
 - Modify: `frontend/src/editor/searchCount.ts` (the `countLabel` parameter type only)
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `cellMatcher`: an empty search gives `test: null, valid: true`; the
     regexp `"("` gives `valid: false, test: null`. A literal `"a.b"` does
     not match `"axb"`. Case-insensitive by default, and Match case
@@ -406,15 +410,15 @@ replace in results, and a Command Palette entry for result find.
     ends. From `null`, forward finds the first match. It returns `null`
     when nothing matches. From a position that is a match, it moves on to
     the next one.
-- [ ] **Step 2: Run them and see them fail.**
+- [x] **Step 2: Run them and see them fail.**
   Run: `npm --prefix frontend test -- src/grid/find.test.ts`
   Expected: FAIL
-- [ ] **Step 3: Implement `grid/find.ts`.** Widen `countLabel`'s
+- [x] **Step 3: Implement `grid/find.ts`.** Widen `countLabel`'s
   parameter to `{ valid: boolean; search: string }`.
-- [ ] **Step 4: Run them, and the editor's count tests.**
+- [x] **Step 4: Run them, and the editor's count tests.**
   Run: `npm --prefix frontend test -- src/grid/find.test.ts src/editor/searchCount.test.ts`
   Expected: PASS
-- [ ] **Step 5: Commit** — `git commit -m "Add find-in-result matching and navigation"`
+- [x] **Step 5: Commit** — `git commit -m "Add find-in-result matching and navigation"`
 
 ### Task 5: Find state setters
 
@@ -422,7 +426,7 @@ replace in results, and a Command Palette entry for result find.
 - Modify: `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write the failing tests** for:
+- [x] **Step 1: Write the failing tests** for:
   - `openFind(tabId, resultId)`: creates `find` with defaults, or sets
     `open: true` and keeps the old query.
   - `setFind(tabId, resultId, patch)`: merges the patch. A change to
@@ -430,12 +434,14 @@ replace in results, and a Command Palette entry for result find.
     `current` keeps it.
   - `closeFind(tabId, resultId)`: sets `open: false` and keeps the query.
   - A result that is gone is left alone.
-- [ ] **Step 2: Run them and see them fail.**
+- [x] **Step 2: Run them and see them fail.**
   Run: `npm --prefix frontend test -- src/state/runner.test.ts`
   Expected: FAIL
-- [ ] **Step 3: Implement** them next to `selectRow`, through `updateRows`.
-- [ ] **Step 4: Run the tests.** Same command. Expected: PASS
-- [ ] **Step 5: Commit** — `git commit -m "Keep find-in-result state on the result"`
+- [x] **Step 3: Implement** them next to `selectRow`, through `updateRows`.
+- [x] **Step 4: Run the tests.** Same command. Expected: PASS
+- [x] **Step 5: Commit** — `git commit -m "Keep find-in-result state on the result"`
+
+> Deviation: done in Task 2 (see there); no separate commit.
 
 ### Task 6: The find bar in the grid
 
@@ -444,7 +450,7 @@ replace in results, and a Command Palette entry for result find.
 - Modify: `frontend/src/grid/ResultGrid.tsx`
 - Create: `frontend/e2e/result-find.spec.ts`
 
-- [ ] **Step 1: `GridFind`.** Props: `find: GridFind`, `count: string`
+- [x] **Step 1: `GridFind`.** Props: `find: GridFind`, `count: string`
   (the label), `invalid: boolean`, `fieldRef`, `onChange(patch)`,
   `onStep(dir)`, `onClose()`. Lay it out as the editor's `FindPanel` find
   row (copy its classes: `h-7 w-72` field, `font-editor text-xs`, toggles
@@ -453,7 +459,7 @@ replace in results, and a Command Palette entry for result find.
   handles Enter, Shift+Enter, Mod+G, Shift+Mod+G, Mod+F (select the text)
   and Escape. Mod means Meta on macOS and Ctrl elsewhere (`isMac` from
   `components/keys.ts`). Each handled key calls `preventDefault`.
-- [ ] **Step 2: Wire it into `ResultGrid`.**
+- [x] **Step 2: Wire it into `ResultGrid`.**
   - Render `GridFind` above the scroller when `result.find?.open`.
   - Matching: take `useDeferredValue` of `result.find`, build
     `cellMatcher` with `useMemo`, then count with `countCellMatches(rows,
@@ -477,7 +483,7 @@ replace in results, and a Command Palette entry for result find.
     closes it while open.
   - Closing from the field or the × focuses the scroller
     (`[data-result-grid]`).
-- [ ] **Step 3: Write the e2e spec** on table `t`:
+- [x] **Step 3: Write the e2e spec** on table `t`:
   - `select id, name from t where id <= 30 order by id;` → focus the grid
     (click a cell) → `ControlOrMeta+f` → the field "Find in result" is
     focused. Type `customer 2` → the count reads `11 matches` (2, 20–29).
@@ -491,39 +497,83 @@ replace in results, and a Command Palette entry for result find.
     `exact: true`), not the result's.
   - Horizontal scrolling to a match is checked by hand in Task 8: the
     fixture has no wide table.
-- [ ] **Step 4: Run the spec.**
+- [x] **Step 4: Run the spec.**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`
   Expected: PASS (all specs, including `search.spec.ts` for the editor)
-- [ ] **Step 5: Commit** — `git commit -m "Find in a result with ⌘F"`
+- [x] **Step 5: Commit** — `git commit -m "Find in a result with ⌘F"`
+
+> Deviation: `modKey` lives in `components/keys.ts` (shared by the grid and the bar). The bar's key handler sits on the whole bar, not the field (Codex finding), so Escape and ⌘G work after a click on its buttons. The "loaded rows" spec ends by sorting, which loads the rest and closes the cursor: an open cursor locked the SQLite fixture for later specs (`SQLITE_BUSY` in run-policy and structure).
 
 ### Task 7: Docs
 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1:** After "### Row details" (~line 692), add "### Sort and
+- [x] **Step 1:** After "### Row details" (~line 692), add "### Sort and
   find in results". Cover the in-app sort over all rows (loading first,
   Cancel, the 100,000 cap), the click cycle, the NULL and kind order, that
   row numbers, row details and ↑/↓ follow the shown order, the shared
   export/sort lock, and find: whole-cell matches over loaded rows, the
   1,000 cap, wrap-around navigation, and state kept on the result.
-- [ ] **Step 2:** In "### Export", say rows go out in the order the grid
+- [x] **Step 2:** In "### Export", say rows go out in the order the grid
   shows. In the keys table (~line 784), change the ⌘F row to "Opens Find:
   in the editor, or in the result when its grid has focus". Change the
   ⌘G row to say it works in both.
-- [ ] **Step 3: Commit** — `git commit -m "Document result sort and find"`
+- [x] **Step 3: Commit** — `git commit -m "Document result sort and find"`
 
 ### Task 8: Verify
 
-- [ ] **Step 1:** `npm --prefix frontend test`. Expected: all pass.
-- [ ] **Step 2:** `npm --prefix frontend run lint` and `npm --prefix
+- [x] **Step 1:** `npm --prefix frontend test`. Expected: all pass.
+- [x] **Step 2:** `npm --prefix frontend run lint` and `npm --prefix
   frontend run build` (tsc). Expected: no errors.
-- [ ] **Step 3:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected:
+- [x] **Step 3:** `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`. Expected:
   all pass.
-- [ ] **Step 4: Manual check in `lgx run`** (server mode on Linux):
+- [x] **Step 4: Manual check in `lgx run`** (server mode on Linux):
   - Sort a wide result by a column far to the right.
   - Find a value in that column: the grid scrolls sideways, and the match
     is not hidden under the number column.
   - Sort while the row details panel is open: it keeps showing the same
     row.
   - Resize a column, and check that it does not sort.
+
+## Summary
+
+Implemented as designed on branch `result-sort-and-find`:
+
+- **Sort:** a header click sorts in the app (`grid/sort.ts`, `sortResult`
+  in `state/runner.ts`). An open result loads the rest first, under the
+  lock that Export uses (now `withLoadLock`). The rows are reordered in the
+  store and `unsorted` keeps the arrival order. The header shows an arrow
+  and `aria-sort`.
+- **Find:** ⌘F in the grid opens `grid/GridFind.tsx`. Matching and stepping
+  are in `grid/find.ts`, and the state is on `RowsResult.find`. Matching
+  cells are highlighted, the view scrolls on both axes to a match, and the
+  count reads "in loaded rows" while more rows are available.
+- **Docs:** `DESIGN.md` has a new "Sort and find in results" section, an
+  Export note, and an updated keys table.
+
+**Verification:** 616 unit tests pass. The full e2e suite passes (61
+passed, 1 skipped, the same skip as on master). An ad-hoc e2e check on a
+32-column result confirmed sideways scrolling to a match and that row
+details follow a sort; the spec was then removed.
+
+**Issues hit:**
+- Codex flagged equal-double ties: `Infinity` vs a 401-digit numeric, and
+  a number vs integer text. Fixed with explicit infinity and exact-integer
+  tie-breaks.
+- Codex flagged that the find keys stopped working after a click on the
+  bar's buttons. Fixed.
+- An open cursor left by a spec locked the fixture for later specs.
+  Fixed in the spec.
+
+**Deviations:**
+- The shared types landed in Task 1.
+- The find setters and their tests landed in Task 2.
+- `modKey` moved to `components/keys.ts`.
+- The bar-level key handler replaced the field-level one.
+- The find spec now closes its cursor.
+
+**What the plan could have specified better:** the rule that an e2e spec
+must not leave a cursor open on the SQLite fixture (it locks the file for
+later specs), and the equal-double cases the comparator has to cover
+(Infinity, mixed number and string).
