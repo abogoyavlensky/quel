@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
 import type { RowsResult } from "@/state/store";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { fetchMore, openRowDetails, selectRow, sortResult } from "@/state/runner";
+import { modKey } from "@/components/keys";
+import { countLabel } from "@/editor/searchCount";
+import type { CellPos } from "@/state/store";
+import { closeFind, fetchMore, openFind, openRowDetails, selectRow, setFind, sortResult } from "@/state/runner";
 import { display, isNumericType } from "./format";
+import { cellMatcher, countCellMatches, stepMatch } from "./find";
+import { GridFind } from "./GridFind";
 import { initialWidths, numberWidth } from "./widths";
 
 // A result as a grid: rows and columns both virtualized, so a 100,000-row
@@ -91,7 +96,83 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
     el.addEventListener("pointerup", up);
   };
 
+  const numW = numberWidth(result.rows.length, result.cursor === "open");
+
+  // Rows have a fixed height and sit under the sticky header, which the
+  // virtualizer's scrollToIndex does not know about: scroll by hand.
+  const scrollRowIntoView = (el: HTMLElement, index: number) => {
+    const top = HEAD_H + index * ROW_H;
+    if (top < el.scrollTop + HEAD_H) el.scrollTop = top - HEAD_H;
+    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
+  };
+  // Columns likewise, clear of the sticky row numbers.
+  const scrollColIntoView = (el: HTMLElement, index: number) => {
+    let left = numW;
+    for (let i = 0; i < index; i++) left += widths[i];
+    const right = left + widths[index];
+    if (left - numW < el.scrollLeft) el.scrollLeft = left - numW;
+    else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = Math.min(left - numW, right - el.clientWidth);
+  };
+
+  // Find: counted and highlighted from a deferred query, so typing stays
+  // quick on a large result; the steps use the query as it is.
+  const find = result.find;
+  const shownFind = useDeferredValue(find);
+  const matcher = useMemo(() => (shownFind ? cellMatcher(shownFind) : null), [shownFind]);
+  const highlight = shownFind?.open ? (matcher?.test ?? null) : null;
+  const current = shownFind?.current ?? null;
+  const countText = useMemo(() => {
+    if (!shownFind?.open || !matcher) return "";
+    const count = highlight ? countCellMatches(result.rows, highlight, current) : { total: 0, current: null, capped: false };
+    const label = countLabel({ valid: matcher.valid, search: shownFind.search }, count);
+    return label && result.cursor === "open" ? `${label} in loaded rows` : label;
+  }, [shownFind, matcher, highlight, current, result.rows, result.cursor]);
+  const findField = useRef<HTMLInputElement>(null);
+  // ⌘F asked for the field: selected once the bar is drawn.
+  const [focusAsk, setFocusAsk] = useState(0);
+  useEffect(() => {
+    if (focusAsk > 0) findField.current?.select();
+  }, [focusAsk]);
+
+  const step = (dir: 1 | -1) => {
+    if (!find?.open) return;
+    const test = cellMatcher(find).test;
+    if (!test) return;
+    const sel = result.selectedRow ?? 0;
+    const from: CellPos = find.current ?? { row: sel, col: dir === 1 ? -1 : result.columns.length };
+    const to = stepMatch(result.rows, from, dir, test);
+    if (!to) return;
+    selectRow(tabId, result.id, to.row);
+    setFind(tabId, result.id, { current: to });
+    const el = scroller.current;
+    if (el) {
+      scrollRowIntoView(el, to.row);
+      scrollColIntoView(el, to.col);
+    }
+  };
+  const close = () => {
+    closeFind(tabId, result.id);
+    scroller.current?.focus();
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const key = e.key.toLowerCase();
+    if (modKey(e) && !e.shiftKey && key === "f") {
+      e.preventDefault();
+      openFind(tabId, result.id);
+      setFocusAsk((n) => n + 1);
+      return;
+    }
+    if (find?.open && modKey(e) && key === "g") {
+      e.preventDefault();
+      step(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if (find?.open && e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      close();
+      return;
+    }
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
@@ -100,20 +181,25 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
     if (last < 0 || (cur === null && e.key === "ArrowUp")) return;
     const next = cur === null ? 0 : Math.max(0, Math.min(last, cur + (e.key === "ArrowDown" ? 1 : -1)));
     selectRow(tabId, result.id, next);
-    // Rows have a fixed height and sit under the sticky header, which the
-    // virtualizer's scrollToIndex does not know about: scroll by hand.
-    const el = e.currentTarget;
-    const top = HEAD_H + next * ROW_H;
-    if (top < el.scrollTop + HEAD_H) el.scrollTop = top - HEAD_H;
-    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
+    scrollRowIntoView(e.currentTarget, next);
   };
 
   const colItems = cols.getVirtualItems();
-  const numW = numberWidth(result.rows.length, result.cursor === "open");
   const width = numW + cols.getTotalSize();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {find?.open ? (
+        <GridFind
+          find={find}
+          count={countText}
+          invalid={matcher ? !matcher.valid : false}
+          fieldRef={findField}
+          onChange={(patch) => setFind(tabId, result.id, patch)}
+          onStep={step}
+          onClose={close}
+        />
+      ) : null}
       <div
         ref={scroller}
         role="grid"
@@ -215,6 +301,8 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
                 {colItems.map((c) => {
                   const cell = row[c.index];
                   const { text, kind } = display(cell);
+                  const isCurrent = current !== null && current.row === r.index && current.col === c.index;
+                  const match = highlight !== null && (isCurrent || highlight(cell));
                   return (
                     <div
                       key={c.key}
@@ -225,6 +313,7 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
                         (kind === "number" || numeric[c.index]) && "text-right tabular-nums",
                         kind === "null" && "text-muted-foreground/70 italic",
                         kind === "bool" && "text-muted-foreground",
+                        match && (isCurrent ? "bg-(--search-match-current)" : "bg-(--search-match)"),
                       )}
                       style={{ left: numW + c.start, width: c.size }}
                     >

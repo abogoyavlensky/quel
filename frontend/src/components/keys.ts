@@ -1,5 +1,9 @@
 // Shortcut labels as the platform writes them.
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+
+// The app's modifier held (⌘ on macOS, Ctrl elsewhere), without Alt; Shift may be.
+export const modKey = (e: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey">) =>
+  (isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey;
 export const RUN_KEY = isMac ? "⌘↵" : "Ctrl+Enter";
 export const ROW_KEY = isMac ? "⌘I" : "Ctrl+I";
 export const SCRIPT_KEY = isMac ? "⇧⌘↵" : "Ctrl+Shift+Enter";
