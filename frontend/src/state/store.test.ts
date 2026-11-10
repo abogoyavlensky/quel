@@ -23,6 +23,9 @@ const result = (id: string): RowsResult => ({
   pinned: false,
   elapsedMs: 1,
   selectedRow: null,
+  sort: null,
+  unsorted: null,
+  find: null,
 });
 
 // Two workspaces, a and b, each with one tab holding an open result.

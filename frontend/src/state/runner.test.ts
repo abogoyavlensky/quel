@@ -1827,3 +1827,167 @@ describe("cancelConnect", () => {
     expect(api.cancelConnect).not.toHaveBeenCalled();
   });
 });
+
+describe("sortResult", () => {
+  // Rows [id, name]: ids 3, 1, 2, so a sort shows.
+  async function threeRows(hasMore = false) {
+    api.run.mockResolvedValue({
+      columns: [
+        { name: "id", type: "INT4" },
+        { name: "name", type: "TEXT" },
+      ],
+      rows: [
+        [3, "c"],
+        [1, "a"],
+        [2, "b"],
+      ],
+      "has-more": hasMore,
+      "update-count": null,
+      "elapsed-ms": 1,
+    });
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    return tab().results[0].id;
+  }
+  const ids = () => rowsAt(0).rows.map((r) => r[0]);
+
+  it("cycles ascending, descending and the order the rows came in", async () => {
+    const id = await threeRows();
+    await runner.sortResult(tabId(), id, 0);
+    expect(ids()).toEqual([1, 2, 3]);
+    expect(rowsAt(0).sort).toEqual({ column: 0, dir: "asc" });
+    await runner.sortResult(tabId(), id, 0);
+    expect(ids()).toEqual([3, 2, 1]);
+    await runner.sortResult(tabId(), id, 0);
+    expect(ids()).toEqual([3, 1, 2]);
+    expect(rowsAt(0).sort).toBeNull();
+    expect(rowsAt(0).unsorted).toBeNull();
+  });
+
+  it("keeps the selected row selected", async () => {
+    const id = await threeRows();
+    runner.selectRow(tabId(), id, 0); // id 3
+    await runner.sortResult(tabId(), id, 0);
+    expect(rowsAt(0).selectedRow).toBe(2);
+    await runner.sortResult(tabId(), id, 0);
+    expect(rowsAt(0).selectedRow).toBe(0);
+    await runner.sortResult(tabId(), id, 0);
+    expect(rowsAt(0).selectedRow).toBe(0);
+  });
+
+  it("clears the find bar's current match", async () => {
+    const id = await threeRows();
+    runner.openFind(tabId(), id);
+    runner.setFind(tabId(), id, { search: "a" });
+    runner.setFind(tabId(), id, { current: { row: 1, col: 1 } });
+    await runner.sortResult(tabId(), id, 1);
+    expect(rowsAt(0).find).toMatchObject({ open: true, search: "a", current: null });
+  });
+
+  it("loads the rest of an open result first, under the tab's lock", async () => {
+    api.run.mockResolvedValue(rowsResult(500, true));
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    const id = tab().results[0].id;
+    const p = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    const sorting = runner.sortResult(tabId(), id, 0);
+    expect(tab().exporting).toEqual({ action: "sort", rows: null, total: 0 });
+    p.resolve(page(200, false));
+    await sorting;
+    expect(tab().exporting).toBeNull();
+    expect(rowsAt(0).cursor).toBe("done");
+    expect(rowsAt(0).rows).toHaveLength(700);
+    expect(rowsAt(0).rows[0][0]).toBe(1);
+    await runner.sortResult(tabId(), id, 0);
+    expect(rowsAt(0).rows[0][0]).toBe(1199);
+  });
+
+  it("sorts nothing when the load is canceled, and says so", async () => {
+    const id = await threeRows(true);
+    const p = deferred<FetchResult>();
+    api.fetchPage.mockReturnValueOnce(p.promise);
+    const sorting = runner.sortResult(tabId(), id, 0);
+    runner.cancelExport(tabId());
+    p.resolve(page(500, true));
+    await sorting;
+    expect(rowsAt(0).cursor).toBe("open");
+    expect(rowsAt(0).sort).toBeNull();
+    expect(toasts.info).toHaveBeenCalledWith("Sort canceled.");
+    expect(tab().exporting).toBeNull();
+  });
+
+  it("sorts nothing when the rest cannot be loaded, then sorts what it holds", async () => {
+    const id = await threeRows(true);
+    api.fetchPage.mockRejectedValueOnce(new Error("boom"));
+    await runner.sortResult(tabId(), id, 0);
+    expect(rowsAt(0).cursor).toBe("closed");
+    expect(rowsAt(0).sort).toBeNull();
+    expect(toasts.error).toHaveBeenCalledWith("Sort stopped: not all rows could be loaded.");
+    await runner.sortResult(tabId(), id, 0);
+    expect(ids()).toEqual([1, 2, 3]);
+  });
+
+  it("does nothing while the tab exports", async () => {
+    const id = await threeRows();
+    updateTab(tabId(), (t) => ({ ...t, exporting: { action: "copy", rows: null, total: 0 } }));
+    await runner.sortResult(tabId(), id, 0);
+    expect(ids()).toEqual([3, 1, 2]);
+  });
+
+  it("sorts a capped result as it is", async () => {
+    const id = await threeRows();
+    updateTab(tabId(), (t) => ({
+      ...t,
+      results: t.results.map((r) => (r.kind === "rows" ? { ...r, cursor: "capped" } : r)),
+    }));
+    await runner.sortResult(tabId(), id, 1);
+    expect(ids()).toEqual([1, 2, 3]);
+    expect(api.fetchPage).not.toHaveBeenCalled();
+  });
+});
+
+describe("find state", () => {
+  async function result() {
+    api.run.mockResolvedValue(rowsResult(3, false));
+    await runner.runStatements(tabId(), stmts("select * from t"));
+    return tab().results[0].id;
+  }
+
+  it("opens with an empty query, and again with the old one", async () => {
+    const id = await result();
+    expect(rowsAt(0).find).toBeNull();
+    runner.openFind(tabId(), id);
+    expect(rowsAt(0).find).toEqual({
+      open: true,
+      search: "",
+      caseSensitive: false,
+      wholeWord: false,
+      regexp: false,
+      current: null,
+    });
+    runner.setFind(tabId(), id, { search: "x", regexp: true });
+    runner.closeFind(tabId(), id);
+    expect(rowsAt(0).find).toMatchObject({ open: false, search: "x", regexp: true });
+    runner.openFind(tabId(), id);
+    expect(rowsAt(0).find).toMatchObject({ open: true, search: "x", regexp: true });
+  });
+
+  it("forgets the current match when the query or a toggle changes", async () => {
+    const id = await result();
+    runner.openFind(tabId(), id);
+    runner.setFind(tabId(), id, { current: { row: 1, col: 0 } });
+    expect(rowsAt(0).find?.current).toEqual({ row: 1, col: 0 });
+    runner.setFind(tabId(), id, { caseSensitive: true });
+    expect(rowsAt(0).find?.current).toBeNull();
+    runner.setFind(tabId(), id, { current: { row: 2, col: 0 } });
+    runner.setFind(tabId(), id, { search: "2" });
+    expect(rowsAt(0).find?.current).toBeNull();
+  });
+
+  it("leaves a result that is gone alone", async () => {
+    await result();
+    runner.openFind(tabId(), "nope");
+    runner.setFind(tabId(), "nope", { search: "x" });
+    runner.closeFind(tabId(), "nope");
+    expect(rowsAt(0).find).toBeNull();
+  });
+});

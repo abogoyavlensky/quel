@@ -13,6 +13,9 @@ const result = (fetching: boolean): ResultTab => ({
   pinned: false,
   elapsedMs: 1,
   selectedRow: null,
+  sort: null,
+  unsorted: null,
+  find: null,
 });
 
 const tab = (patch: Partial<EditorTab> = {}): EditorTab => ({ ...newWorkspace("p").tabs[0], ...patch });
