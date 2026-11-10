@@ -61,6 +61,12 @@ test("an open result says the count covers the loaded rows", async ({ page }) =>
   await page.keyboard.press("ControlOrMeta+f");
   await field(page).fill("customer 1999");
   await expect(count(page)).toHaveText("No results in loaded rows");
+
+  // A sort loads the rest, which also closes the cursor: an open one would
+  // lock the fixture for later specs. Every row is loaded, and found.
+  await page.getByRole("columnheader", { name: /^id/ }).click();
+  await expect(page.getByRole("group", { name: "Result footer" })).toContainText("2,000 rows");
+  await expect(count(page)).toHaveText("1 match");
 });
 
 test("⌘F in the editor still opens the editor's Find", async ({ page }) => {
