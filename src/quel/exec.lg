@@ -180,12 +180,13 @@
 (defn- run-rows
   "Run a row-returning statement and read its first page. Returns
    {:result <the reply> :rows <the cursor, when it has more> :types [...]};
-   a cursor without more rows is closed here."
-  [session ctx q page-size]
+   a cursor without more rows is closed here. :types are the column type
+   names as `cells/type-names` gives them for engine."
+  [engine session ctx q page-size]
   (let [rows (shim/QueryCtx session ctx q [])]
     (try
       (let [names (vec (.Columns rows))
-            types (vec (shim/ColumnTypeNames rows))
+            types (cells/type-names engine (shim/ColumnTypeNames rows))
             page (read-page rows types page-size false)]
         (when-not (:has-more page) (.Close rows))
         {:result {:columns (mapv (fn [n t] {:name n :type t}) names types)
@@ -404,7 +405,7 @@
         (let [session (conn/session! conns conn-id session-id ctx)
               t0 (System/nanoTime)
               {:keys [result rows types]} (if (rows? sql)
-                                            (run-rows session ctx sql page-size)
+                                            (run-rows engine session ctx sql page-size)
                                             {:result (run-exec session ctx sql)})]
           (when rows
             (if (open-cursor! execs query-id ctx rows types)

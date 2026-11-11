@@ -62,3 +62,12 @@
 
 (deftest typed-rows-line-up-with-their-types
   (is (= [1 "\\x78" nil] (cells/encode-row ["INT4" "BYTEA" "TEXT"] [1 "x" nil]))))
+
+;; pgx reports a type outside its type map as its OID.
+(deftest type-names-name-redshift-super
+  (is (= ["INT4" "SUPER" "TEXT"] (cells/type-names :redshift ["INT4" "4000" "TEXT"])))
+  (is (= ["4000"] (cells/type-names :postgres ["4000"])))
+  (is (= ["4000"] (cells/type-names :sqlite ["4000"])))
+  (is (= ["3000"] (cells/type-names :redshift ["3000"])))
+  (is (= [] (cells/type-names :redshift [])))
+  (is (vector? (cells/type-names :redshift (list "4000")))))
