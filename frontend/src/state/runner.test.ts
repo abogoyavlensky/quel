@@ -1991,3 +1991,43 @@ describe("find state", () => {
     expect(rowsAt(0).find).toBeNull();
   });
 });
+
+describe("moveResult", () => {
+  async function three() {
+    api.run.mockResolvedValue(rowsResult(1, false));
+    await runner.runStatements(tabId(), stmts("select 1; select 2; select 3"));
+    return tab().results.map((r) => r.id);
+  }
+
+  it("moves a result to an index, and leaves the shown one alone", async () => {
+    const [a, b, c] = await three();
+    runner.selectResult(tabId(), b);
+    runner.moveResult(tabId(), c, 0);
+    expect(tab().results.map((r) => r.id)).toEqual([c, a, b]);
+    expect(tab().active).toBe(b);
+  });
+
+  it("clamps an index past the end", async () => {
+    const [a, b, c] = await three();
+    runner.moveResult(tabId(), a, 99);
+    expect(tab().results.map((r) => r.id)).toEqual([b, c, a]);
+  });
+
+  it("changes nothing for the same index or a result that is gone", async () => {
+    const [, b] = await three();
+    const before = tab();
+    runner.moveResult(tabId(), b, 1);
+    runner.moveResult(tabId(), "gone", 0);
+    expect(tab()).toBe(before);
+  });
+
+  it("keeps the new order of kept results across a run", async () => {
+    const [a, b, c] = await three();
+    for (const id of [a, b, c]) runner.pin(tabId(), id);
+    runner.moveResult(tabId(), c, 0);
+    await runner.runStatements(tabId(), stmts("select 4"));
+    const ids = tab().results.map((r) => r.id);
+    expect(ids.slice(0, 3)).toEqual([c, a, b]);
+    expect(ids).toHaveLength(4);
+  });
+});

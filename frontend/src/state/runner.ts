@@ -6,6 +6,7 @@ import { copyText } from "@/lib/clipboard";
 import { type Lost, lostOf } from "@/lib/lost";
 import { notify } from "@/lib/notify";
 import { metaKeys, queryClient } from "@/lib/query";
+import { moveItem } from "@/lib/reorder";
 import { saveChunks } from "@/lib/save";
 import type { SavedWorkspace } from "@/lib/types";
 import { currentInput, dropState, seed } from "@/editor/states";
@@ -786,6 +787,19 @@ async function exportRows(
 
 export function pin(tabId: string, resultId: string): void {
   updateResult(tabId, resultId, (r) => ({ ...r, pinned: !r.pinned }));
+}
+
+// Move a result tab to toIndex (clamped) in the strip, leaving the shown
+// one as it is. Results live in memory only, so nothing is saved. Any
+// result can move; the strip only lets kept ones be dragged, and a run
+// keeps those in their order. Nothing changes when it is already there or
+// gone.
+export function moveResult(tabId: string, resultId: string, toIndex: number): void {
+  const results = findTab(tabId)?.results;
+  const from = results?.findIndex((r) => r.id === resultId) ?? -1;
+  if (!results || from < 0) return;
+  if (Math.max(0, Math.min(results.length - 1, toIndex)) === from) return;
+  updateTab(tabId, (t) => ({ ...t, results: moveItem(t.results, from, toIndex) }));
 }
 
 // Name a result tab; a blank name gives it back its statement. Results
