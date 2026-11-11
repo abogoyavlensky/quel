@@ -1,7 +1,7 @@
 import { focusEditor } from "@/editor/states";
-import { selectTab } from "@/state/runner";
+import { selectResult, selectTab } from "@/state/runner";
 import { showResults, toggleResults, toggleSidebar } from "./layout";
-import { store, selectedWorkspace, showsResult, type AppState } from "@/state/store";
+import { MESSAGES, activeTabOf, store, selectedWorkspace, showsResult, type AppState } from "@/state/store";
 
 // The two palettes (components/CommandPalette.tsx, GoToConnection.tsx) and
 // the keys that reach the editor and the tabs from anywhere.
@@ -91,4 +91,35 @@ export function focusTabKey(n: number): void {
   if (!tab) return;
   selectTab(tab.id);
   setTimeout(focusEditor);
+}
+
+// ⌘PageUp / ⌘PageDown: the previous or next tab, wrapping. While focus is
+// in the results pane (AppShell marks it), the current tab's result tabs,
+// Messages first; anywhere else, the editor tabs. Focus follows on the
+// next tick, so the next press cycles the same strip: the editor, or the
+// new result's grid, or (Messages, a result with no rows) its tab button.
+// Hidden results have no pane in the page, so the keys cycle editor tabs.
+export function cycleTabsKey(dir: -1 | 1): void {
+  const w = loadedWorkspace();
+  if (!w) return;
+  const inResults = document.activeElement?.closest?.("[data-quel-results]");
+  const tab = activeTabOf(w);
+  const ids = inResults ? [MESSAGES, ...tab.results.map((r) => r.id)] : w.tabs.map((t) => t.id);
+  if (ids.length < 2) return;
+  const i = ids.indexOf(inResults ? tab.active : tab.id);
+  const next = ids[(i + dir + ids.length) % ids.length];
+  if (!inResults) {
+    selectTab(next);
+    setTimeout(focusEditor);
+    return;
+  }
+  selectResult(tab.id, next);
+  setTimeout(() => {
+    const grid = document.querySelector<HTMLElement>("[data-result-grid]");
+    const button = grid
+      ? null
+      : document.querySelector<HTMLElement>('[data-quel-results] [role="tab"][aria-selected="true"]');
+    button?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    (grid ?? button)?.focus();
+  });
 }
