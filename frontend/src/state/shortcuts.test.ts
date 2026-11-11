@@ -71,4 +71,16 @@ describe("shortcutOf", () => {
     expect(shortcutOf(ev("0", { ...cmd, code: "Digit0" }), true)).toBeNull();
     expect(shortcutOf(ev("k", cmd), true)).toBeNull();
   });
+
+  it("cycles tabs on ⌘PageUp and ⌘PageDown, and on Ctrl off macOS", () => {
+    expect(shortcutOf(ev("PageUp", cmd), true)).toEqual({ kind: "cycle", dir: -1 });
+    expect(shortcutOf(ev("PageDown", cmd), true)).toEqual({ kind: "cycle", dir: 1 });
+    expect(shortcutOf(ev("PageUp", ctrl), false)).toEqual({ kind: "cycle", dir: -1 });
+    expect(shortcutOf(ev("PageDown", ctrl), false)).toEqual({ kind: "cycle", dir: 1 });
+    expect(shortcutOf(ev("PageDown", ctrl), true)).toBeNull();
+    expect(shortcutOf(ev("PageDown", { ...cmd, shiftKey: true }), true)).toBeNull();
+    expect(shortcutOf(ev("PageUp", { ...ctrl, altKey: true }), false)).toBeNull();
+    expect(shortcutOf(ev("PageUp"), true)).toBeNull();
+    expect(shortcutOf(ev("PageDown"), false)).toBeNull();
+  });
 });

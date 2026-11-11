@@ -3,13 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const focusEditor = vi.hoisted(() => vi.fn());
 vi.mock("@/editor/states", () => ({ focusEditor }));
 const selectTab = vi.hoisted(() => vi.fn());
-vi.mock("@/state/runner", () => ({ selectTab }));
+const selectResult = vi.hoisted(() => vi.fn());
+vi.mock("@/state/runner", () => ({ selectTab, selectResult }));
 const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn(), toggleResults: vi.fn(), showResults: vi.fn() }));
 vi.mock("./layout", () => layout);
 const { toggleSidebar, toggleResults, showResults } = layout;
 
 import {
   closePalette,
+  cycleTabsKey,
   focusEditorKey,
   focusResultKey,
   focusTabKey,
@@ -36,6 +38,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   focusEditor.mockReset();
   selectTab.mockReset();
+  selectResult.mockReset();
   toggleSidebar.mockReset();
   toggleResults.mockReset();
   showResults.mockReset().mockImplementation(() => store.setState({ resultsHidden: false }));
@@ -233,6 +236,102 @@ describe("focusTabKey", () => {
     seed(2);
     store.setState({ palette: "connections" });
     focusTabKey(1);
+    vi.runAllTimers();
+    expect(selectTab).not.toHaveBeenCalled();
+    expect(focusEditor).not.toHaveBeenCalled();
+  });
+});
+
+describe("cycleTabsKey", () => {
+  // Focus outside the results: no element, or one not inside the pane.
+  const outside = () => vi.stubGlobal("document", { activeElement: { closest: () => null } });
+  // Focus inside the results pane; the page has a grid or not, and a
+  // selected result tab button.
+  function inside(hasGrid: boolean) {
+    const grid = { focus: vi.fn() };
+    const tabButton = { focus: vi.fn(), scrollIntoView: vi.fn() };
+    vi.stubGlobal("document", {
+      activeElement: { closest: (sel: string) => (sel === "[data-quel-results]" ? {} : null) },
+      querySelector: (sel: string) => (sel === "[data-result-grid]" ? (hasGrid ? grid : null) : tabButton),
+    });
+    return { grid, tabButton };
+  }
+  // The current tab with results r1 and r2, showing `active`.
+  function withResults(active: string, ids = ["r1", "r2"]) {
+    seed();
+    store.setState((s) => {
+      const w = s.workspaces.p;
+      const results = ids.map((id) => ({ id, kind: "rows" }) as (typeof w.tabs)[0]["results"][number]);
+      return { workspaces: { p: { ...w, tabs: [{ ...w.tabs[0], results, active }] } } };
+    });
+    return store.getState().workspaces.p.tabs[0].id;
+  }
+
+  it("cycles the editor tabs, wrapping, and focuses the editor on the next tick", () => {
+    const ids = seed(3);
+    cycleTabsKey(1);
+    expect(selectTab).toHaveBeenLastCalledWith(ids[1]);
+    outside();
+    cycleTabsKey(-1);
+    expect(selectTab).toHaveBeenLastCalledWith(ids[2]);
+    expect(focusEditor).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(focusEditor).toHaveBeenCalledTimes(2);
+    expect(selectResult).not.toHaveBeenCalled();
+  });
+
+  it("cycles the result tabs, Messages first, while focus is in the results", () => {
+    const tabId = withResults("r1");
+    inside(true);
+    cycleTabsKey(1);
+    expect(selectResult).toHaveBeenLastCalledWith(tabId, "r2");
+    cycleTabsKey(-1);
+    expect(selectResult).toHaveBeenLastCalledWith(tabId, MESSAGES);
+    const tabId2 = withResults("r2");
+    cycleTabsKey(1);
+    expect(selectResult).toHaveBeenLastCalledWith(tabId2, MESSAGES);
+    expect(selectTab).not.toHaveBeenCalled();
+  });
+
+  it("focuses the new result's grid on the next tick", () => {
+    withResults("r1");
+    const { grid, tabButton } = inside(true);
+    cycleTabsKey(1);
+    expect(grid.focus).not.toHaveBeenCalled();
+    vi.runAllTimers();
+    expect(grid.focus).toHaveBeenCalledOnce();
+    expect(tabButton.focus).not.toHaveBeenCalled();
+    expect(focusEditor).not.toHaveBeenCalled();
+  });
+
+  it("focuses the selected tab button, scrolled into view, when there is no grid", () => {
+    withResults("r1");
+    const { tabButton } = inside(false);
+    cycleTabsKey(-1);
+    vi.runAllTimers();
+    expect(tabButton.focus).toHaveBeenCalledOnce();
+    expect(tabButton.scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+  });
+
+  it("does nothing with one editor tab, or no results", () => {
+    seed(1);
+    cycleTabsKey(1);
+    withResults(MESSAGES, []);
+    inside(true);
+    cycleTabsKey(1);
+    vi.runAllTimers();
+    expect(selectTab).not.toHaveBeenCalled();
+    expect(selectResult).not.toHaveBeenCalled();
+    expect(focusEditor).not.toHaveBeenCalled();
+  });
+
+  it("does nothing with no workspace, a load error, or a palette open", () => {
+    cycleTabsKey(1);
+    seed(2, { loadError: "boom" });
+    cycleTabsKey(1);
+    seed(2);
+    store.setState({ palette: "commands" });
+    cycleTabsKey(1);
     vi.runAllTimers();
     expect(selectTab).not.toHaveBeenCalled();
     expect(focusEditor).not.toHaveBeenCalled();

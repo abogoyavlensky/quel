@@ -17,6 +17,7 @@ import { NameInput } from "./NameInput";
 import { ResultFooter } from "./ResultFooter";
 import { ResultOutcome } from "./ResultOutcome";
 import { RUN_KEY } from "./keys";
+import { useResultTabDrag } from "./useResultTabDrag";
 
 // A result tab is named by its statement, as far as it fits.
 function label(sql: string): string {
@@ -91,7 +92,9 @@ function NotConnected({ banner }: { banner: boolean }) {
 // instead of the run hint, and a refused run puts a banner above the
 // results. The footer under them says what a run is doing, or the shown
 // result's rows and time. Double-click a result tab to name it; right-click
-// for Rename, Keep and Close. A blank name gives back the statement.
+// for Rename, Keep and Close. A blank name gives back the statement. A kept
+// tab drags to a new place in the strip (useResultTabDrag); other tabs and
+// Messages do not move.
 export function ResultTabs({ tab }: { tab: EditorTab }) {
   const [editing, setEditing] = useState<string | null>(null);
   // Rename chosen in a tab's menu: the input appears once the menu has
@@ -101,6 +104,7 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
   const empty = tab.results.length === 0 && tab.messages.length === 0;
   const w = useApp(selectedWorkspace);
   const offline = w?.status === "disconnected" || w?.status === "connecting";
+  const { dragging, stripProps } = useResultTabDrag(tab.id);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -108,7 +112,11 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
       <div
         role="tablist"
         aria-label="Results"
-        className="flex h-[46px] shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2.5"
+        {...stripProps}
+        className={cn(
+          "flex h-[46px] shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2.5",
+          dragging && "cursor-grabbing **:cursor-grabbing",
+        )}
       >
         <TabButton selected={tab.active === MESSAGES} onSelect={() => selectResult(tab.id, MESSAGES)}>
           <MessageSquare className="size-4" />
@@ -122,6 +130,10 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
                 onSelect={() => selectResult(tab.id, r.id)}
                 onDoubleClick={(e) => !(e.target as HTMLElement).closest("button") && setEditing(r.id)}
                 title={r.sql}
+                data-result-id={r.id}
+                data-kept={r.pinned ? "" : undefined}
+                data-dragging={dragging === r.id ? "" : undefined}
+                className="data-dragging:ring-1 data-dragging:ring-ring"
               >
                 {editing === r.id ? (
                   <NameInput
