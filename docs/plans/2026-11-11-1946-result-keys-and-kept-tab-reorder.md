@@ -1,5 +1,7 @@
 # Result Keys and Kept-Tab Reorder Implementation Plan
 
+**Status: completed** (2026-11-11, branch `result-keys-and-tab-reorder`)
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Enter on a selected result row opens the row details panel; ⌘PageUp / ⌘PageDown (Ctrl elsewhere) cycle the result tabs or the editor tabs, whichever area has focus; a kept result tab can be dragged to a new place in the result tab strip.
@@ -189,7 +191,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
 - Modify: `frontend/src/grid/ResultGrid.tsx`
 - Test: `frontend/e2e/row-details.spec.ts`
 
-- [ ] **Step 1: Implement**
+- [x] **Step 1: Implement**
   In `onKeyDown`, after `if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;`
   and before the arrow-key check: on `e.key === "Enter"` with
   `result.selectedRow !== null`, `preventDefault()`, call
@@ -197,7 +199,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   fall through and do nothing. Update the file's header comment (the one
   that says what a click and a double-click do) to mention Enter.
 
-- [ ] **Step 2: Extend the UI test**
+- [x] **Step 2: Extend the UI test**
   In `row-details.spec.ts` add a test: run the three-row query, click
   row 2, press Enter → the panel shows "Row 2 of 3" and the grid is still
   focused; press ArrowDown → "Row 3 of 3"; press Enter again → the panel
@@ -205,11 +207,11 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   no selected row, grid focused through `ControlOrMeta+r`, Enter → the
   panel stays closed.
 
-- [ ] **Step 3: Run**
+- [x] **Step 3: Run**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh e2e/row-details.spec.ts`
   Expected: PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   `git commit -m "Open row details with Enter on a selected row"`
 
 ### Task 2: The cycle shortcut
@@ -218,28 +220,30 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
 - Modify: `frontend/src/state/shortcuts.ts`
 - Test: `frontend/src/state/shortcuts.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
   `⌘PageUp` → `{ kind: "cycle", dir: -1 }`, `⌘PageDown` →
   `{ kind: "cycle", dir: 1 }`, with `cmd` on macOS and `ctrl` elsewhere;
   `null` with Shift, with Alt, without the modifier, and for Ctrl on
   macOS.
 
-- [ ] **Step 2: Run to see them fail**
+- [x] **Step 2: Run to see them fail**
   Run: `npm --prefix frontend test -- shortcuts`
   Expected: the new cases FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
   Add the kind to the `Shortcut` union and match it after the
   `if (e.shiftKey) return null;` line, on the unlowered `e.key`
   (`"PageUp"` / `"PageDown"`). Update the two comments in the file that
   list the keys.
 
-- [ ] **Step 4: Run**
+- [x] **Step 4: Run**
   Run: `npm --prefix frontend test -- shortcuts`
   Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   `git commit -m "Match ⌘PageUp and ⌘PageDown as a tab cycle shortcut"`
+
+> Deviation: `App.tsx`'s final `else focusTabKey(k.n)` no longer type-checks once the union has `cycle`, so this commit narrows it to `else if (k.kind === "tab")`; Task 3 adds the `cycle` branch before it.
 
 ### Task 3: Cycle tabs by the focused area
 
@@ -247,7 +251,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
 - Modify: `frontend/src/state/palette.ts`, `frontend/src/App.tsx`
 - Test: `frontend/src/state/palette.test.ts`, `frontend/e2e/result-tabs.spec.ts` (new)
 
-- [ ] **Step 1: Write failing unit tests**
+- [x] **Step 1: Write failing unit tests**
   In `palette.test.ts` (it stubs `document` as a plain object and mocks
   `@/state/runner`; add `selectResult` to that mock). Cases for
   `cycleTabsKey`:
@@ -266,11 +270,11 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   - one editor tab, or a tab with no results: no select call.
   - nothing with no workspace, a load error, or a palette open.
 
-- [ ] **Step 2: Run to see them fail**
+- [x] **Step 2: Run to see them fail**
   Run: `npm --prefix frontend test -- palette`
   Expected: the new cases FAIL
 
-- [ ] **Step 3: Implement `cycleTabsKey`**
+- [x] **Step 3: Implement `cycleTabsKey`**
   In `palette.ts`, next to `focusTabKey`, as the Design section says:
   `loadedWorkspace()` guard; area from
   `document.activeElement?.closest?.("[data-quel-results]")`; ids are
@@ -282,16 +286,16 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   `setTimeout`, as described. Import `selectResult` from
   `@/state/runner`.
 
-- [ ] **Step 4: Route the key**
+- [x] **Step 4: Route the key**
   In `App.tsx` `useGlobalKeys`, add `else if (k.kind === "cycle")
   cycleTabsKey(k.dir);` before the final `else` (which stays the `tab`
   case). Extend the comment above the hook with the new keys.
 
-- [ ] **Step 5: Run unit tests**
+- [x] **Step 5: Run unit tests**
   Run: `npm --prefix frontend test -- palette`
   Expected: PASS
 
-- [ ] **Step 6: Write the UI test**
+- [x] **Step 6: Write the UI test**
   New `frontend/e2e/result-tabs.spec.ts`, following `results.spec.ts`
   (its header comment, `db`, `editor`, `grid` helpers; `connectFixture`).
   A helper runs a three-statement script with
@@ -307,12 +311,14 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
     `ControlOrMeta+PageUp` → the first editor tab is selected and the
     editor is focused; `ControlOrMeta+PageDown` → the second.
 
-- [ ] **Step 7: Run**
+- [x] **Step 7: Run**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh e2e/result-tabs.spec.ts`
   Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
   `git commit -m "Cycle result or editor tabs with ⌘PageUp and ⌘PageDown"`
+
+> Deviation: the app has no ⌘T, so the UI test adds the second editor tab with the "New tab" button (as `row-details.spec.ts` does).
 
 ### Task 4: Reorder helpers and `moveResult`
 
@@ -321,7 +327,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
 - Modify: `frontend/src/state/runner.ts`
 - Test: `frontend/src/state/runner.test.ts`
 
-- [ ] **Step 1: Write failing tests for the helpers**
+- [x] **Step 1: Write failing tests for the helpers**
   `moveItem`: forward, backward, same index (returns an equal list),
   `to` clamped to the list's ends, the input not mutated.
   `dragTarget` with spans of unequal widths, e.g.
@@ -332,17 +338,17 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   - stability: after moving index 0 to 1 the spans are
     `[{0,100}, {104,144}, {148,188}]`; from 1 with x = 95 → 1.
 
-- [ ] **Step 2: Run to see them fail**
+- [x] **Step 2: Run to see them fail**
   Run: `npm --prefix frontend test -- reorder`
   Expected: FAIL (no module)
 
-- [ ] **Step 3: Implement `lib/reorder.ts`**
+- [x] **Step 3: Implement `lib/reorder.ts`**
   `dragTarget`: start at `from`; while the next span's centre is less
   than `x`, step right; if no step right was taken, while the previous
   span's centre is greater than `x`, step left. Comment the midpoint rule
   and why it does not flicker.
 
-- [ ] **Step 4: Write failing tests for `moveResult`**
+- [x] **Step 4: Write failing tests for `moveResult`**
   In `runner.test.ts`, with a tab holding three results (reuse the
   file's helpers for a script run): moving the third to index 0 gives the
   order third, first, second and leaves `active` alone; an index past the
@@ -351,16 +357,16 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   reorder, run again → the kept ones keep the new order ahead of the new
   result.
 
-- [ ] **Step 5: Implement `moveResult`**
+- [x] **Step 5: Implement `moveResult`**
   Next to `pin` in `runner.ts`, with `updateTab` and `moveItem`. Return
   the tab unchanged when nothing moves. Comment: results live in memory
   only, so nothing is saved; the strip only lets kept tabs be dragged.
 
-- [ ] **Step 6: Run**
+- [x] **Step 6: Run**
   Run: `npm --prefix frontend test -- reorder runner`
   Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   `git commit -m "Add moveResult and the drag reorder helpers"`
 
 ### Task 5: Drag kept result tabs
@@ -370,7 +376,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
 - Modify: `frontend/src/components/ResultTabs.tsx`
 - Test: `frontend/e2e/result-tabs.spec.ts`
 
-- [ ] **Step 1: Implement the hook**
+- [x] **Step 1: Implement the hook**
   `useResultTabDrag(tabId)` as the Design section describes. Details that
   must hold:
   - `onPointerDown`: ignore unless `e.button === 0`, no `ctrlKey`, the
@@ -402,7 +408,7 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
     a `pointermove` that cannot find the dragged id in the strip ends the
     drag the same way. Effects use braces (AGENTS.md).
 
-- [ ] **Step 2: Wire the strip**
+- [x] **Step 2: Wire the strip**
   In `ResultTabs.tsx`: call the hook with `tab.id`; spread `stripProps`
   on the `role="tablist"` div and add `cursor-grabbing` to it while
   `dragging` is set. On each result's `TabButton` add
@@ -412,12 +418,12 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   file uses). Messages gets none of these. Extend the component's header
   comment: a kept tab drags to a new place; others do not.
 
-- [ ] **Step 3: Check by hand that the old gestures still work**
+- [x] **Step 3: Check by hand that the old gestures still work**
   Covered by existing specs; run them:
   `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh e2e/query-loop.spec.ts`
   Expected: PASS (rename by double-click, the context menu, keep, close)
 
-- [ ] **Step 4: Write the UI test**
+- [x] **Step 4: Write the UI test**
   In `result-tabs.spec.ts`, test "a kept result tab drags to a new
   place; others stay": run the three-statement script; keep all three
   (hover each tab, click its `Keep result` button). Read the order as the
@@ -433,19 +439,21 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
   - Run `select 4 as d;` → the two kept tabs keep their order, followed
     by the new result.
 
-- [ ] **Step 5: Run**
+- [x] **Step 5: Run**
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server bash scripts/e2e.sh e2e/result-tabs.spec.ts`
   Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git commit -m "Drag kept result tabs to reorder them"`
+
+> Deviation: while dragging, the strip gets `cursor-grabbing **:cursor-grabbing`, not only `cursor-grabbing`, because the tabs' own `cursor-default` would otherwise hide the grab cursor.
 
 ### Task 6: Docs and the full check
 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Update DESIGN.md**
+- [x] **Step 1: Update DESIGN.md**
   - *Row details*: Enter on a selected row opens the panel, like the
     double-click (only opens).
   - *Results and pinning*: a kept tab drags to a new place in the strip;
@@ -459,11 +467,52 @@ Work on a branch (`result-keys-and-tab-reorder`), not on `master`.
     for itself).
   Use /writing-clearly.
 
-- [ ] **Step 2: Run everything**
+- [x] **Step 2: Run everything**
   Run: `npm --prefix frontend run lint && npm --prefix frontend test && npm --prefix frontend run build`
   Expected: no lint errors, all tests PASS, the build succeeds
   Run: `CGO_ENABLED=0 GOFLAGS=-tags=server lgx e2e`
   Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   `git commit -m "Document Enter, the tab cycle keys and kept-tab reorder"`
+
+---
+
+## Completion summary
+
+**Implemented:**
+- Enter on a selected row opens the row details panel (only opens).
+- ⌘PageUp / ⌘PageDown (Ctrl elsewhere) cycle the result tabs while focus
+  is in the results, else the editor tabs, wrapping; focus follows.
+- A kept result tab drags to a new place in the strip, with Escape to put
+  it back.
+- DESIGN.md covers all three.
+
+**Verification:** lint clean, 634 unit tests, the build, `lgx test`, and
+the full `lgx e2e` (64 tests, including the new `result-tabs.spec.ts` and
+the Enter test in `row-details.spec.ts`) pass. The e2e specs drive the
+built app in Chromium the way a user does.
+
+**Issues:**
+- `go` was not on PATH in the session shell, though mise has it installed,
+  so the e2e runs used `~/.local/share/mise/installs/go/1.27/bin`.
+- The session had no task-list tool, so this document was the only
+  progress tracker.
+- Codex review of Task 2 flagged that `cycle` was not routed yet; Task 3
+  routes it. Codex review of Task 5 noted that edge scroll stops when the
+  pointer holds still near an edge (the plan's "per `pointermove`"). It was
+  left as designed and put in the backlog.
+
+**Deviations:**
+- Task 2: `App.tsx`'s final `else` was narrowed to `k.kind === "tab"` so
+  the commit type-checks; Task 3 adds the `cycle` branch.
+- Task 3: the UI test uses the "New tab" button, since the app has no ⌘T.
+- Task 4: `moveResult` returns before `updateTab` when nothing moves, so the
+  workspace object is untouched too.
+- Task 5: the strip gets `cursor-grabbing **:cursor-grabbing` while
+  dragging, since the tabs' own `cursor-default` hides a parent cursor.
+
+**What the plan could have specified better:** check that the keys and
+helpers it names exist (⌘T) and that adding a union member does not break
+an exhaustive `else` in an earlier task's commit. It could also have said
+whether edge scroll should continue while the pointer holds still.

@@ -381,6 +381,13 @@ the change from running to what the statement came to. Renaming does not
 keep a result: a named tab that is not kept is replaced by the next run like
 any other.
 
+A kept tab can be dragged to a new place in the strip. It moves among the
+result tabs, between unkept ones too (keeping a result does not move it),
+and the tabs reorder in place as the pointer passes a neighbour's middle;
+Escape puts it back. Unkept tabs and Messages cannot be picked up, and a
+drag never changes which result is shown. The order lives in memory, and
+a run keeps the kept tabs in it.
+
 A run's first statement takes focus, from a pinned tab too. A later one
 takes it only from the statement before it, so a user who picked another
 tab mid-script stays there, until an error or a cancel takes focus. Every
@@ -699,8 +706,9 @@ runs, and a new run's results start without one.
 The row details panel shows the selected row of the active result, one
 read-only block per column, and follows the selection, the result tab,
 the editor tab and the profile. It opens and closes with the tab bar's
-button, `⌘I` (`Ctrl+I`), or a double-click on a row, which only opens.
-A single click never opens it. `⌘I` is caught on `window` in the capture
+button, `⌘I` (`Ctrl+I`), a double-click on a row, or Enter while the grid
+has focus and a row is selected. The last two only open. A single click
+never opens it. `⌘I` is caught on `window` in the capture
 phase rather than made a native menu item: CodeMirror binds `Mod-i`
 itself, and a toggle cannot take the double delivery (menu plus page)
 that Run tolerates. The panel's open state is app-wide and in memory.
@@ -820,6 +828,7 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⌘J / Ctrl+J | Hides or shows the results pane |
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
+| ⌘PageUp, ⌘PageDown / Ctrl+PageUp, Ctrl+PageDown | Selects the previous or next tab, wrapping: the result tabs (Messages first) while focus is in the results, else the editor tabs. Focus follows: the editor, or the result's grid, or the result tab itself when it has no grid |
 | ⌘F / Ctrl+F | Opens Find: in the editor (with replace), or in the result when its grid has focus |
 | ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match, in the editor or the result |
 | ⌥⌘G / Ctrl+Alt+G | Opens Go to Line |
@@ -851,16 +860,20 @@ by `e.code`, because Shift or the layout changes `e.key`. It catches ⌘P
 before the webview prints, and ⌘R before a browser reloads (server mode).
 None of the keys collide with CodeMirror's keymaps (its only `b` binding
 is the macOS emacs-style `Ctrl-b`). Only the palettes also have native
-View menu items; nine "Tab N" items would be clutter, ⌘B and ⌘J are
-toggles that cannot take a double delivery (as ⌘I), and server mode has no
-native menu. If the menu
+View menu items; nine "Tab N" items would be clutter, ⌘PageUp and
+⌘PageDown act on the focused area, which a menu or palette would take
+focus from, ⌘B and ⌘J are toggles that cannot take a double delivery (as
+⌘I), and server mode has no native menu. In server mode in a real
+Chromium on Linux or Windows, the browser keeps Ctrl+PageUp and
+Ctrl+PageDown for its own tabs and the page never sees them; the app
+window and Playwright get them. If the menu
 and the page both see a key, the palette opens twice, which is harmless:
 opening sets the state, it does not toggle it.
 
 **Dialog guards.** At most one palette is open (`store.palette`); opening
 the other switches to it. A palette does not open over the profile or
-update dialog, and ⌘E, ⌘R, ⌘B, ⌘J and ⌘1–9 do nothing while any dialog or palette is
-open: in those, the keys belong to the dialog. Picking an entry closes the
+update dialog, and ⌘E, ⌘R, ⌘B, ⌘J, ⌘1–9, ⌘PageUp and ⌘PageDown do nothing while any
+dialog or palette is open: in those, the keys belong to the dialog. Picking an entry closes the
 palette first and runs the action on the next tick, so actions that open
 the profile dialog are not refused.
 
