@@ -60,3 +60,62 @@ test("⌘PageUp and ⌘PageDown cycle the focused area's tabs", async ({ page })
   await expect(editorTabs(page).nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(editor(page)).toBeFocused();
 });
+
+// The result tabs' statements, in strip order, after Messages.
+const order = (page: Page) =>
+  page
+    .getByRole("tablist", { name: "Results" })
+    .locator("[data-result-id]")
+    .evaluateAll((els) => els.map((el) => el.getAttribute("title")));
+const centre = async (page: Page, n: number) => {
+  const b = (await resultTabs(page).nth(n).boundingBox())!;
+  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+};
+
+test("a kept result tab drags to a new place; others stay", async ({ page }) => {
+  await connectFixture(page, db);
+  await runThree(page);
+  for (let n = 1; n <= 3; n++) {
+    await resultTabs(page).nth(n).hover();
+    await resultTabs(page).nth(n).getByRole("button", { name: "Keep result" }).click();
+  }
+  await expect(page.getByRole("button", { name: "Keep result", pressed: true })).toHaveCount(3);
+  await resultTabs(page).nth(2).click();
+  expect(await order(page)).toEqual(["select 1 as a", "select 2 as b", "select 3 as c"]);
+
+  // The third onto the first's left quarter; the selected tab stays.
+  const from = await centre(page, 3);
+  const first = (await resultTabs(page).nth(1).boundingBox())!;
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(first.x + first.width / 4, from.y, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(() => order(page)).toEqual(["select 3 as c", "select 1 as a", "select 2 as b"]);
+  await expect(page.getByRole("tab", { name: "select 2 as b" })).toHaveAttribute("aria-selected", "true");
+
+  // Escape mid-drag puts it back.
+  const a = await centre(page, 2);
+  const b = (await resultTabs(page).nth(3).boundingBox())!;
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  await page.mouse.move(b.x + (b.width * 3) / 4, a.y, { steps: 8 });
+  await expect.poll(() => order(page)).toEqual(["select 3 as c", "select 2 as b", "select 1 as a"]);
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect.poll(() => order(page)).toEqual(["select 3 as c", "select 1 as a", "select 2 as b"]);
+
+  // A tab that is not kept does not move.
+  await resultTabs(page).nth(3).getByRole("button", { name: "Keep result" }).click();
+  await expect(page.getByRole("button", { name: "Keep result", pressed: true })).toHaveCount(2);
+  const last = await centre(page, 3);
+  const front = (await resultTabs(page).nth(1).boundingBox())!;
+  await page.mouse.move(last.x, last.y);
+  await page.mouse.down();
+  await page.mouse.move(front.x + 2, last.y, { steps: 8 });
+  await page.mouse.up();
+  expect(await order(page)).toEqual(["select 3 as c", "select 1 as a", "select 2 as b"]);
+
+  // A run keeps the kept tabs in their order, then the new result.
+  await runScript(page, "select 4 as d;");
+  await expect.poll(() => order(page)).toEqual(["select 3 as c", "select 1 as a", "select 4 as d"]);
+});
