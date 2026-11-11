@@ -1186,6 +1186,9 @@ settles them; update this section when it does.
   promise with its message. Checked in server mode with headless Chromium.
   The Vite dev server is not used; see [Dev loop](#dev-loop).
 - Column types: `sql.shim/ColumnTypeNames` returns them as strings.
+  pgx reports a type it cannot name as its OID; `quel.cells/type-names`
+  gives Redshift's `SUPER` (OID 4000) its name. Other unnamed types are
+  in `docs/backlog/pg-unnamed-types-show-oid.md`.
 - Cancelling a context stops a running SQLite query promptly (modernc
   calls `sqlite3_interrupt`; the error is `context canceled`), and a
   cancel can arrive before the first row. The session stays usable.

@@ -58,12 +58,24 @@
    "TIMESTAMP" "2006-01-02T15:04:05.999999"
    "TIMESTAMPTZ" "2006-01-02T15:04:05.999999Z07:00"})
 
+;; pgx names only the types in its type map and reports any other as its
+;; OID. These are the ones worth a name.
+(def ^:private oid-names
+  {:redshift {"4000" "SUPER"}})
+
+(defn type-names
+  "The driver's column type names as the grid shows them: an OID pgx has
+   no name for becomes its type's name, anything else stays as it is."
+  [engine names]
+  (let [known (get oid-names engine)]
+    (mapv #(get known % %) names)))
+
 (defn- go-time? [v]
   (= "go.time.Time" (str (type v))))
 
 (defn encode
   "One driver value as a bridge-safe cell, given its column's type name
-   (as sql.shim/ColumnTypeNames reports it; nil when unknown)."
+   (as `type-names` returns it; nil when unknown)."
   ([v] (encode nil v))
   ([type-name v]
    (cond
