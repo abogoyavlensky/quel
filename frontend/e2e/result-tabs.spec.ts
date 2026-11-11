@@ -44,6 +44,9 @@ test("⌘PageUp and ⌘PageDown cycle the focused area's tabs", async ({ page })
   await expect(resultTabs(page).nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(grid(page)).toBeFocused();
   await page.keyboard.press("ControlOrMeta+PageUp");
+  // Messages has no grid, so focus drops to the page until its tab takes
+  // it; a second press before that is read as an editor-area press.
+  await expect(resultTabs(page).first()).toBeFocused();
   await page.keyboard.press("ControlOrMeta+PageUp");
   await expect(resultTabs(page).nth(3)).toHaveAttribute("aria-selected", "true");
   await expect(grid(page)).toBeFocused();
