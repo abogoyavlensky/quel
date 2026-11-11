@@ -17,9 +17,9 @@ import { initialWidths, numberWidth } from "./widths";
 // positioned divs rather than a <table>: the header sticks to the top, the
 // row numbers to the left. Scrolling near the end loads the next page.
 // A click selects a row (the result keeps it, for the row details panel),
-// ↑/↓ move the selection while the grid has focus, and a double-click
-// also opens the panel. The rows and time are in the results footer
-// (components/ResultFooter.tsx).
+// ↑/↓ move the selection while the grid has focus, and a double-click or
+// Enter on the selected row also opens the panel (only opens: ⌘I closes).
+// The rows and time are in the results footer (components/ResultFooter.tsx).
 
 const ROW_H = 34;
 const HEAD_H = 48;
@@ -174,6 +174,13 @@ export function ResultGrid({ tabId, result }: { tabId: string; result: RowsResul
       return;
     }
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    // The find bar is not inside the scroller, so its Enter never gets here.
+    if (e.key === "Enter") {
+      if (result.selectedRow === null) return;
+      e.preventDefault();
+      openRowDetails();
+      return;
+    }
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
     const last = result.rows.length - 1;

@@ -85,3 +85,27 @@ test("shows, copies and filters the selected row's values", async ({ page, conte
   await page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab").first().click();
   await expect(details(page)).toContainText("Row 1 of 3");
 });
+
+test("Enter on the selected row opens the panel, and only opens it", async ({ page }) => {
+  await connectFixture(page, db);
+  await write(page, "select id, name from t where id <= 3 order by id;");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByRole("gridcell", { name: "customer 3", exact: true })).toBeVisible();
+
+  // No selected row: Enter does nothing.
+  await page.keyboard.press("ControlOrMeta+r");
+  await expect(grid(page)).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(details(page)).toHaveCount(0);
+
+  await row(page, 2).click();
+  await page.keyboard.press("Enter");
+  await expect(details(page)).toContainText("Row 2 of 3");
+  await expect(grid(page)).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(details(page)).toContainText("Row 3 of 3");
+  await page.keyboard.press("Enter");
+  await expect(details(page)).toContainText("Row 3 of 3");
+  await page.keyboard.press("ControlOrMeta+i");
+  await expect(details(page)).toHaveCount(0);
+});
