@@ -112,7 +112,7 @@ function useGlobalKeys() {
       else if (k.kind === "result") focusResultKey();
       else if (k.kind === "sidebar") toggleSidebarKey();
       else if (k.kind === "resultsPane") toggleResultsKey();
-      else focusTabKey(k.n);
+      else if (k.kind === "tab") focusTabKey(k.n);
     };
     window.addEventListener("keydown", onKey, true);
     return () => {
