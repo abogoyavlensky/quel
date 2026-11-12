@@ -28,7 +28,7 @@ export interface FetchResult {
   closed: boolean;
 }
 
-export type Engine = "sqlite" | "postgres" | "redshift";
+export type Engine = "sqlite" | "duckdb" | "postgres" | "redshift";
 
 export interface OpenResult {
   "conn-id": string;

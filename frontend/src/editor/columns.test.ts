@@ -101,6 +101,19 @@ describe("columnCompletionSource", () => {
     expect(labels(complete("select ▮ from Public.Customers", { explicit: true }))).toEqual(["id", "name", "email"]);
   });
 
+  it("matches names case-insensitively on DuckDB", () => {
+    const r = complete("select ▮ from MIXED", { engine: "duckdb", schema: lite, explicit: true });
+    expect(labels(r)).toEqual(["Col", "autoincrement", "notnull"]);
+  });
+
+  it("quotes DuckDB's own reserved words", () => {
+    const duck: CompletionSchema = { "default-schema": "main", schemas: { main: { t: ["qualify", "summarize", "name"] } } };
+    const r = complete("select ▮ from t", { engine: "duckdb", schema: duck, explicit: true });
+    expect(option(r, "qualify").apply).toBe('"qualify"');
+    expect(option(r, "summarize").apply).toBe('"summarize"');
+    expect(option(r, "name").apply ?? "name").toBe("name");
+  });
+
   it("matches unquoted names case-insensitively on SQLite", () => {
     const r = complete("select ▮ from MIXED", { engine: "sqlite", explicit: true });
     expect(labels(r)).toEqual(["Col", "autoincrement", "notnull"]);

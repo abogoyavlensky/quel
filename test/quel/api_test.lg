@@ -265,3 +265,12 @@
     (fn [env _]
       (is (= {:current "1.0.0" :enabled false} (api/check-update env)))
       (is (= {:ok true} (api/skip-update env "2.0.0"))))))
+
+;; The file chooser's filters follow the engine; the dialog itself needs a
+;; window.
+(deftest file-filters-follow-the-engine
+  (is (str/includes? (second (first (api/db-filters "duckdb"))) "*.duckdb"))
+  (is (str/includes? (second (first (api/db-filters "duckdb"))) "*.ddb"))
+  (is (str/includes? (second (first (api/db-filters "sqlite"))) "*.sqlite"))
+  (is (= (api/db-filters "sqlite") (api/db-filters nil)))
+  (is (= ["All files" "*"] (last (api/db-filters "duckdb")))))

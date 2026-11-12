@@ -20,14 +20,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      # The runner has no GTK4/WebKitGTK, so the app runs in Wails' cgo-free
-      # server mode: an HTTP server instead of a window. Both vars are needed
-      # - a few Wails packages gate on `linux && cgo` without a `!server`
-      # guard.
-      CGO_ENABLED: "0"
+      # The runner has no display, so the app runs in Wails' server mode: an
+      # HTTP server instead of a window. cgo stays on because DuckDB links a
+      # C library, and with it a few Wails packages that build on
+      # `linux && cgo` without a `!server` guard need the GTK4/WebKitGTK
+      # headers (installed below).
+      CGO_ENABLED: "1"
       GOFLAGS: -tags=server
     steps:
       - uses: actions/checkout@v7
+
+      - name: GTK4/WebKitGTK headers
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       # lg, lgx, go and node, at the versions in .mise.toml.
       - uses: jdx/mise-action@v5
@@ -41,8 +45,8 @@ jobs:
             ~/go/pkg/mod
             ~/.lgx/runtimes
             ~/.npm
-          key: deps-${{ runner.os }}-${{ runner.arch }}-server-${{ hashFiles('.mise.toml', 'lgx.edn', 'frontend/package-lock.json') }}
-          restore-keys: deps-${{ runner.os }}-${{ runner.arch }}-server-
+          key: deps-${{ runner.os }}-${{ runner.arch }}-server-cgo-${{ hashFiles('.mise.toml', 'lgx.edn', 'frontend/package-lock.json') }}
+          restore-keys: deps-${{ runner.os }}-${{ runner.arch }}-server-cgo-
 
       # The signing, publishing and tap scripts, with stand-ins for Apple's
       # tools and GitHub.

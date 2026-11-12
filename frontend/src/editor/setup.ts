@@ -32,7 +32,8 @@ export const language = new Compartment();
 
 export function dialectFor(engine: Engine | null) {
   if (engine === "sqlite") return SQLite;
-  if (engine === "postgres" || engine === "redshift") return PostgreSQL;
+  // DuckDB's SQL is closest to PostgreSQL's ($$ strings, :: casts).
+  if (engine === "postgres" || engine === "redshift" || engine === "duckdb") return PostgreSQL;
   return StandardSQL;
 }
 

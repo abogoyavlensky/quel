@@ -3,10 +3,10 @@
 ;; Introspection: what a database holds, for the structure tree and the
 ;; editor's completion. describe-schema and describe-object gather what
 ;; one expand of the tree shows. One multimethod per operation, dispatched on the
-;; engine (:sqlite, :postgres, :redshift) and given the database's pool as
-;; a sql.core connectable. The methods live in the engine namespaces
-;; (quel.meta.sqlite, quel.meta.postgres), which require this one; quel.api
-;; loads them.
+;; engine (:sqlite, :duckdb, :postgres, :redshift) and given the database's
+;; pool as a sql.core connectable. The methods live in the engine
+;; namespaces (quel.meta.sqlite, quel.meta.duckdb, quel.meta.postgres),
+;; which require this one; quel.api loads them.
 ;;
 ;; Every query runs on the pool, never on a tab's session: browsing must
 ;; not wait behind a running query. So objects that live in one connection

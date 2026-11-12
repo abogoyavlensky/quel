@@ -2,6 +2,7 @@
   (:require [quel.conn :as conn]
             [quel.conn-test :refer [with-registry]]
             [quel.meta :as meta]
+            [quel.meta.duckdb]
             [quel.meta.sqlite]
             [sql.core :as sql]
             [clojure.test :refer [deftest is]]))
@@ -119,3 +120,101 @@
         (is (= [true false] ((juxt :pk :fk) (by "id"))))
         (is (= [false true] ((juxt :pk :fk) (by "t_id"))))
         (is (= [false false] ((juxt :pk :fk) (by "code"))))))))
+
+;; DuckDB introspection over an in-memory database.
+
+(defn- with-duck
+  "Run (f db) over an in-memory DuckDB holding one of everything."
+  [f]
+  (with-registry
+    (fn [registry _]
+      (let [{:keys [conn-id]} (conn/open-target! registry {:engine :duckdb :path ":memory:" :label "m"})
+            db (conn/db registry conn-id)]
+        (doseq [q ["create schema s2"
+                   "create type mood as enum ('sad', 'ok', 'happy')"
+                   "create sequence seq1 start 1"
+                   "create table p (id integer primary key, name varchar)"
+                   "create table t (id integer primary key, code varchar unique, pid integer references p(id), n integer check (n > 0), m mood)"
+                   "create index t_n on t (n)"
+                   "create view v as select id, code from t"
+                   "create macro add2(a, b) as a + b"
+                   "create macro tm(x) as table select x as y"
+                   "create table s2.u (a integer)"]]
+          (sql/execute! db [q]))
+        ;; A temp table, on the pool: it must not show.
+        (sql/execute! db ["create temp table tmp1 (a integer)"])
+        (f db)))))
+
+(deftest duckdb-schemas
+  (with-duck
+    (fn [db]
+      (is (= [{:name "main" :default true} {:name "s2" :default false}]
+             (meta/schemas :duckdb db))))))
+
+(deftest duckdb-objects
+  (with-duck
+    (fn [db]
+      (is (= [{:name "p" :kind "table"} {:name "t" :kind "table"} {:name "v" :kind "view"}]
+             (meta/objects :duckdb db "main")))
+      (is (= [{:name "u" :kind "table"}] (meta/objects :duckdb db "s2"))))))
+
+(deftest duckdb-columns
+  (with-duck
+    (fn [db]
+      (is (= [{:name "id" :type "INTEGER"} {:name "code" :type "VARCHAR"} {:name "pid" :type "INTEGER"}
+              {:name "n" :type "INTEGER"} {:name "m" :type "ENUM('sad', 'ok', 'happy')"}]
+             (meta/columns :duckdb db "main" "t")))
+      (is (= ["id" "code"] (mapv :name (meta/columns :duckdb db "main" "v"))))
+      (is (= [] (meta/columns :duckdb db "main" "nope")))
+      (is (= [] (meta/columns :duckdb db "main" "tmp1"))))))
+
+(deftest duckdb-completion
+  (with-duck
+    (fn [db]
+      (let [c (meta/completion-schema :duckdb db)]
+        (is (= "main" (:default-schema c)))
+        (is (= ["id" "code" "pid" "n" "m"] (get-in c [:schemas "main" "t"])))
+        (is (= ["id" "code"] (get-in c [:schemas "main" "v"])))
+        (is (= ["a"] (get-in c [:schemas "s2" "u"])))
+        (is (= #{"main" "s2"} (set (keys (:schemas c)))))))))
+
+(deftest duckdb-describe-schema
+  (with-duck
+    (fn [db]
+      (let [d (meta/describe-schema :duckdb db "main")]
+        (is (= (meta/objects :duckdb db "main") (:objects d)))
+        (is (= [{:name "add2" :kind "function" :args "a, b"} {:name "tm" :kind "function" :args "x"}]
+               (:functions d)))
+        (is (= [{:name "mood" :kind "enum" :detail nil :values ["sad" "ok" "happy"]}] (:types d)))
+        (is (= [{:name "seq1"}] (:sequences d)))
+        (is (= {:objects [{:name "u" :kind "table"}] :functions [] :types [] :sequences []}
+               (meta/describe-schema :duckdb db "s2")))))))
+
+(deftest duckdb-indexes
+  (with-duck
+    (fn [db]
+      (is (= [{:name "t_n" :definition "(n)" :unique false :primary false}]
+             (meta/indexes :duckdb db "main" "t")))
+      (is (= [] (meta/indexes :duckdb db "main" "p"))))))
+
+(deftest duckdb-constraints
+  (with-duck
+    (fn [db]
+      (is (= [{:name "t_id_pkey" :kind "primary-key" :columns ["id"] :definition "PRIMARY KEY(id)"}
+              {:name "t_code_key" :kind "unique" :columns ["code"] :definition "UNIQUE(code)"}
+              {:name "t_pid_id_fkey" :kind "foreign-key" :columns ["pid"] :definition "FOREIGN KEY (pid) REFERENCES p(id)"}
+              {:name "t_n_check" :kind "check" :columns ["n"] :definition "CHECK((n > 0))"}]
+             (meta/constraints :duckdb db "main" "t")))
+      (is (= ["primary-key"] (mapv :kind (meta/constraints :duckdb db "main" "p")))
+          "a referenced table lists only its own keys")
+      (is (= [] (meta/constraints :duckdb db "main" "v"))))))
+
+(deftest duckdb-describe-object-marks-keys
+  (with-duck
+    (fn [db]
+      (let [d (meta/describe-object :duckdb db "main" "t")
+            by (into {} (map (juxt :name identity) (:columns d)))]
+        (is (= [true false] ((juxt :pk :fk) (by "id"))))
+        (is (= [false true] ((juxt :pk :fk) (by "pid"))))
+        (is (= [false false] ((juxt :pk :fk) (by "code"))))
+        (is (= [] (:sequences d)))))))

@@ -53,6 +53,17 @@ describe("isJsonType", () => {
     for (const t of ["JSON", "jsonb", "SUPER"]) expect(isJsonType(t)).toBe(true);
     for (const t of ["_JSONB", "TEXT", ""]) expect(isJsonType(t)).toBe(false);
   });
+
+  it("knows DuckDB's nested types", () => {
+    for (const t of ["STRUCT(a INTEGER)", "INTEGER[]", "INTEGER[3]", "MAP(VARCHAR, INTEGER)", "UNION(a INTEGER, b VARCHAR)", "STRUCT(a INTEGER)[]"])
+      expect(isJsonType(t)).toBe(true);
+    for (const t of ["INTEGER", "VARCHAR", "DECIMAL(4,2)", "_INT4"]) expect(isJsonType(t)).toBe(false);
+  });
+
+  it("formats a DuckDB list or struct", () => {
+    expect(jsonText("[1,2]", "INTEGER[]", "duckdb")).toBe("[\n  1,\n  2\n]");
+    expect(jsonText('{"a":1}', "STRUCT(a INTEGER)", "duckdb")).toBe('{\n  "a": 1\n}');
+  });
 });
 
 describe("jsonText", () => {

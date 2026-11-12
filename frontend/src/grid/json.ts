@@ -17,9 +17,12 @@ export const MAX_JSON_CHARS = 256 * 1024;
 export const MAX_FORMATTED_CHARS = 1024 * 1024;
 
 const jsonTypes = /^(JSONB?|SUPER)$/i;
+// DuckDB's nested types, which cross the bridge as JSON text: STRUCT(...),
+// MAP(...), UNION(...), and lists and arrays (INTEGER[], INTEGER[3]).
+const duckdbNested = /^(STRUCT|MAP|UNION)\(|\[\d*\]$/i;
 
 export function isJsonType(type: string): boolean {
-  return jsonTypes.test(type);
+  return jsonTypes.test(type) || duckdbNested.test(type);
 }
 
 const INDENT = "  ";

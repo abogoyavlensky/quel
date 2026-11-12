@@ -27,6 +27,7 @@ export const ENGINES: { value: Engine; label: string }[] = [
   { value: "postgres", label: "PostgreSQL" },
   { value: "redshift", label: "Redshift" },
   { value: "sqlite", label: "SQLite" },
+  { value: "duckdb", label: "DuckDB" },
 ];
 
 export const SSL_MODES: SslMode[] = ["disable", "allow", "prefer", "require", "verify-ca", "verify-full"];
@@ -46,7 +47,18 @@ export const RUN_POLICIES: { value: RunPolicy; label: string; hint: string }[] =
   },
 ];
 
-export const DEFAULT_PORT: Record<Engine, number | null> = { postgres: 5432, redshift: 5439, sqlite: null };
+export const DEFAULT_PORT: Record<Engine, number | null> = {
+  postgres: 5432,
+  redshift: 5439,
+  sqlite: null,
+  duckdb: null,
+};
+
+// Is a profile of this engine a file on this machine (a path, no server,
+// no password)? A DuckDB path may also be :memory:, a scratch database.
+export function fileEngine(engine: Engine): boolean {
+  return engine === "sqlite" || engine === "duckdb";
+}
 
 export function defaultSslMode(engine: Engine): SslMode {
   return engine === "redshift" ? "require" : "prefer";
@@ -71,14 +83,14 @@ export function emptyForm(engine: Engine = "postgres"): ProfileForm {
   };
 }
 
-// A connection's name for the SQLite file at path: the file's name
-// without a .db, .sqlite or .sqlite3 extension.
+// A connection's name for the database file at path: the file's name
+// without a .db, .sqlite, .sqlite3, .duckdb or .ddb extension.
 export function nameFromPath(path: string): string {
   return (
     path
       .split(/[\\/]/)
       .pop()
-      ?.replace(/\.(db|sqlite3?)$/i, "") || path
+      ?.replace(/\.(db|sqlite3?|duckdb|ddb)$/i, "") || path
   );
 }
 
@@ -112,7 +124,7 @@ export function withEngine(form: ProfileForm, engine: Engine): ProfileForm {
 // The first required field that is empty, as a message, or null.
 export function missing(form: ProfileForm): string | null {
   if (!form.name.trim()) return "A name is required.";
-  if (form.engine === "sqlite") return form.path.trim() ? null : "A file path is required.";
+  if (fileEngine(form.engine)) return form.path.trim() ? null : "A file path is required.";
   if (!form.host.trim()) return "A host is required.";
   if (form.port.trim() && !/^\d+$/.test(form.port.trim())) return "The port must be a number.";
   return null;
@@ -123,7 +135,7 @@ const orNull = (s: string) => (s.trim() ? s.trim() : null);
 // What the backend takes. Fields the engine does not use are sent as null.
 // The password goes as typed, untrimmed, and only when one was typed.
 export function toInput(form: ProfileForm): ProfileInput {
-  const server = form.engine !== "sqlite";
+  const server = !fileEngine(form.engine);
   const input: ProfileInput = {
     name: form.name.trim(),
     engine: form.engine,

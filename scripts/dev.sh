@@ -6,10 +6,11 @@
 #
 #   lgx dev        # or: bash scripts/dev.sh
 #
-# On Linux without the webview headers, run it in server mode and open
-# http://localhost:8080 (WAILS_SERVER_PORT moves it):
+# On Linux without a desktop, run it in server mode and open
+# http://localhost:8080 (WAILS_SERVER_PORT moves it). cgo stays on for
+# DuckDB, so the GTK4/WebKitGTK headers and a C compiler are still needed:
 #
-#   CGO_ENABLED=0 GOFLAGS=-tags=server lgx dev
+#   CGO_ENABLED=1 GOFLAGS=-tags=server lgx dev
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"

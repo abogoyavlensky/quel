@@ -15,6 +15,8 @@ describe("calls that answer a string or nil", () => {
     expect(await exportBegin("csv", "result.csv")).toBe("/tmp/result.csv");
     expect(bridge.call).toHaveBeenCalledWith("export-begin", "csv", "result.csv");
     expect(await chooseFile()).toBe("/tmp/result.csv");
+    expect(await chooseFile("duckdb")).toBe("/tmp/result.csv");
+    expect(bridge.call).toHaveBeenLastCalledWith("choose-file", "duckdb");
   });
 
   it.each([{}, null, undefined, ""])("returns null for %j", async (reply) => {

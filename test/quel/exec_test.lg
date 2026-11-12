@@ -511,3 +511,76 @@
               (is (< (ms-since t0) 3500))
               (is (empty? @execs))
               (finally (ig/halt-key! :quel.exec/registry execs)))))))))
+
+;; DuckDB, in memory.
+
+(defn- with-duck-env
+  "Run (f execs conns conn-id) over fresh registries and an in-memory
+   DuckDB, halting both afterwards in the system's order."
+  [f]
+  (let [conns (ig/init-key :quel.conn/registry {})
+        execs (ig/init-key :quel.exec/registry {:conns conns})]
+    (try
+      (f execs conns (:conn-id (conn/open-target! conns {:engine :duckdb :path ":memory:" :label "m"})))
+      (finally
+        (ig/halt-key! :quel.exec/registry execs)
+        (ig/halt-key! :quel.conn/registry conns)))))
+
+;; The generic scan would hand over a duckdb.Decimal for the decimal.
+(deftest duckdb-values-come-through-its-own-scan
+  (with-duck-env
+    (fn [execs conns id]
+      (let [r (run execs conns id "select 1 as a, 'x' as b, date '2026-01-02' as d, 12.34::decimal(4,2) as n")]
+        (is (= [{:name "a" :type "INTEGER"} {:name "b" :type "VARCHAR"} {:name "d" :type "DATE"}
+                {:name "n" :type "DECIMAL(4,2)"}]
+               (:columns r)))
+        (is (= [[1 "x" "2026-01-02" "12.34"]] (:rows r)))))))
+
+(deftest a-big-duckdb-result-keeps-its-cursor
+  (with-duck-env
+    (fn [execs conns id]
+      (let [r (run-in execs conns id "s1" "big" "select range::integer as i from range(1, 1201)" :page-size 500)
+            p2 (fetch execs conns "big")
+            p3 (fetch execs conns "big")]
+        (is (true? (:has-more r)))
+        (is (= 500 (count (:rows p2))))
+        (is (= 200 (count (:rows p3))))
+        (is (false? (:has-more p3)))
+        (is (= (vec (range 1 1201)) (mapv first (concat (:rows r) (:rows p2) (:rows p3)))))
+        (is (= {} @execs))))))
+
+(deftest cancel-a-runaway-duckdb-query
+  (with-duck-env
+    (fn [execs conns id]
+      (let [qid "duck-runaway"
+            started (System/nanoTime)
+            result (future (message-of #(exec/run! execs conns {:conn-id id :session-id "s1" :query-id qid
+                                                                 :sql "select count(*) from range(10000000000000)"})))]
+        (is (until #(contains? @execs qid)))
+        (sleep 100)
+        (is (true? (exec/cancel! execs qid)))
+        (is (= "Query canceled." (deref result 5000 :timeout)))
+        (is (< (ms-since started) 5000))))))
+
+(deftest duckdb-row-returning-heads
+  (is (exec/rows? "from t"))
+  (is (exec/rows? "FROM t select a"))
+  (is (exec/rows? "describe t"))
+  (is (exec/rows? "summarize t"))
+  (is (exec/rows? "pivot t on x using sum(y)"))
+  (is (exec/rows? "unpivot t on a, b into name k value v")))
+
+(deftest duckdb-from-first-and-describe-run-as-queries
+  (with-duck-env
+    (fn [execs conns id]
+      (run execs conns id "create table t (x integer, y integer)")
+      (run execs conns id "insert into t values (1, 10), (2, 20)")
+      (is (= [[1 10] [2 20]] (:rows (run execs conns id "from t order by x"))))
+      (is (= ["x" "y"] (mapv first (:rows (run execs conns id "describe t"))))))))
+
+;; The scan and the encoding together.
+(deftest duckdb-nested-values-decimals-and-intervals
+  (with-duck-env
+    (fn [execs conns id]
+      (is (= [["[1,2]" "{\"k\":\"v\"}" "12.34" "01:30:00"]]
+             (:rows (run execs conns id "select [1,2] as l, {'k': 'v'} as s, 12.34::decimal(4,2) as d, interval 90 minute as i")))))))

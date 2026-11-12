@@ -7,7 +7,7 @@
  ;; build) rejects a namespace whose last segment is main.
  :main "src/quel/app.lg"
 
- ;; Wails and the sqlite driver are Go packages, so Quel runs on an lg that
+ ;; Wails and the database drivers are Go packages, so Quel runs on an lg that
  ;; lgx builds with the Go toolchain.
  :lg-runtime :built
  ;; A let-go main commit: the native build needs `lg compile -module` and
@@ -51,6 +51,16 @@
         {:git/url "https://github.com/abogoyavlensky/letgo-packages"
          :git/tag "postgres-v0.5.0"
          :deps/root "postgres"}
+
+        ;; DuckDB, in-process, through duckdb-go v2. The one cgo driver: it
+        ;; links a prebuilt static libduckdb, so it adds about 75 MB to the
+        ;; binary, needs a C toolchain, and cannot be cross-compiled (each
+        ;; platform builds on itself). It names sql-v0.4.0, as sqlite and
+        ;; postgres do.
+        abogoyavlensky/letgo-duckdb
+        {:git/url "https://github.com/abogoyavlensky/letgo-packages"
+         :git/tag "duckdb-v0.4.0"
+         :deps/root "duckdb"}
 
         ;; Profile passwords in the macOS Keychain (the Secret Service on
         ;; Linux), over go-keyring. keyring-v0.1.0 is the first release.

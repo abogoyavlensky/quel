@@ -75,6 +75,34 @@ test("a profile is tested before saving, then connected, renamed and deleted", a
   await expect(page.getByRole("banner")).not.toContainText("E2E renamed");
 });
 
+// A DuckDB scratch database: :memory: needs no file.
+test("a DuckDB profile connects and runs", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "New connection" }).first().click();
+  await dialog(page).getByLabel("Name").fill("E2E duck");
+  await dialog(page).getByRole("combobox", { name: "Type" }).click();
+  await page.getByRole("option", { name: "DuckDB" }).click();
+  await expect(dialog(page)).toContainText(":memory: for a scratch database");
+  await dialog(page).getByLabel("File").fill(":memory:");
+  await dialog(page).getByRole("button", { name: "Save" }).click();
+  await expect(dialog(page)).toHaveCount(0);
+
+  await expect(page.getByRole("banner")).toContainText("DuckDB");
+  await saved(page).getByRole("button", { name: "Connect E2E duck" }).click();
+  await expectConnected(page);
+  // A new scratch profile's first tab says how to query a file.
+  await expect(page.getByLabel("SQL editor")).toContainText("Query CSV, JSON and Parquet files in place");
+  await write(page, "select 42 as answer;");
+  await page.keyboard.press("ControlOrMeta+Enter");
+  await expect(page.getByRole("gridcell", { name: "42", exact: true })).toBeVisible();
+
+  // Deleted, so the other specs see the list they expect.
+  await saved(page).getByRole("button", { name: "Edit E2E duck" }).click();
+  await dialog(page).getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByRole("button", { name: /^E2E duck/ })).toHaveCount(0);
+});
+
 test("a duplicate name is refused", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "New connection" }).first().click();

@@ -28,9 +28,11 @@ built into `resources/public`.
 | `lgx sign-macos` / `lgx verify-macos --distribution` | Developer ID signing, notarization and the release zip in `dist/`; check the zip as a user gets it. Needs `APPLE_SIGNING_IDENTITY` and `APPLE_NOTARY_PROFILE` |
 | `lgx test-release` | release script tests (signing, cask, GitHub Release, tap), with stand-ins for Apple's tools and GitHub (runs on Linux) |
 
-On Linux without GTK4/WebKitGTK headers, prefix `lgx dev`, `lgx run` and
-the test, smoke and e2e tasks with `CGO_ENABLED=0 GOFLAGS=-tags=server`. The `-pg`
-tasks need Docker.
+On Linux, every build needs a C compiler and `libgtk-4-dev
+libwebkitgtk-6.0-dev`, even in server mode: DuckDB is cgo, and a few Wails
+packages build on `linux && cgo` without a `!server` guard. Without a
+desktop, prefix `lgx dev`, `lgx run` and the test, smoke and e2e tasks with
+`CGO_ENABLED=1 GOFLAGS=-tags=server`. The `-pg` tasks need Docker.
 
 ## Rules that bite
 

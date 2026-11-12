@@ -71,3 +71,27 @@
   (is (= ["3000"] (cells/type-names :redshift ["3000"])))
   (is (= [] (cells/type-names :redshift [])))
   (is (vector? (cells/type-names :redshift (list "4000")))))
+
+;; DuckDB values, as duckdb.shim/ScanRow hands them over.
+
+(deftest duckdb-lists-and-structs-become-json
+  (is (= "[1,2]" (cells/encode "INTEGER[]" [1 2])))
+  (is (= "{\"a\":1}" (cells/encode "STRUCT(a INTEGER)" {:a 1})))
+  (is (= "{\"k\":[\"x\",null]}" (cells/encode "MAP(VARCHAR, VARCHAR[])" {"k" ["x" nil]})))
+  (is (= "[]" (cells/encode "INTEGER[]" []))))
+
+;; As DuckDB prints them (select interval '...'::varchar).
+(deftest duckdb-intervals-print-as-duckdb-prints-them
+  (let [iv (fn [m d us] (cells/encode "INTERVAL" {:months m :days d :micros us}))]
+    (is (= "1 year 2 months 3 days 01:30:00" (iv 14 3 5400000000)))
+    (is (= "00:00:00" (iv 0 0 0)))
+    (is (= "1 day" (iv 0 1 0)))
+    (is (= "-1 day" (iv 0 -1 0)))
+    (is (= "-01:30:00" (iv 0 0 -5400000000)))
+    (is (= "-1 year -2 months" (iv -14 0 0)))
+    (is (= "-1 day 02:00:00" (iv 0 -1 7200000000)))
+    (is (= "00:00:01.5" (iv 0 0 1500000)))
+    (is (= "2 years" (iv 24 0 0)))
+    (is (= "25:00:00" (iv 0 0 90000000000)))
+    (is (= "-2562047788:00:54.775808" (iv 0 0 -9223372036854775808)) "no overflow at the smallest int64")
+    (is (= "2562047788:00:54.775807" (iv 0 0 9223372036854775807)))))

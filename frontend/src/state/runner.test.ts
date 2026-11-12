@@ -1352,6 +1352,36 @@ describe("loading a workspace", () => {
     expect(later.nextTabNumber).toBe(5);
   });
 
+  it("a new DuckDB scratch profile's first tab shows how to query a file", async () => {
+    const duck = (id: string, path: string) => ({
+      id,
+      name: id,
+      engine: "duckdb" as const,
+      host: null,
+      port: null,
+      database: null,
+      user: null,
+      "ssl-mode": null,
+      path,
+      color: "none" as const,
+      "run-policy": "never" as const,
+      "has-password": false,
+    });
+    store.setState({ profiles: [duck("mem", ":memory:"), duck("file", "/x.duckdb"), duck("used", ":memory:")] });
+    api.loadWorkspace
+      .mockResolvedValueOnce(saved())
+      .mockResolvedValueOnce(saved())
+      .mockResolvedValueOnce(saved({ "next-tab-number": 3 }));
+    const mem = await runner.ensureWorkspace("mem");
+    expect(editor.seeds[mem.tabs[0].id].text).toBe(runner.DUCKDB_SCRATCH_STARTER);
+    expect(runner.DUCKDB_SCRATCH_STARTER).toContain("from '/path/to/data.csv'");
+    const file = await runner.ensureWorkspace("file");
+    expect(editor.seeds[file.tabs[0].id]).toBeUndefined();
+    // Its tabs were all closed once: no starter again.
+    const used = await runner.ensureWorkspace("used");
+    expect(editor.seeds[used.tabs[0].id]).toBeUndefined();
+  });
+
   it("a failed load is marked, never saved, and can be retried", async () => {
     vi.useFakeTimers();
     try {
