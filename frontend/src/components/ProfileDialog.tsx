@@ -202,7 +202,7 @@ function ProfileEditor({
             {server
               ? "Passwords are kept in the Keychain."
               : form.engine === "duckdb"
-                ? "A DuckDB database file, or :memory: for a scratch database."
+                ? "A DuckDB database file, or :memory: for a scratch database. Both can query CSV, JSON and Parquet files in place."
                 : "A SQLite database file on this machine."}
           </DialogDescription>
         </DialogHeader>
@@ -326,7 +326,7 @@ function ProfileEditor({
                   className="h-9 min-w-0 flex-1"
                   value={form.path}
                   onChange={(e) => set({ path: e.target.value })}
-                  placeholder={form.engine === "duckdb" ? "/path/to/data.duckdb or :memory:" : "/path/to/app.db"}
+                  placeholder={form.engine === "duckdb" ? "/path/to/data.duckdb" : "/path/to/app.db"}
                   spellCheck={false}
                   autoComplete="off"
                 />

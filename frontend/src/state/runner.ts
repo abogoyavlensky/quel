@@ -828,12 +828,32 @@ export function closeResult(tabId: string, resultId: string): void {
   });
 }
 
+// The first tab of a new DuckDB scratch profile (:memory:): DuckDB queries
+// files in place, which nothing else in the UI tells you.
+export const DUCKDB_SCRATCH_STARTER = [
+  "-- A scratch database. Query CSV, JSON and Parquet files in place:",
+  "-- select * from '/path/to/data.csv';",
+  "-- describe from '/path/to/data.csv';",
+  "",
+].join("\n");
+
+function isDuckdbScratch(profileId: string): boolean {
+  const p = store.getState().profiles.find((x) => x.id === profileId);
+  return p?.engine === "duckdb" && p.path === ":memory:";
+}
+
 // A workspace from what the backend saved: its tabs seeded with their
-// text and selection, or one fresh tab when none was saved.
+// text and selection, or one fresh tab when none was saved. A profile
+// that never had a tab (next-tab-number still 1) and is a DuckDB scratch
+// database starts with DUCKDB_SCRATCH_STARTER.
 function fromSaved(profileId: string, saved: SavedWorkspace): Workspace {
   const n = Math.max(1, saved["next-tab-number"] ?? 1);
   if (saved.tabs.length === 0) {
     const first = newTabState(n);
+    if (n === 1 && isDuckdbScratch(profileId)) {
+      const end = DUCKDB_SCRATCH_STARTER.length;
+      seed(first.id, DUCKDB_SCRATCH_STARTER, { from: end, to: end });
+    }
     return { ...newWorkspace(profileId), tabs: [first], activeTab: first.id, nextTabNumber: n + 1, closed: saved.closed };
   }
   const tabs = saved.tabs.map((t) => {

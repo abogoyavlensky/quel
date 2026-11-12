@@ -90,6 +90,8 @@ test("a DuckDB profile connects and runs", async ({ page }) => {
   await expect(page.getByRole("banner")).toContainText("DuckDB");
   await saved(page).getByRole("button", { name: "Connect E2E duck" }).click();
   await expectConnected(page);
+  // A new scratch profile's first tab says how to query a file.
+  await expect(page.getByLabel("SQL editor")).toContainText("Query CSV, JSON and Parquet files in place");
   await write(page, "select 42 as answer;");
   await page.keyboard.press("ControlOrMeta+Enter");
   await expect(page.getByRole("gridcell", { name: "42", exact: true })).toBeVisible();
