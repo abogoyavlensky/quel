@@ -25,7 +25,11 @@
 ;; writes. The frontend classifies and decides (frontend/src/sql/guard.ts);
 ;; the backend only stores it.
 
-(def engines #{"sqlite" "postgres" "redshift"})
+(def engines #{"sqlite" "duckdb" "postgres" "redshift"})
+
+;; Engines whose profile is a file path, with no server and no password.
+;; A DuckDB path may also be :memory:, a scratch database.
+(def ^:private file-engines #{"sqlite" "duckdb"})
 (def ssl-modes ["disable" "allow" "prefer" "require" "verify-ca" "verify-full"])
 (def colors ["none" "red" "orange" "yellow" "green" "blue" "purple"])
 (def run-policies ["never" "writes" "always" "read-only"])
@@ -80,15 +84,15 @@
 
 (defn password-change
   "What saving p does to its saved password: [:forget], [:set pw] or
-   [:keep]. A SQLite profile always forgets; otherwise forget wins over a
+   [:keep]. A file profile (SQLite, DuckDB) always forgets; otherwise forget wins over a
    password sent alongside it. An empty
    password counts as none: pgx treats \"\" as no password and falls back
    to .pgpass, so Quel cannot promise an explicitly empty one."
   [{:keys [engine password forget-password?]}]
   (cond
-    ;; SQLite has no password: one left from the profile's server days is
+    ;; A file has no password: one left from the profile's server days is
     ;; deleted, and never read.
-    (= "sqlite" engine) [:forget]
+    (contains? file-engines engine) [:forget]
     forget-password? [:forget]
     (= "" password) [:forget]
     (string? password) [:set password]
@@ -129,7 +133,7 @@
    (when-not name
      (throw (ex-info "A name is required." {})))
    (when-not (contains? engines engine)
-     (throw (ex-info "Choose a database type: SQLite, PostgreSQL or Redshift." {:engine engine})))
+     (throw (ex-info "Choose a database type: SQLite, DuckDB, PostgreSQL or Redshift." {:engine engine})))
    (when (and color (not (some #{color} colors)))
      (throw (ex-info (str "Unknown colour " color ".") {:color color})))
    (when (and run-policy (not (some #{run-policy} run-policies)))
@@ -139,9 +143,11 @@
                                     name (or id "")]))
      (throw (duplicate-name name)))
    (let [p (assoc p :color (or color "none") :run-policy (or run-policy "never"))]
-     (if (= "sqlite" engine)
+     (if (contains? file-engines engine)
        (do (when-not (:path p)
              (throw (ex-info "A file path is required." {})))
+           (when-let [msg (and (= "duckdb" engine) (conn/duckdb-path-error (:path p)))]
+             (throw (ex-info msg {:path (:path p)})))
            (assoc p :host nil :port nil :database nil :user nil :ssl-mode nil))
        (let [port (or port (default-ports engine))
              ssl-mode (or ssl-mode (if (= "redshift" engine) "require" "prefer"))]
@@ -158,7 +164,7 @@
    says one is saved: a profile without one must connect even where no
    keyring is reachable (a Linux box with no Secret Service)."
   [secrets p]
-  (when (and (:has-password p) (not= "sqlite" (:engine p)))
+  (when (and (:has-password p) (not (contains? file-engines (:engine p))))
     (secrets/password secrets (:id p))))
 
 (defn effective-password
@@ -271,12 +277,14 @@
 
 (defn target
   "What quel.conn/open-target! opens for profile p (validated) with
-   password. A SQLite file must exist: a typo must not quietly create an
-   empty database."
+   password. A SQLite or DuckDB file must exist: a typo must not quietly
+   create an empty database. DuckDB's :memory: is a fresh scratch
+   database, so there is nothing to find."
   [{:keys [engine path name] :as p} password]
-  (if (= "sqlite" engine)
-    (let [st (os/stat path)]
-      (when (or (nil? st) (:dir? st))
-        (throw (ex-info (str "No such file: " path) {:path path})))
-      {:engine :sqlite :path path :label name})
+  (if (contains? file-engines engine)
+    (do (when-not (and (= "duckdb" engine) (= ":memory:" path))
+          (let [st (os/stat path)]
+            (when (or (nil? st) (:dir? st))
+              (throw (ex-info (str "No such file: " path) {:path path})))))
+        {:engine (keyword engine) :path path :label name})
     {:engine (keyword engine) :dsn (dsn p password) :label name :secret password}))

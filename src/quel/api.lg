@@ -103,13 +103,21 @@
   [{:keys [attempts]} attempt-id]
   {:canceled (conn/cancel-attempt! attempts attempt-id)})
 
-(def db-filters
-  [["SQLite" "*.db;*.sqlite;*.sqlite3"] ["All files" "*"]])
+(defn db-filters
+  "The file chooser's filters for a profile of engine (\"sqlite\" or
+   \"duckdb\"; anything else is SQLite's)."
+  [engine]
+  [(if (= "duckdb" engine)
+     ["DuckDB" "*.duckdb;*.ddb;*.db"]
+     ["SQLite" "*.db;*.sqlite;*.sqlite3"])
+   ["All files" "*"]])
 
 (defn choose-file
-  "The SQLite file the user picks, or nil when they cancel."
-  [{:keys [app]}]
-  (w/open-file app {:title "Choose a Database File" :filters db-filters}))
+  "The database file the user picks for a profile of engine, or nil when
+   they cancel."
+  ([env] (choose-file env nil))
+  ([{:keys [app]} engine]
+   (w/open-file app {:title "Choose a Database File" :filters (db-filters engine)})))
 
 (defn export-begin
   "Ask where to save a result exported as format (\"csv\", \"json\" or

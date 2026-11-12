@@ -252,3 +252,47 @@
         (profiles/delete! db s (:id p))
         (is (= "planted" (secrets/password s (:id p))))
         (secrets/delete-password! s (:id p))))))
+
+;; DuckDB profiles: a file, or :memory:, and no password.
+
+(deftest a-duckdb-profile-is-a-path
+  (with-store
+    (fn [db dir]
+      (let [p (profiles/validate db (profiles/normalize {"name" "d" "engine" "duckdb" "path" "/x.duckdb"
+                                                         "host" "h" "port" 1 "user" "u"}))]
+        (is (= ["/x.duckdb" nil nil nil nil] [(:path p) (:host p) (:port p) (:user p) (:ssl-mode p)])))
+      (let [path (str dir "/x.duckdb")
+            _ (spit path "")
+            p (profiles/save! db s {"name" "Duck" "engine" "duckdb" "path" path "password" "pw"})]
+        (is (= "duckdb" (:engine p)))
+        (is (false? (:has-password p)))
+        (is (nil? (secrets/password s (:id p))))))))
+
+(deftest a-duckdb-profile-forgets-passwords
+  (is (= [:forget] (profiles/password-change {:engine "duckdb" :password "pw"})))
+  (is (nil? (profiles/saved-password s {:engine "duckdb" :has-password true :id "x"}))))
+
+(deftest duckdb-profile-validation
+  (with-store
+    (fn [db _]
+      (let [bad (fn [m] (message-of #(profiles/validate db (profiles/normalize m))))]
+        (is (= "A file path is required." (bad {"name" "d" "engine" "duckdb"})))
+        (is (= "A DuckDB file path cannot contain ?."
+               (bad {"name" "d" "engine" "duckdb" "path" "/tmp/a?b.duckdb"})))
+        (is (= (conn/duckdb-path-error "/tmp/a%zz.duckdb")
+               (bad {"name" "d" "engine" "duckdb" "path" "/tmp/a%zz.duckdb"})))
+        (is (nil? (bad {"name" "d" "engine" "duckdb" "path" ":memory:"})))
+        (is (str/includes? (bad (assoc pg "engine" "mysql")) "DuckDB"))))))
+
+(deftest duckdb-targets
+  (let [dir (temp-dir)]
+    (try
+      (let [path (str dir "/x.duckdb")]
+        (spit path "")
+        (is (= {:engine :duckdb :path path :label "d"}
+               (profiles/target {:engine "duckdb" :path path :name "d"} nil)))
+        (is (= {:engine :duckdb :path ":memory:" :label "m"}
+               (profiles/target {:engine "duckdb" :path ":memory:" :name "m"} nil)))
+        (is (= (str "No such file: " dir "/missing.duckdb")
+               (message-of #(profiles/target {:engine "duckdb" :path (str dir "/missing.duckdb")} nil)))))
+      (finally (os/sh "rm" "-rf" dir)))))
