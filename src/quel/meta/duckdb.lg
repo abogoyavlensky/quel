@@ -1,0 +1,121 @@
+(ns quel.meta.duckdb
+  (:require [quel.meta :as meta]
+            [sql.core :as sql]
+            [string :as str]))
+
+;; DuckDB's catalog, through its duckdb_*() table functions, for the
+;; database the connection opened (current_database()). Internal objects
+;; (DuckDB's own) are left out, except for schemas: DuckDB marks main
+;; internal.
+;;
+;; Databases a tab ATTACHes are left out, and so are temp objects: both
+;; belong to one connection, and these queries run on the pool. The temp
+;; objects are in a database of their own ("temp"), so the
+;; current_database() filter drops them.
+;;
+;; DuckDB has no owned sequences (a column's default may call nextval, but
+;; nothing ties the sequence to it), so owned-sequences keeps the default.
+
+(def ^:private in-db "database_name = current_database()")
+
+(defmethod meta/schemas :duckdb [_ db]
+  (mapv (fn [{:keys [name default]}] {:name name :default default})
+        (sql/execute! db [(str "select schema_name as name, schema_name = current_schema() as \"default\""
+                               " from duckdb_schemas() where " in-db
+                               " and schema_name not in ('information_schema', 'pg_catalog')"
+                               " order by schema_name")])))
+
+(def ^:private objects-sql
+  (str "select name, kind from ("
+       " select table_name as name, 'table' as kind from duckdb_tables()"
+       " where " in-db " and schema_name = ? and not internal and not temporary"
+       " union all"
+       " select view_name as name, 'view' as kind from duckdb_views()"
+       " where " in-db " and schema_name = ? and not internal and not temporary"
+       ") order by name"))
+
+(defmethod meta/objects :duckdb [_ db schema]
+  (mapv #(select-keys % [:name :kind]) (sql/execute! db [objects-sql schema schema])))
+
+(defmethod meta/columns :duckdb [_ db schema name]
+  (mapv #(select-keys % [:name :type])
+        (sql/execute! db [(str "select column_name as name, data_type as type from duckdb_columns()"
+                               " where " in-db " and schema_name = ? and table_name = ? and not internal"
+                               " order by column_index")
+                          schema name])))
+
+;; One query: duckdb_columns() lists the columns of tables and views alike.
+(defmethod meta/completion-rows :duckdb [_ db]
+  (mapv #(select-keys % [:schema :tbl :col])
+        (sql/execute! db [(str "select schema_name as schema, table_name as tbl, column_name as col"
+                               " from duckdb_columns() where " in-db " and not internal"
+                               " and schema_name not in ('information_schema', 'pg_catalog')"
+                               " order by schema_name, table_name, column_index"
+                               " limit " meta/completion-limit)])))
+
+;; Macros, scalar and table: the functions a user makes. :args are their
+;; parameter names (macros have no declared types).
+(defmethod meta/functions :duckdb [_ db schema]
+  (->> (sql/execute! db [(str "select function_name as name, parameters from duckdb_functions()"
+                              " where " in-db " and schema_name = ? and not internal"
+                              " and function_type in ('macro', 'table_macro')")
+                         schema])
+       (map (fn [{:keys [name parameters]}]
+              {:name name :kind "function" :args (str/join ", " (or parameters []))}))
+       (sort-by (juxt :name :args))
+       vec))
+
+;; Only enums: DuckDB's other user types (CREATE TYPE ... AS STRUCT, an
+;; alias) have nothing the tree shows beyond the name.
+(defmethod meta/types :duckdb [_ db schema]
+  (mapv (fn [{:keys [name labels]}] {:name name :kind "enum" :detail nil :values (vec (or labels []))})
+        (sql/execute! db [(str "select type_name as name, labels from duckdb_types()"
+                               " where " in-db " and schema_name = ? and not internal"
+                               " and logical_type = 'ENUM' order by type_name")
+                          schema])))
+
+(defmethod meta/sequences :duckdb [_ db schema]
+  (mapv #(select-keys % [:name])
+        (sql/execute! db [(str "select sequence_name as name from duckdb_sequences()"
+                               " where " in-db " and schema_name = ? and not temporary"
+                               " order by sequence_name")
+                          schema])))
+
+;; CREATE INDEX indexes only: DuckDB lists a primary or unique key's
+;; index under constraints, not here. expressions reads "[a, b]".
+(defn- index-definition [expressions]
+  (let [e (str expressions)]
+    (if (and (str/starts-with? e "[") (str/ends-with? e "]"))
+      (str "(" (subs e 1 (dec (count e))) ")")
+      e)))
+
+(defmethod meta/indexes :duckdb [_ db schema name]
+  (mapv (fn [{:keys [index_name expressions is_unique is_primary]}]
+          {:name index_name :definition (index-definition expressions)
+           :unique (true? is_unique) :primary (true? is_primary)})
+        (sql/execute! db [(str "select index_name, expressions, is_unique, is_primary from duckdb_indexes()"
+                               " where " in-db " and schema_name = ? and table_name = ?"
+                               " order by index_name")
+                          schema name])))
+
+;; NOT NULL is a constraint to DuckDB too; it is left out, as on the other
+;; engines.
+(def ^:private constraint-kinds
+  {"PRIMARY KEY" "primary-key" "UNIQUE" "unique" "FOREIGN KEY" "foreign-key" "CHECK" "check"})
+
+(def ^:private kind-order {"primary-key" 0 "unique" 1 "foreign-key" 2 "check" 3})
+
+(defmethod meta/constraints :duckdb [_ db schema name]
+  (->> (sql/execute! db [(str "select constraint_name, constraint_type, constraint_column_names, constraint_text"
+                              " from duckdb_constraints()"
+                              " where " in-db " and schema_name = ? and table_name = ?"
+                              " and constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')")
+                         schema name])
+       (map (fn [{:keys [constraint_name constraint_type constraint_column_names constraint_text]}]
+              {:name constraint_name
+               :kind (constraint-kinds constraint_type)
+               :columns (vec (or constraint_column_names []))
+               :definition constraint_text}))
+       distinct
+       (sort-by (juxt (comp kind-order :kind) :name))
+       vec))

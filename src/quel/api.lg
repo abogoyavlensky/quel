@@ -5,6 +5,7 @@
             [quel.export :as export]
             [quel.meta :as meta]
             ;; Loaded for their quel.meta methods.
+            [quel.meta.duckdb]
             [quel.meta.postgres]
             [quel.meta.sqlite]
             [quel.profiles :as profiles]
