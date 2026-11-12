@@ -577,3 +577,10 @@
       (run execs conns id "insert into t values (1, 10), (2, 20)")
       (is (= [[1 10] [2 20]] (:rows (run execs conns id "from t order by x"))))
       (is (= ["x" "y"] (mapv first (:rows (run execs conns id "describe t"))))))))
+
+;; The scan and the encoding together.
+(deftest duckdb-nested-values-decimals-and-intervals
+  (with-duck-env
+    (fn [execs conns id]
+      (is (= [["[1,2]" "{\"k\":\"v\"}" "12.34" "01:30:00"]]
+             (:rows (run execs conns id "select [1,2] as l, {'k': 'v'} as s, 12.34::decimal(4,2) as d, interval 90 minute as i")))))))

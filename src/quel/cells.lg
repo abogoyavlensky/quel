@@ -14,6 +14,13 @@
 ;; a BLOB: let-go boxes a []byte as a Go string with the same bytes, so
 ;; (bytes s) gets them back and they go out as hex. Only a SQLite column
 ;; with no declared type is missed: its blobs cannot be told from text.
+;;
+;; DuckDB's own scan (duckdb.shim/ScanRow) has done most of the work:
+;; dates, times, DECIMAL and HUGEINT arrive as strings. What is left is a
+;; LIST, ARRAY, STRUCT, MAP or JSON value, which arrives as a vector or a
+;; map and goes out as JSON text (the grid's JSON viewer knows the types),
+;; and an INTERVAL, which arrives as {:months :days :micros} and goes out
+;; as DuckDB prints it.
 ;; The large-text cap comes later.
 
 ;; The largest integer a JavaScript number holds exactly: 2^53 - 1.
@@ -73,6 +80,44 @@
 (defn- go-time? [v]
   (= "go.time.Time" (str (type v))))
 
+(defn- unit
+  "n and its unit, plural unless n is 1 or -1: \"2 years\", \"-1 day\"."
+  [n word]
+  (str n " " word (when-not (= 1 (abs n)) "s")))
+
+(defn- two [n] (if (< n 10) (str "0" n) (str n)))
+
+(defn- clock
+  "micros as DuckDB prints an interval's time part: [-]hh:mm:ss, with a
+   fraction when there is one, its trailing zeros trimmed."
+  [micros]
+  (let [us (abs micros)
+        secs (quot us 1000000)
+        frac (rem us 1000000)]
+    (str (when (neg? micros) "-")
+         (two (quot secs 3600)) ":" (two (rem (quot secs 60) 60)) ":" (two (rem secs 60))
+         (when (pos? frac)
+           (str "." (str/replace (subs (str (+ 1000000 frac)) 1) #"0+$" ""))))))
+
+(defn- interval
+  "A DuckDB INTERVAL, {:months :days :micros}, as DuckDB prints it: \"1
+   year 2 months 3 days 01:30:00\", each part left out when zero, and
+   \"00:00:00\" for a zero interval."
+  [{:keys [months days micros]}]
+  (let [years (quot months 12)
+        months (rem months 12)
+        parts (cond-> []
+                (not (zero? years)) (conj (unit years "year"))
+                (not (zero? months)) (conj (unit months "month"))
+                (not (zero? days)) (conj (unit days "day"))
+                (not (zero? micros)) (conj (clock micros)))]
+    (if (empty? parts) "00:00:00" (str/join " " parts))))
+
+(defn- json-text
+  "A nested value as JSON text, or its string form if it has no JSON one."
+  [v]
+  (try (json/write-json v) (catch _ (str v))))
+
 (defn encode
   "One driver value as a bridge-safe cell, given its column's type name
    (as `type-names` returns it; nil when unknown)."
@@ -88,6 +133,8 @@
      (int? v) (if (<= (- max-safe-int) v max-safe-int) v (str v))
      (number? v) (or (non-finite v) v)
      (go-time? v) (.Format v (get time-layouts type-name "2006-01-02T15:04:05.999999Z07:00"))
+     (and (= "INTERVAL" type-name) (map? v)) (try (interval v) (catch _ (str v)))
+     (or (vector? v) (map? v)) (json-text v)
      :else (str v))))
 
 (defn encode-row
