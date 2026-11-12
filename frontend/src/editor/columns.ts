@@ -67,6 +67,19 @@ const REDSHIFT_EXTRA = [
   "without",
 ];
 
+// DuckDB's reserved keywords (duckdb_keywords() where keyword_category =
+// 'reserved', DuckDB 1.x, as the bundled driver reports them).
+const DUCKDB = [
+  "all", "analyse", "analyze", "and", "any", "array", "as", "asc", "asymmetric", "both", "case",
+  "cast", "check", "collate", "column", "constraint", "create", "default", "deferrable", "desc",
+  "describe", "distinct", "do", "else", "end", "except", "false", "fetch", "for", "foreign",
+  "from", "group", "having", "in", "initially", "intersect", "into", "lambda", "lateral",
+  "leading", "limit", "not", "null", "offset", "on", "only", "or", "order", "pivot",
+  "pivot_longer", "pivot_wider", "placing", "primary", "qualify", "references", "returning",
+  "select", "show", "some", "summarize", "symmetric", "table", "then", "to", "trailing", "true",
+  "union", "unique", "unpivot", "using", "variadic", "when", "where", "window", "with",
+];
+
 // sqlite.org's SQLite Keywords page (lang_keywords.html), all 147.
 const SQLITE = [
   "abort", "action", "add", "after", "all", "alter", "always", "analyze", "and", "as", "asc",
@@ -91,8 +104,7 @@ const RESERVED: Record<Engine, Set<string>> = {
   postgres: new Set(POSTGRES),
   redshift: new Set([...POSTGRES, ...REDSHIFT_EXTRA]),
   sqlite: new Set(SQLITE),
-  // DuckDB's reserved words follow PostgreSQL's.
-  duckdb: new Set(POSTGRES),
+  duckdb: new Set(DUCKDB),
 };
 // No profile, no engine: quote what any of them reserves.
 const ANY_RESERVED = new Set([...POSTGRES, ...REDSHIFT_EXTRA, ...SQLITE]);
