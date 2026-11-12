@@ -1,6 +1,7 @@
 (ns quel.conn
   (:refer-clojure :exclude [close!])
-  (:require [integrant.core :as ig]
+  (:require [duckdb.core :as duckdb]
+            [integrant.core :as ig]
             [postgres.core :as pg]
             [sql.core :as sql]
             [sql.shim :as shim]
@@ -9,7 +10,7 @@
 
 ;; Open databases, keyed by a conn-id the frontend holds. Each entry is
 ;; {:db <connectable> :sessions-db <connectable>
-;;  :engine <:sqlite :postgres :redshift> :label <string>
+;;  :engine <:sqlite :duckdb :postgres :redshift> :label <string>
 ;;  :sessions {session-id <*sql.Conn>} :retired #{session-id}}.
 ;;
 ;; What to open arrives as one string: a SQLite file path, or a
@@ -28,6 +29,15 @@
 ;; connections: closing a session closes its connection instead of parking
 ;; it, so a closed tab's settings, temp tables or (on SQLite) open
 ;; transaction never reach whoever takes that connection next.
+;;
+;; A DuckDB target opens one pool, with no idle connections, and uses it as
+;; both :db and :sessions-db. An in-memory DuckDB belongs to the instance
+;; that opened it, so a second pool on :memory: would be a second, empty
+;; database; with one pool, every tab and the structure tree see the same
+;; scratch database. A tab's session is still its own connection, closed
+;; with the tab. A file is safe to open twice (two profiles, or Test while
+;; connected): the driver keeps one instance per path, process-wide, and a
+;; second pool shares it rather than tripping DuckDB's file lock.
 ;;
 ;; A closed tab's session-id is retired, and session! refuses it from then
 ;; on. Bridge calls run concurrently, so a run sent just before the tab
@@ -133,25 +143,43 @@
     true (str/replace #"(?i)(password\s*=\s*)('(?:[^'\\]|\\.)*'|[^\s&'`]+)" "$1***")
     true (str/replace #"([a-z]+://[^/?#:@\s]*):[^/?#@\s]*@" "$1:***@")))
 
+(defn duckdb-path-error
+  "Why the DuckDB driver cannot open path as the file it names, or nil.
+   The driver reads everything after a ? as options, and url-parses the
+   rest, so a % that does not start an escape fails to parse. Other
+   characters (#, spaces, a valid %20) open as themselves."
+  [path]
+  (cond
+    (= ":memory:" path) nil
+    (str/includes? path "?") "A DuckDB file path cannot contain ?."
+    (re-find #"%([^0-9A-Fa-f]|.[^0-9A-Fa-f]|.?$)" path)
+    "A DuckDB file path cannot contain a % that is not followed by two hex digits."
+    :else nil))
+
 (defn- open-pool
   "A pool for target. Postgres pools keep a session across a cancelled
    query (:postgres/cancel :request). Errors are redacted before they reach
    the UI. Opening is lazy: no connection is made yet."
   [{:keys [engine path url dsn] :as t}]
-  (if (= :sqlite engine)
-    (sqlite/open (sqlite-uri path))
+  (case engine
+    :sqlite (sqlite/open (sqlite-uri path))
+    :duckdb (do (when-let [msg (duckdb-path-error path)]
+                  (throw (ex-info msg {})))
+                (try (duckdb/open path)
+                     (catch e (throw (ex-info (ex-message e) {})))))
     (try
       (pg/open (or url dsn) {:postgres/cancel :request})
       (catch e (throw (ex-info (redact t (ex-message e)) {}))))))
 
 (defn- close-pool! [engine db]
-  (if (= :sqlite engine)
-    (sqlite/close! db)
+  (case engine
+    :sqlite (sqlite/close! db)
+    :duckdb (duckdb/close! db)
     (pg/close! db)))
 
 (defn- ping!
-  "Make a connection on db under ctx (a select 1, which works on Postgres
-   and Redshift). Throws \"Connecting canceled.\" when ctx was cancelled,
+  "Make a connection on db under ctx (a select 1, which works on Postgres,
+   Redshift and DuckDB). Throws \"Connecting canceled.\" when ctx was cancelled,
    else the redacted error."
   [t db ctx]
   (try
@@ -165,16 +193,21 @@
 (defn- connect
   "The shared pool and the session pool for target. A Postgres pool is
    pinged under ctx, so a wrong password or host fails here, not at the
-   first run, and a cancel stops the dial."
+   first run, and a cancel stops the dial. So is a DuckDB pool, so a file
+   that is locked by another process or is not a DuckDB database fails
+   here too; it is the one pool for both (see the top of the file)."
   [{:keys [engine] :as t} ctx]
   (let [db (open-pool t)]
     (when (not= :sqlite engine)
       (try (ping! t db ctx)
            (catch e (close-pool! engine db) (throw e))))
-    (let [sessions-db (try (open-pool t)
+    (if (= :duckdb engine)
+      (do (.SetMaxIdleConns (:sql/handle db) 0)
+          {:db db :sessions-db db})
+      (let [sessions-db (try (open-pool t)
                            (catch e (close-pool! engine db) (throw e)))]
-      (.SetMaxIdleConns (:sql/handle sessions-db) 0)
-      {:db db :sessions-db sessions-db})))
+        (.SetMaxIdleConns (:sql/handle sessions-db) 0)
+        {:db db :sessions-db sessions-db}))))
 
 (defn open-target!
   "Open target t: {:engine (:path | :url | :dsn) :label [:secret]}, where
@@ -198,7 +231,8 @@
 (defn check!
   "Connect to target t once and close again; throws the redacted error if
    that fails. Nothing is kept: this backs the Test button. The dial runs
-   under ctx, a shim Ctx (a SQLite file is not dialled)."
+   under ctx, a shim Ctx (a SQLite file is not dialled; a DuckDB one is
+   opened, so a file that is not a DuckDB database fails)."
   ([t] (check! t (shim/NewCtx)))
   ([{:keys [engine] :as t} ctx]
    (let [db (open-pool t)]
@@ -243,9 +277,17 @@
   (:db (entry registry conn-id)))
 
 (defn engine
-  "The engine of an open database: :sqlite, :postgres or :redshift."
+  "The engine of an open database: :sqlite, :duckdb, :postgres or
+   :redshift."
   [registry conn-id]
   (:engine (entry registry conn-id)))
+
+(defn scan-row
+  "The row reader for an open database's results: its driver's
+   :sql/scan-row (DuckDB's turns dates, decimals, lists and structs into
+   plain values), else sql.shim/ScanRow."
+  [registry conn-id]
+  (or (:sql/scan-row (:db (entry registry conn-id))) shim/ScanRow))
 
 (defn- check-session-id [session-id]
   (when (str/blank? session-id)
@@ -325,11 +367,12 @@
     (get old conn-id)))
 
 (defn close-entry!
-  "Close a detached entry: its sessions, then both pools."
+  "Close a detached entry: its sessions, then its pools (one, for DuckDB)."
   [{:keys [db sessions-db engine sessions]}]
   (doseq [session (vals sessions)]
     (.Close session))
-  (close-pool! engine sessions-db)
+  (when-not (identical? sessions-db db)
+    (close-pool! engine sessions-db))
   (close-pool! engine db)
   nil)
 

@@ -380,3 +380,141 @@
                    (message-of #(conn/open-target! registry {:engine :postgres :dsn (silent-dsn port) :label "silent"} ctx))))
             (is (< (ms-since t0) 500))
             (is (empty? @registry))))))))
+
+;; DuckDB. Every test is in memory or in a temp dir.
+
+(defn- with-temp-dir [f]
+  (let [dir (str/trim (:out (os/sh "mktemp" "-d")))]
+    (try (f dir) (finally (os/sh "rm" "-rf" dir)))))
+
+(def ^:private duck-mem {:engine :duckdb :path ":memory:" :label "m"})
+
+(defn- on [handle q]
+  (sql/execute! {:sql/handle handle} [q]))
+
+(deftest open-an-in-memory-duckdb
+  (with-registry
+    (fn [registry _]
+      (let [r (conn/open-target! registry duck-mem)]
+        (is (= :duckdb (:engine r)))
+        (is (= "m" (:label r)))))))
+
+;; One pool, so every connection shares the one in-memory instance, and the
+;; instance outlives its connections even with no idle ones.
+(deftest an-in-memory-duckdb-is-shared-by-every-session
+  (with-registry
+    (fn [registry _]
+      (let [{:keys [conn-id]} (conn/open-target! registry duck-mem)
+            s1 (conn/session! registry conn-id "a")
+            s2 (conn/session! registry conn-id "b")]
+        (on s1 "create table shared (x integer)")
+        (on s1 "insert into shared values (7)")
+        (is (= [{:x 7}] (on s2 "select x from shared")))
+        (is (= [{:x 7}] (sql/execute! (conn/db registry conn-id) ["select x from shared"])))
+        (.Close (conn/retire-session! registry conn-id "a"))
+        (.Close (conn/retire-session! registry conn-id "b"))
+        (is (= [{:x 7}] (on (conn/session! registry conn-id "c") "select x from shared")))))))
+
+(deftest a-duckdb-temp-table-stays-in-its-session
+  (with-registry
+    (fn [registry _]
+      (let [{:keys [conn-id]} (conn/open-target! registry duck-mem)
+            s1 (conn/session! registry conn-id "a")
+            s2 (conn/session! registry conn-id "b")]
+        (on s1 "create temp table mine (x integer)")
+        (is (= [] (on s1 "select x from mine")))
+        (is (some? (message-of #(on s2 "select x from mine"))))))))
+
+;; The driver caches instances by path, so a second open of a file shares
+;; the first one's instance instead of failing on DuckDB's file lock.
+(deftest two-opens-of-one-duckdb-file-share-it
+  (with-temp-dir
+    (fn [dir]
+      (let [registry (ig/init-key :quel.conn/registry {})
+            t {:engine :duckdb :path (str dir "/a.duckdb") :label "a"}]
+        (try
+          (let [a (:conn-id (conn/open-target! registry t))
+                b (:conn-id (conn/open-target! registry t))]
+            (sql/execute! (conn/db registry a) ["create table t (x integer)"])
+            (sql/execute! (conn/db registry a) ["insert into t values (1)"])
+            (is (= [{:x 1}] (sql/execute! (conn/db registry b) ["select x from t"])))
+            (is (nil? (conn/check! t)))
+            (conn/close! registry a)
+            (sql/execute! (conn/db registry b) ["insert into t values (2)"])
+            (is (= [{:n 2}] (sql/execute! (conn/db registry b) ["select count(*)::integer as n from t"]))))
+          (finally (ig/halt-key! :quel.conn/registry registry)))))))
+
+(deftest a-question-mark-in-a-duckdb-path-is-refused
+  (with-temp-dir
+    (fn [dir]
+      (let [path (str dir "/a?b.duckdb")]
+        (is (= "A DuckDB file path cannot contain ?." (conn/duckdb-path-error path)))
+        (with-registry
+          (fn [registry _]
+            (is (= "A DuckDB file path cannot contain ?."
+                   (message-of #(conn/open-target! registry {:engine :duckdb :path path :label "x"}))))
+            (is (= "A DuckDB file path cannot contain ?."
+                   (message-of #(conn/check! {:engine :duckdb :path path}))))))
+        (is (nil? (os/stat (str dir "/a"))))))))
+
+;; The driver url-parses the path: a % that is not an escape fails to
+;; parse, so it is refused with a plain message. A valid escape, a # and a
+;; space are kept as they are.
+(deftest a-bad-percent-in-a-duckdb-path-is-refused
+  (is (some? (conn/duckdb-path-error "/tmp/a%zz.duckdb")))
+  (is (some? (conn/duckdb-path-error "/tmp/a%2.duckdb")))
+  (is (nil? (conn/duckdb-path-error ":memory:")))
+  (is (nil? (conn/duckdb-path-error "/tmp/a%20b #1.duckdb"))))
+
+(deftest odd-duckdb-file-names-open-as-themselves
+  (with-temp-dir
+    (fn [dir]
+      (let [path (str dir "/a%20b #1.duckdb")
+            registry (ig/init-key :quel.conn/registry {})]
+        (try
+          (let [{:keys [conn-id]} (conn/open-target! registry {:engine :duckdb :path path :label "x"})]
+            (sql/execute! (conn/db registry conn-id) ["create table marker (x int)"])
+            (conn/close! registry conn-id))
+          (finally (ig/halt-key! :quel.conn/registry registry)))
+        (is (pos? (:size (os/stat path))))
+        (is (= ["a%20b #1.duckdb"]
+               (filterv #(not (str/ends-with? % ".wal"))
+                        (str/split-lines (str/trim (:out (os/sh "ls" "-1" dir)))))))))))
+
+(deftest closing-a-duckdb-closes-its-pool-once
+  (with-registry
+    (fn [registry _]
+      (let [{:keys [conn-id]} (conn/open-target! registry duck-mem)
+            e (get @registry conn-id)]
+        (is (identical? (:db e) (:sessions-db e)))
+        (conn/session! registry conn-id "a")
+        (is (nil? (conn/close! registry conn-id)))
+        (is (empty? @registry))))))
+
+;; The bundled library reads both formats without downloading an extension.
+(deftest duckdb-reads-csv-and-json-files
+  (with-temp-dir
+    (fn [dir]
+      (spit (str dir "/f.csv") "a,b\n1,x\n2,y\n3,z\n")
+      (spit (str dir "/f.json") "[{\"a\": 1}, {\"a\": 2}]")
+      (with-registry
+        (fn [registry _]
+          (let [db (conn/db registry (:conn-id (conn/open-target! registry duck-mem)))]
+            (is (= [{:n 3}] (sql/execute! db [(str "select count(*)::integer as n from read_csv('" dir "/f.csv')")])))
+            (is (= [{:n 2}] (sql/execute! db [(str "select count(*)::integer as n from read_json_auto('" dir "/f.json')")])))))))))
+
+(deftest check-a-file-that-is-not-duckdb
+  (with-temp-dir
+    (fn [dir]
+      (let [path (str dir "/junk.duckdb")]
+        (spit path "this is not a duckdb database, just some bytes\n")
+        (is (some? (message-of #(conn/check! {:engine :duckdb :path path}))))))))
+
+(deftest scan-row-follows-the-engine
+  (with-registry
+    (fn [registry path]
+      (let [d (:conn-id (conn/open-target! registry duck-mem))
+            s (:conn-id (conn/open! registry path))]
+        (is (identical? (:sql/scan-row (conn/db registry d)) (conn/scan-row registry d)))
+        (is (some? (conn/scan-row registry d)))
+        (is (identical? shim/ScanRow (conn/scan-row registry s)))))))
