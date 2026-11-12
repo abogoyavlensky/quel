@@ -90,5 +90,27 @@ describe("profile form", () => {
     expect(nameFromPath("/data/Sales Report.sqlite3")).toBe("Sales Report");
     expect(nameFromPath("/data/archive.tar")).toBe("archive.tar");
     expect(nameFromPath("C:\\data\\x.sqlite")).toBe("x");
+    expect(nameFromPath("/data/events.duckdb")).toBe("events");
+    expect(nameFromPath("/data/events.DDB")).toBe("events");
+  });
+
+  it("a DuckDB profile needs a path", () => {
+    expect(missing({ ...emptyForm("duckdb"), name: "n" })).toBe("A file path is required.");
+    expect(missing({ ...emptyForm("duckdb"), name: "n", path: ":memory:" })).toBeNull();
+  });
+
+  it("a DuckDB profile sends its path and no server fields or password", () => {
+    const f = { ...emptyForm("duckdb"), name: "d", path: " :memory: ", host: "h", port: "1", user: "u", password: "pw" };
+    const input = toInput(f);
+    expect(input).toMatchObject({
+      engine: "duckdb",
+      path: ":memory:",
+      host: null,
+      port: null,
+      database: null,
+      user: null,
+      "ssl-mode": null,
+    });
+    expect("password" in input).toBe(false);
   });
 });

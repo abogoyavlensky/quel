@@ -6,6 +6,7 @@ import type { Color, Engine } from "@/lib/types";
 
 export const engineColor: Record<Engine, string> = {
   sqlite: "bg-engine-sqlite",
+  duckdb: "bg-engine-duckdb",
   postgres: "bg-engine-postgres",
   redshift: "bg-engine-redshift",
 };
@@ -21,6 +22,7 @@ export const tagColor: Record<Exclude<Color, "none">, string> = {
 
 export const engineText: Record<Engine, string> = {
   sqlite: "text-engine-sqlite",
+  duckdb: "text-engine-duckdb",
   postgres: "text-engine-postgres",
   redshift: "text-engine-redshift",
 };
@@ -44,4 +46,9 @@ export const tagInk: Record<Exclude<Color, "none">, string> = {
   purple: "text-tag-purple-ink",
 };
 
-export const engineLabel: Record<Engine, string> = { sqlite: "SQLite", postgres: "PostgreSQL", redshift: "Redshift" };
+export const engineLabel: Record<Engine, string> = {
+  sqlite: "SQLite",
+  duckdb: "DuckDB",
+  postgres: "PostgreSQL",
+  redshift: "Redshift",
+};

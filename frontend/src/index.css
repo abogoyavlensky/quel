@@ -46,6 +46,7 @@
     --color-engine-sqlite: oklch(0.62 0.11 175);
     --color-engine-postgres: oklch(0.58 0.13 255);
     --color-engine-redshift: oklch(0.6 0.17 25);
+    --color-engine-duckdb: oklch(0.72 0.15 80);
     --color-chrome: var(--chrome);
     --color-row-alt: var(--row-alt);
     --color-sidebar-ring: var(--sidebar-ring);

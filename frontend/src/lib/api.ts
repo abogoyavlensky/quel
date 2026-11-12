@@ -3,6 +3,7 @@ import { call } from "@/lib/bridge";
 import type {
   ClosedTab,
   CompletionSchema,
+  Engine,
   FetchResult,
   ObjectDetails,
   OpenResult,
@@ -114,8 +115,10 @@ export const connect = (profileId: string, attemptId: string) => call<OpenResult
 // none runs (it ended, or its call has not reached the backend yet).
 export const cancelConnect = (attemptId: string) => call<{ canceled: boolean }>("cancel-connect", attemptId);
 
-// The SQLite file the user picks in a native dialog, or null.
-export const chooseFile = () => answerOrNull(call("choose-file"));
+// The database file the user picks in a native dialog, filtered for the
+// profile's engine, or null.
+export const chooseFile = (engine?: Engine) =>
+  answerOrNull(engine ? call("choose-file", engine) : call("choose-file"));
 
 // Each profile's saved editor tabs, and the selected profile. The bridge
 // lowers a nil reply to {} or null, so the calls that may answer nil

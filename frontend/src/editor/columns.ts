@@ -91,6 +91,8 @@ const RESERVED: Record<Engine, Set<string>> = {
   postgres: new Set(POSTGRES),
   redshift: new Set([...POSTGRES, ...REDSHIFT_EXTRA]),
   sqlite: new Set(SQLITE),
+  // DuckDB's reserved words follow PostgreSQL's.
+  duckdb: new Set(POSTGRES),
 };
 // No profile, no engine: quote what any of them reserves.
 const ANY_RESERVED = new Set([...POSTGRES, ...REDSHIFT_EXTRA, ...SQLITE]);
@@ -225,7 +227,8 @@ function tablesIn(doc: Text, scope: Node, pos: number): Part[][] {
 
 // One name among `names` by the engine's rules. On Postgres and Redshift
 // a quoted name matches exactly and an unquoted one folded to lower case;
-// SQLite matches either case-insensitively (an exact match first).
+// SQLite and DuckDB match either case-insensitively (an exact match
+// first): DuckDB identifiers ignore case, quoted or not.
 function pick(names: string[], part: Part, engine: Engine | null): string | undefined {
   if (engine === "postgres" || engine === "redshift") {
     const name = part.quoted ? part.name : part.name.toLowerCase();

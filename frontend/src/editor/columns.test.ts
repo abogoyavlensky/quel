@@ -101,6 +101,11 @@ describe("columnCompletionSource", () => {
     expect(labels(complete("select ▮ from Public.Customers", { explicit: true }))).toEqual(["id", "name", "email"]);
   });
 
+  it("matches names case-insensitively on DuckDB", () => {
+    const r = complete("select ▮ from MIXED", { engine: "duckdb", schema: lite, explicit: true });
+    expect(labels(r)).toEqual(["Col", "autoincrement", "notnull"]);
+  });
+
   it("matches unquoted names case-insensitively on SQLite", () => {
     const r = complete("select ▮ from MIXED", { engine: "sqlite", explicit: true });
     expect(labels(r)).toEqual(["Col", "autoincrement", "notnull"]);

@@ -35,6 +35,7 @@ import {
   SSL_MODES,
   emptyForm,
   nameFromPath,
+  fileEngine,
   fromProfile,
   missing,
   toInput,
@@ -127,7 +128,7 @@ function ProfileEditor({
   };
 
   const incomplete = missing(form);
-  const server = form.engine !== "sqlite";
+  const server = !fileEngine(form.engine);
 
   async function onTest() {
     const at = revision.current;
@@ -184,7 +185,7 @@ function ProfileEditor({
 
   async function onBrowse() {
     try {
-      const path = await chooseFile();
+      const path = await chooseFile(form.engine);
       // A new file names an unnamed connection after itself.
       if (path) set({ path, ...(form.name.trim() === "" ? { name: nameFromPath(path) } : {}) });
     } catch (err) {
@@ -198,7 +199,11 @@ function ProfileEditor({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit Connection" : "New Connection"}</DialogTitle>
           <DialogDescription>
-            {server ? "Passwords are kept in the Keychain." : "A SQLite database file on this machine."}
+            {server
+              ? "Passwords are kept in the Keychain."
+              : form.engine === "duckdb"
+                ? "A DuckDB database file, or :memory: for a scratch database."
+                : "A SQLite database file on this machine."}
           </DialogDescription>
         </DialogHeader>
 
@@ -321,7 +326,7 @@ function ProfileEditor({
                   className="h-9 min-w-0 flex-1"
                   value={form.path}
                   onChange={(e) => set({ path: e.target.value })}
-                  placeholder="/path/to/app.db"
+                  placeholder={form.engine === "duckdb" ? "/path/to/data.duckdb or :memory:" : "/path/to/app.db"}
                   spellCheck={false}
                   autoComplete="off"
                 />
