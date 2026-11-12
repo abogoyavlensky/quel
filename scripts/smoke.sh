@@ -98,6 +98,18 @@ pconn="$(json "$connected" "['conn-id']")" || fail "connect: $connected"
 [[ "$(call run "[\"$pconn\",\"s1\",\"q-p\",\"select 1\"]")" == *'"rows":[[1]]'* ]] || fail "run on a profile's connection"
 call close-db "[\"$pconn\"]" >/dev/null
 
+# A DuckDB scratch profile (:memory:): connect, and query a CSV file in
+# place, through DuckDB's own SQL.
+printf 'a,b\n1,x\n' >"$tmp/smoke.csv"
+duck_saved="$(call save-profile "[{\"name\":\"Smoke duck\",\"engine\":\"duckdb\",\"path\":\":memory:\"}]")"
+duck_profile="$(json "$duck_saved" "['id']")" || fail "save-profile (duckdb): $duck_saved"
+duck_connected="$(call connect "[\"$duck_profile\"]")"
+duck="$(json "$duck_connected" "['conn-id']")" || fail "connect (duckdb): $duck_connected"
+[[ "$duck_connected" == *'"engine":"duckdb"'* ]] || fail "duckdb engine: $duck_connected"
+duck_run="$(call run "[\"$duck\",\"s1\",\"q-duck\",\"select count(*)::integer as n from '$tmp/smoke.csv'\"]")"
+[[ "$duck_run" == *'"rows":[[1]]'* ]] || fail "duckdb csv query: $duck_run"
+call close-db "[\"$duck\"]" >/dev/null
+
 # The profile's editor tabs: save them, load them back.
 r="$(call save-workspace "[\"$profile\",{\"tabs\":[{\"id\":\"smoke-tab\",\"title\":\"Query 1\",\"body\":\"select 42\"}],\"active-tab\":\"smoke-tab\",\"next-tab-number\":2}]")"
 nothing "$r" || fail "save-workspace: $r"
