@@ -40,12 +40,17 @@ build is done).
 
 ### Without a desktop
 
-On a machine without the webview headers, Wails' server mode runs the
-same app as an HTTP server you open in a browser:
+On a machine without a display, Wails' server mode runs the same app as
+an HTTP server you open in a browser:
 
 ```sh
-CGO_ENABLED=0 GOFLAGS=-tags=server lgx dev    # http://localhost:8080
+CGO_ENABLED=1 GOFLAGS=-tags=server lgx dev    # http://localhost:8080
 ```
+
+On Linux it still needs a C compiler and the GTK4/WebKitGTK headers
+(`sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev`): DuckDB is
+cgo, and a few Wails packages build on `linux && cgo` without a `!server`
+guard.
 
 Menus and file dialogs do nothing there.
 
@@ -74,9 +79,9 @@ lgx test-release            # the release scripts, with stand-ins for Apple's to
 ```
 
 The `-pg` tasks need Docker. `lgx e2e` needs Playwright's Chromium once:
-`npx --prefix frontend playwright install chromium`. Without the webview
-headers, prefix the test, smoke and e2e tasks with
-`CGO_ENABLED=0 GOFLAGS=-tags=server`.
+`npx --prefix frontend playwright install chromium`. Without a display,
+prefix the test, smoke and e2e tasks with
+`CGO_ENABLED=1 GOFLAGS=-tags=server` (the headers above are still needed).
 
 ## Build
 

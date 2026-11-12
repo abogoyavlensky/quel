@@ -32,10 +32,12 @@ start_app() {
     data_dir="$(mktemp -d)"
     cd "$SERVER_MODE_ROOT"
     rm -f .nrepl-port
-    # Both vars are needed (a few Wails packages gate on `linux && cgo`
-    # without a `!server` guard).
+    # cgo is on because DuckDB links a C library; -tags=server keeps the
+    # window out, so no display is needed (the GTK4/WebKitGTK headers are,
+    # as a few Wails packages build on `linux && cgo` without a `!server`
+    # guard).
     set -m
-    CGO_ENABLED=0 GOFLAGS=-tags=server WAILS_SERVER_PORT="$port" LGX_RUN=1 \
+    CGO_ENABLED=1 GOFLAGS=-tags=server WAILS_SERVER_PORT="$port" LGX_RUN=1 \
         QUEL_SECRETS=memory QUEL_DATA_DIR="$data_dir" \
         QUEL_UPDATES="${QUEL_UPDATES:-off}" QUEL_UPDATES_URL="${QUEL_UPDATES_URL:-}" \
         "$LGX" run >"$log" 2>&1 &
