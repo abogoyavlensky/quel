@@ -89,11 +89,11 @@
 
 (defn- clock
   "micros as DuckDB prints an interval's time part: [-]hh:mm:ss, with a
-   fraction when there is one, its trailing zeros trimmed."
+   fraction when there is one, its trailing zeros trimmed. Split before
+   taking magnitudes: (abs micros) overflows for the smallest int64."
   [micros]
-  (let [us (abs micros)
-        secs (quot us 1000000)
-        frac (rem us 1000000)]
+  (let [secs (abs (quot micros 1000000))
+        frac (abs (rem micros 1000000))]
     (str (when (neg? micros) "-")
          (two (quot secs 3600)) ":" (two (rem (quot secs 60) 60)) ":" (two (rem secs 60))
          (when (pos? frac)
