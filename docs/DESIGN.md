@@ -42,13 +42,18 @@ in `docs/plans/`.
 | 1 | Redshift | `postgres` (pgx, pure Go) | Postgres wire protocol, its own catalog |
 | 1 | SQLite | `sqlite` (modernc, pure Go) | a file, opened by path |
 | 2 | PostgreSQL | `postgres` (pgx, pure Go) | |
-| 2 | DuckDB | `duckdb` (cgo) | a file, locked by the process that opens it |
+| 2 | DuckDB | `duckdb` (cgo) | a file, or `:memory:` for a scratch database; done 2026-11-12 |
 | later | Redis | `go-redis` (new package) | a key browser, not a SQL client |
 
 Redshift and SQLite are the first targets. Postgres comes almost free once
 Redshift works (same driver, a different catalog). DuckDB is cgo and adds
-about 75 MB to the binary; Wails is cgo already, so the only real cost is
-size.
+about 75 MB to the binary. Wails is cgo already, so on macOS the cost is
+size. On Linux every build, server mode included, now runs with
+`CGO_ENABLED=1` and needs a C compiler and the GTK4/WebKitGTK headers: a
+few Wails packages build on `linux && cgo` without a `!server` guard. CI
+installs them. Through DuckDB's own SQL (`select * from 'data.csv'`,
+`read_json_auto(...)`), a DuckDB profile also queries CSV, JSON and
+Parquet files in place.
 
 ## Stack
 
@@ -239,9 +244,24 @@ the id, close its query or cursor, then close the connection.
 
 Statements run in autocommit unless the user opens a transaction.
 
-SQLite and DuckDB profiles are file paths. DuckDB locks the file for the
-process, so a DuckDB file is opened once and shared across tabs; a second
-open of the same file reuses the pool.
+SQLite and DuckDB profiles are file paths. A DuckDB path may also be
+`:memory:`, a scratch database.
+
+A DuckDB target opens **one** pool, with no idle connections, and uses it
+for browsing and for sessions alike. An in-memory DuckDB belongs to the
+instance that opened it, so the two pools SQLite gets would be two
+separate, empty databases. With one pool, every tab and the structure tree
+see the same scratch database. A tab's session is still its own
+connection, closed with the tab, so its temp tables and `SET`s go with it.
+DuckDB locks a file for the process, but a second open of the same file
+(two profiles, or Test while connected) is safe: duckdb-go keeps one
+instance per path, process-wide, and a second pool shares it.
+
+The driver reads everything after a `?` in its DSN as options, and
+url-parses the rest. So a DuckDB path with a `?`, or with a `%` that does
+not start an escape, is refused (`quel.conn/duckdb-path-error`, in profile
+validation and when opening). `#`, spaces and a valid `%20` open as
+themselves.
 
 ## Query execution
 
@@ -1079,7 +1099,8 @@ version is `quel.version/version`, kept equal to `VERSION` by a test.
 
 ### Testing
 
-- **Backend**: `lgx test` against SQLite (and later DuckDB) in-process.
+- **Backend**: `lgx test` against SQLite and DuckDB in-process (DuckDB in
+  memory, or in temp files).
   `lgx test-pg` runs the same suite with a throwaway Postgres in Docker
   (`scripts/with-postgres.sh` sets `QUEL_PG_URL`); without it the Postgres
   tests skip. CI runs `test-pg`.
@@ -1160,7 +1181,9 @@ package feature, not app glue.
    read-only profiles; `Cmd+K`. Indexes, keys, functions, types and
    sequences in the tree done 2026-11-02; dist and sort keys backlogged.
    Run policies (confirmation and read-only) done 2026-11-02.
-3. **PostgreSQL and DuckDB.**
+3. **PostgreSQL and DuckDB.** DuckDB done 2026-11-12: profiles for a file
+   or `:memory:`, sessions, cancel, the structure tree, completion, and
+   nested values and intervals in the grid.
 4. **Diagrams and export.** ER diagrams with export; results to CSV and
    JSON; copy-as formats. Results to CSV, JSON and Markdown (copy or save)
    done 2026-10-31.
