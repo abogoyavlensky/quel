@@ -1,4 +1,4 @@
-import type { KeyKind, ObjectDetails, ObjectKind, SchemaContents, SchemaInfo } from "@/lib/types";
+import type { CompletionSchema, KeyKind, ObjectDetails, ObjectKind, SchemaContents, SchemaInfo } from "@/lib/types";
 import { metaKeys } from "@/lib/query";
 
 // The structure tree as a flat list of rows, built from what has loaded
@@ -23,6 +23,13 @@ import { metaKeys } from "@/lib/query";
 //
 // Keys are JSON arrays with a prefix per kind, so a name with any
 // characters, a function named like a table, and overloads stay apart.
+//
+// Under a filter (the Structure input), the rows are the tables and views
+// whose names hold the text, ignoring case: each schema with a match, open,
+// with only its Tables and Views groups, open, counting the matches. A
+// schema with no match is left out. Schema and group rows open and close in
+// the filter's own set (TreeFilter.closed), so the filter never changes
+// what the tree has open without it; matched objects open as usual.
 
 export type Loaded<T> = { status: "pending" } | { status: "error"; message: string } | { status: "success"; data: T };
 
@@ -47,7 +54,14 @@ interface Base {
 export type TreeRow =
   | (Base & { kind: "schema"; label: string; expanded: boolean; schema: string })
   | (Base & { kind: "group"; label: string; detail: string; expanded: boolean; schema: string; group: Group })
-  | (Base & { kind: "object"; label: string; objectKind: ObjectKind; expanded: boolean; schema: string })
+  | (Base & {
+      kind: "object";
+      label: string;
+      objectKind: ObjectKind;
+      expanded: boolean;
+      schema: string;
+      match?: number; // under a filter, where its text starts in the label
+    })
   | (Base & { kind: "column"; label: string; detail: string; badges: Badge[] })
   | (Base & { kind: "section"; label: string; detail: string; expanded: boolean })
   | (Base & { kind: "enum"; label: string; expanded: boolean })
@@ -65,6 +79,39 @@ export const objectKey = (schema: string, name: string) => k("o", schema, name);
 export const sectionKey = (schema: string, name: string, section: Section) => k("d", schema, name, section);
 export const typeKey = (schema: string, name: string) => k("ty", schema, name);
 export const functionKey = (schema: string, name: string, args: string) => k("fn", schema, name, args);
+
+// A filter: its text, trimmed and not blank, and the schema and group keys
+// the user closed while it stands.
+export interface TreeFilter {
+  text: string;
+  closed: ReadonlySet<string>;
+}
+
+// Where text starts in name, ignoring case; -1 when it does not occur.
+// Lower-casing can change a string's length (rare Unicode), so a caller
+// that highlights checks the slice first.
+export function matchAt(name: string, text: string): number {
+  return name.toLowerCase().indexOf(text.toLowerCase());
+}
+
+// The schemas to load under a filter, in the schema list's order: the open
+// ones, and those whose completion entry has a matching table or view.
+// Completion has every schema's tables up to its cap, already fetched, so
+// picking costs no query; without it (loading, failed) only the open ones.
+export function filterSchemas(
+  schemas: SchemaInfo[],
+  completion: CompletionSchema | undefined,
+  text: string,
+  expanded: ReadonlySet<string>,
+): string[] {
+  return schemas
+    .map((s) => s.name)
+    .filter(
+      (s) =>
+        expanded.has(schemaKey(s)) ||
+        Object.keys(completion?.schemas[s] ?? {}).some((t) => matchAt(t, text) >= 0),
+    );
+}
 
 export function isExpandable(row: TreeRow): row is ExpandableRow {
   return (
@@ -163,7 +210,8 @@ function objectRows(rows: TreeRow[], data: TreeData, schema: string, name: strin
   );
 }
 
-export function treeRows(data: TreeData, expanded: ReadonlySet<string>): TreeRow[] {
+export function treeRows(data: TreeData, expanded: ReadonlySet<string>, filter?: TreeFilter): TreeRow[] {
+  if (filter) return filteredRows(data, expanded, filter);
   const rows: TreeRow[] = [];
   for (const { name: schema } of data.schemas) {
     const sKey = schemaKey(schema);
@@ -230,6 +278,48 @@ export function treeRows(data: TreeData, expanded: ReadonlySet<string>): TreeRow
             ? c.functions.map((f) => ({ key: functionKey(schema, f.name, f.args), label: f.name, detail: `(${f.args})`, icon: f.kind }))
             : c.sequences.map((sq) => ({ key: k("sq", schema, sq.name), label: sq.name, detail: "", icon: "sequence" }));
         folder(rows, base, items, expanded);
+      }
+    }
+  }
+  return rows;
+}
+
+function filteredRows(data: TreeData, expanded: ReadonlySet<string>, filter: TreeFilter): TreeRow[] {
+  const rows: TreeRow[] = [];
+  for (const { name: schema } of data.schemas) {
+    const loaded = data.contents[schema];
+    if (!loaded) continue;
+    const c = loaded.status === "success" ? loaded.data : null;
+    const matches = (c?.objects ?? []).flatMap((o) => {
+      const at = matchAt(o.name, filter.text);
+      return at >= 0 ? [{ ...o, at }] : [];
+    });
+    if (c && matches.length === 0) continue;
+
+    const sKey = schemaKey(schema);
+    const sOpen = !filter.closed.has(sKey);
+    rows.push({ kind: "schema", key: sKey, depth: 0, parentKey: null, label: schema, expanded: sOpen, schema });
+    if (!sOpen) continue;
+    const status = statusRows(loaded, false, sKey, 1, "", metaKeys.schema(data.connId, schema));
+    if (status || !c) {
+      rows.push(...(status ?? []));
+      continue;
+    }
+
+    for (const group of ["tables", "views"] as const) {
+      // A materialized view goes with the views.
+      const members = matches.filter((o) => (o.kind === "table") === (group === "tables"));
+      if (members.length === 0) continue;
+      const gKey = groupKey(schema, group);
+      const gOpen = !filter.closed.has(gKey);
+      const label = group === "tables" ? "Tables" : "Views";
+      rows.push({ kind: "group", key: gKey, depth: 1, parentKey: sKey, label, detail: String(members.length), expanded: gOpen, schema, group });
+      if (!gOpen) continue;
+      for (const o of members) {
+        const oKey = objectKey(schema, o.name);
+        const oOpen = expanded.has(oKey);
+        rows.push({ kind: "object", key: oKey, depth: 2, parentKey: gKey, label: o.name, objectKind: o.kind, expanded: oOpen, schema, match: o.at });
+        if (oOpen) objectRows(rows, data, schema, o.name, oKey, expanded);
       }
     }
   }

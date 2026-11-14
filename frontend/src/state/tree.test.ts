@@ -4,10 +4,13 @@ import type { ObjectDetails, ObjectInfo, SchemaContents } from "@/lib/types";
 import {
   type ExpandableRow,
   type TreeData,
+  type TreeFilter,
   type TreeRow,
+  filterSchemas,
   functionKey,
   groupKey,
   initialExpanded,
+  matchAt,
   objectKey,
   openObjects,
   openSchemas,
@@ -312,3 +315,107 @@ describe("what to load", () => {
     expect(openObjects(rows)).toEqual([{ schema: "public", name: "users", key: users }]);
   });
 });
+
+describe("matchAt", () => {
+  it("finds the text ignoring case", () => {
+    expect(matchAt("Orders", "ord")).toBe(0);
+    expect(matchAt("orders", "DER")).toBe(2);
+    expect(matchAt("orders", "x")).toBe(-1);
+  });
+});
+
+describe("filterSchemas", () => {
+  const schemas = [
+    { name: "public", default: true },
+    { name: "sales", default: false },
+    { name: "audit", default: false },
+  ];
+  const completion = { "default-schema": "public", schemas: { sales: { orders: ["id"] }, audit: { log: ["id"] } } };
+
+  it("keeps the open schemas and those whose completion has a match, in order", () => {
+    expect(filterSchemas(schemas, completion, "ORD", open(schemaKey("public")))).toEqual(["public", "sales"]);
+    expect(filterSchemas(schemas, completion, "log", open())).toEqual(["audit"]);
+  });
+
+  it("has only the open schemas without completion", () => {
+    expect(filterSchemas(schemas, undefined, "ord", open(schemaKey("audit")))).toEqual(["audit"]);
+  });
+});
+
+describe("treeRows under a filter", () => {
+  const filter = (text: string, ...closed: string[]): TreeFilter => ({ text, closed: new Set(closed) });
+  const withObjects = contents({
+    objects,
+    functions: [{ name: "orders_fn", kind: "function", args: "" }],
+    sequences: [{ name: "orders_seq" }],
+  });
+
+  it("shows only matching tables and views, open, counting the matches", () => {
+    const rows = treeRows(data({ contents: { public: ok(withObjects) } }), open(), filter("r"));
+    expect(summary(rows)).toEqual([
+      "0:schema:public",
+      "1:group:Tables",
+      "2:object:orders",
+      "2:object:users",
+      "1:group:Views",
+      "2:object:recent",
+    ]);
+    const groups = rows.filter((r) => r.kind === "group");
+    expect(groups.map((g) => ("detail" in g ? g.detail : ""))).toEqual(["2", "1"]);
+    expect(rows.filter(isExpandableRow).every((r) => r.kind === "object" || r.expanded)).toBe(true);
+  });
+
+  it("counts a materialized view as a view and marks where the text starts", () => {
+    const rows = treeRows(data({ contents: { public: ok(withObjects) } }), open(), filter("CEN"));
+    expect(summary(rows)).toEqual(["0:schema:public", "1:group:Views", "2:object:recent"]);
+    const recent = rows.find((r) => r.kind === "object");
+    expect(recent && "match" in recent ? recent.match : null).toBe(2);
+  });
+
+  it("leaves out schemas without a match and those not loaded", () => {
+    const rows = treeRows(
+      data({ contents: { public: ok(withObjects), sales: ok(contents({ objects: [{ name: "x", kind: "table" }] })) } }),
+      open(),
+      filter("orders"),
+    );
+    expect(summary(rows)).toEqual(["0:schema:public", "1:group:Tables", "2:object:orders"]);
+    expect(summary(treeRows(data(), open(), filter("orders")))).toEqual([]);
+  });
+
+  it("shows a loading or failed schema with its status row", () => {
+    const rows = treeRows(
+      data({ contents: { public: { status: "pending" }, sales: { status: "error", message: "boom" } } }),
+      open(),
+      filter("x"),
+    );
+    expect(summary(rows)).toEqual(["0:schema:public", "1:loading:", "0:schema:sales", "1:error:"]);
+  });
+
+  it("closes schema and group rows in the filter's own set, ignoring the tree's", () => {
+    const d = data({ contents: { public: ok(withObjects) } });
+    // The tree's own state (public closed) does not hide the matches.
+    expect(summary(treeRows(d, open(), filter("orders")))).toHaveLength(3);
+    expect(summary(treeRows(d, open(), filter("orders", groupKey("public", "tables"))))).toEqual([
+      "0:schema:public",
+      "1:group:Tables",
+    ]);
+    expect(summary(treeRows(d, open(), filter("orders", schemaKey("public"))))).toEqual(["0:schema:public"]);
+  });
+
+  it("opens a matched object to its columns as usual", () => {
+    const oKey = objectKey("public", "orders");
+    const rows = treeRows(
+      data({
+        contents: { public: ok(withObjects) },
+        details: { [oKey]: ok(details({ columns: [{ name: "id", type: "integer", pk: true, fk: false }] })) },
+      }),
+      open(oKey),
+      filter("orders"),
+    );
+    expect(summary(rows)).toEqual(["0:schema:public", "1:group:Tables", "2:object:orders", "3:column:id"]);
+  });
+});
+
+function isExpandableRow(r: TreeRow): r is ExpandableRow {
+  return "expanded" in r;
+}
