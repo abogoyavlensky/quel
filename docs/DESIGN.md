@@ -508,6 +508,20 @@ caches it and the
 tree's levels per connection (TanStack Query) and reloads them only with
 the tree's refresh button: running DDL does not refresh anything.
 
+An input above the tree filters it to the tables and views whose names
+hold the text, ignoring case. Each schema with a match shows open, with
+only its Tables and Views groups, open and counting the matches, and the
+matched part of each name marked. Matched objects open to their columns
+as usual. Schemas and groups open and close in a set of the filter's own,
+dropped when the text changes, so clearing the filter gives back the tree
+as it was. The schemas the filter loads are the open ones and those whose
+completion names have a match: completion is already cached, so typing
+runs no query, and each such schema costs one `describe-schema`, cached
+like any other. Completion stops at 50,000 columns and leaves out objects
+without columns; such a table is found only once its schema is open
+(backlogged). The text is kept per profile, in memory only. Escape clears
+it, ArrowDown moves into the tree, and ⌘F in the tree comes back to it.
+
 ## Write safety
 
 Each profile has a **run policy**, stored in the app database
@@ -672,6 +686,17 @@ up the first render, and saved in order, one save at a time
 (no connections, a failed tab load, tabs loading): the button lives in
 the strip, so nothing else could bring it back. Hiding it with focus
 inside moves focus to the editor.
+
+The sidebar's Structure section collapses to its header, as a VS Code
+sidebar section does: the header is a disclosure button (a chevron and
+"Structure"), and the Refresh button shows only while expanded. Collapsed,
+the section is left out of the sidebar's split, not collapsed in it: the
+connections take the column and the header sits under them, so no
+structure query runs. The split's panels have ids and the default size
+sits on Structure, so a dragged split comes back. The choice is saved
+app-wide like the sidebar's (`structure-collapsed`, a row while
+collapsed), read at start-up and saved in the same chain. A toggle moves
+the header, and focus inside the section follows it.
 
 The results pane can be hidden too, so the editor takes the workspace: ⌘J,
 the `PanelBottom` button between the other two panel buttons, or the
@@ -849,7 +874,7 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⌘1–⌘8 / Ctrl+1–8 | Selects editor tab N, if there is one, and focuses its editor |
 | ⌘9 / Ctrl+9 | Selects the last editor tab, as browsers do |
 | ⌘PageUp, ⌘PageDown / Ctrl+PageUp, Ctrl+PageDown | Selects the previous or next tab, wrapping: the result tabs (Messages first) while focus is in the results, else the editor tabs. Focus follows: the editor, or the result's grid, or the result tab itself when it has no grid |
-| ⌘F / Ctrl+F | Opens Find: in the editor (with replace), or in the result when its grid has focus |
+| ⌘F / Ctrl+F | Opens Find: in the editor (with replace), or in the result when its grid has focus; in the structure tree, focuses its filter |
 | ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match, in the editor or the result |
 | ⌥⌘G / Ctrl+Alt+G | Opens Go to Line |
 | ⌘, / Ctrl+, | Opens **Settings** |
@@ -1041,7 +1066,7 @@ with string keys); errors reject the frontend's promise with the message.
 | Execution | `run`, `fetch-page`, `cancel`, `close-result`, `close-session` |
 | Export | `export-begin` (the format and a suggested file name; a save dialog; an id, or nil when canceled), `export-append` (the id and a chunk of text), `export-finish` (the id; the path), `export-abort` (the id); `export-ddl` is planned and will open a save dialog too |
 | History | `list-history`, `clear-history` |
-| Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile` |
+| Workspace | `load-workspace`, `save-workspace` (a profile's tabs), `close-tab` (a tab into the closed list, with its final text), `reopen-tab` (out of it, under a new id), `selected-profile`, `select-profile`, `sidebar-hidden`, `set-sidebar-hidden`, `structure-collapsed`, `set-structure-collapsed` |
 | Updates | `check-update` (the current version, whether this copy can install, a newer release or nil, whether it is the skipped one), `skip-update`, `download-update` (blocks until staged and verified), `restart-to-update` |
 
 Backend-to-frontend events: menu actions (`menu:new-tab`, `menu:run`,
