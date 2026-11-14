@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { sidebarShown, toggleResults, toggleSidebar } from "@/state/layout";
 import { closeTab, newTab, renameTab, reopenTab, selectTab, togglePin, toggleRowDetails } from "@/state/runner";
 import { type Workspace, useApp } from "@/state/store";
-import { RESULTS_PANE_KEY, ROW_KEY, SIDEBAR_KEY } from "./keys";
+import { keyLabelOf } from "@/state/keymap";
 import { NameInput } from "./NameInput";
 
 // The selected workspace's editor tabs. Each is its own database session:
@@ -162,7 +162,7 @@ function SidebarToggle() {
       size="icon-sm"
       aria-label="Sidebar"
       aria-pressed={shown}
-      title={`Sidebar (${SIDEBAR_KEY})`}
+      title={`Sidebar (${keyLabelOf("sidebar")})`}
       onClick={toggleSidebar}
       className={cn(shown && "bg-muted text-foreground")}
     >
@@ -180,7 +180,7 @@ function ResultsToggle() {
       size="icon-sm"
       aria-label="Results"
       aria-pressed={shown}
-      title={`Results (${RESULTS_PANE_KEY})`}
+      title={`Results (${keyLabelOf("results")})`}
       onClick={toggleResults}
       className={cn(shown && "bg-muted text-foreground")}
     >
@@ -198,7 +198,7 @@ function RowDetailsToggle() {
       size="icon-sm"
       aria-label="Row details"
       aria-pressed={open}
-      title={`Row details (${ROW_KEY})`}
+      title={`Row details (${keyLabelOf("row-details")})`}
       onClick={toggleRowDetails}
       className={cn(open && "bg-muted text-foreground")}
     >

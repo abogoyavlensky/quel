@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, CaseSensitive, Regex, WholeWord, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import { FIND_NEXT_KEY, FIND_PREV_KEY, modKey } from "@/components/keys";
+import { modKey } from "@/components/keys";
+import { keyLabelOf } from "@/state/keymap";
 import { cn } from "@/lib/utils";
 import type { GridFind as Find } from "@/state/store";
 
@@ -86,7 +87,7 @@ export function GridFind({
         variant="ghost"
         size="icon-xs"
         aria-label="Previous match"
-        title={`Previous match (${FIND_PREV_KEY})`}
+        title={`Previous match (${keyLabelOf("find-previous")})`}
         onClick={() => onStep(-1)}
       >
         <ArrowUp />
@@ -95,7 +96,7 @@ export function GridFind({
         variant="ghost"
         size="icon-xs"
         aria-label="Next match"
-        title={`Next match (${FIND_NEXT_KEY})`}
+        title={`Next match (${keyLabelOf("find-next")})`}
         onClick={() => onStep(1)}
       >
         <ArrowDown />

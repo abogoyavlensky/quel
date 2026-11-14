@@ -26,6 +26,7 @@ vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
 import { commands } from "./commands";
+import { keyLabel } from "./keymap";
 import { type AppState, type ConnStatus, initialState, newWorkspace } from "./store";
 
 const profile = (id: string): Profile => ({
@@ -220,5 +221,33 @@ describe("run", () => {
     expect(palette.openPalette).toHaveBeenCalledWith("connections");
     void find(state(), "check-updates").run();
     expect(updates.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+  });
+});
+
+describe("keys", () => {
+  it("labels every entry from the registry, across the states that show them", () => {
+    const withResult = state("connected", (w) => {
+      w.tabs[0].results = [{ id: "r1", kind: "rows" } as (typeof w.tabs)[0]["results"][number]];
+      w.tabs[0].active = "r1";
+      w.closed = [{ id: "c1" } as (typeof w.closed)[number]];
+    });
+    const states = [
+      initialState(),
+      state(),
+      state("connecting"),
+      withResult,
+      state("connected", (w) => (w.tabs[0].runningQueryId = "q1")),
+    ];
+    const seen = new Set<string>();
+    for (const s of states) {
+      for (const c of commands(s)) {
+        expect(c.keys, c.id).toBe(keyLabel(c.id));
+        seen.add(c.id);
+      }
+    }
+    for (const id of ["run", "cancel", "connect", "cancel-connect", "disconnect", "reopen-tab", "focus-result"]) {
+      expect(seen, id).toContain(id);
+    }
+    expect(commands(state()).find((c) => c.id === "run")!.keys).toMatch(/^(⌘↵|Ctrl\+Enter)$/);
   });
 });
