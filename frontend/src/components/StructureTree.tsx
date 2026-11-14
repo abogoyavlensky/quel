@@ -23,6 +23,7 @@ import * as api from "@/lib/api";
 import { metaKeys, queryClient } from "@/lib/query";
 import type { ObjectDetails, SchemaContents } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { toggleStructure } from "@/state/layout";
 import { cancelConnect, connectProfile, setTreeExpanded } from "@/state/runner";
 import { type Workspace, selectedWorkspace, useApp } from "@/state/store";
 import {
@@ -56,17 +57,30 @@ function loaded<T>(q: { status: "pending" | "error" | "success"; data?: T; error
   return { status: "pending" };
 }
 
-export function StructureTree() {
+// The section's title row: a disclosure button that collapses the section
+// to this row (state/layout.ts), and while expanded the refresh button.
+// AppShell draws it on its own, under the connections, while collapsed.
+export function StructureHeader({ collapsed }: { collapsed: boolean }) {
   const w = useApp(selectedWorkspace);
   const connId = w?.status === "connected" ? w.connId : null;
   const fetching = useIsFetching({ queryKey: metaKeys.all(connId ?? "") }) > 0 && connId !== null;
 
   return (
-    <section aria-labelledby="structure-title" className="flex h-full min-h-0 flex-col text-[15px]">
-      <div className="flex items-center justify-between px-3 pt-3 pb-1">
-        <h2 id="structure-title" className="text-xs font-medium text-muted-foreground">
+    <div className="flex h-10 shrink-0 items-center justify-between gap-1 px-1.5 pt-1">
+      <h2 id="structure-title" className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">
+        <button
+          type="button"
+          data-quel-structure-toggle=""
+          aria-expanded={!collapsed}
+          aria-controls={collapsed ? undefined : "structure-body"}
+          onClick={toggleStructure}
+          className="flex w-full items-center gap-1 rounded-sm px-1.5 py-1 text-left outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <ChevronRightIcon className={cn("size-3.5 shrink-0 transition-transform", !collapsed && "rotate-90")} />
           Structure
-        </h2>
+        </button>
+      </h2>
+      {!collapsed && (
         <Button
           size="icon-xs"
           variant="ghost"
@@ -77,7 +91,23 @@ export function StructureTree() {
         >
           <RefreshCwIcon className={cn(fetching && "animate-spin")} />
         </Button>
-      </div>
+      )}
+    </div>
+  );
+}
+
+export function StructureTree() {
+  const w = useApp(selectedWorkspace);
+  const connId = w?.status === "connected" ? w.connId : null;
+
+  return (
+    <section
+      aria-labelledby="structure-title"
+      data-quel-structure=""
+      className="flex h-full min-h-0 flex-col text-[15px]"
+    >
+      <StructureHeader collapsed={false} />
+      <div id="structure-body" className="flex min-h-0 flex-1 flex-col">
       {!w ? null : connId ? (
         <Tree workspace={w} connId={connId} />
       ) : w.status === "connecting" ? (
@@ -97,6 +127,7 @@ export function StructureTree() {
           )}
         </div>
       )}
+      </div>
     </section>
   );
 }

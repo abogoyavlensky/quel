@@ -8,7 +8,7 @@ import { type Completion, dialectFor } from "@/editor/setup";
 import * as api from "@/lib/api";
 import { metaKeys } from "@/lib/query";
 import type { Engine } from "@/lib/types";
-import { sidebarShown } from "@/state/layout";
+import { sidebarShown, structureCollapsed } from "@/state/layout";
 import { retryLoad } from "@/state/runner";
 import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -19,7 +19,7 @@ import { ProfileDialog } from "./ProfileDialog";
 import { ResultTabs } from "./ResultTabs";
 import { RunButton } from "./RunButton";
 import { RowDetails } from "./RowDetails";
-import { StructureTree } from "./StructureTree";
+import { StructureHeader, StructureTree } from "./StructureTree";
 import { TitleBar } from "./TitleBar";
 import { RunConfirmDialog } from "./RunConfirmDialog";
 import { SettingsDialog } from "./SettingsDialog";
@@ -27,7 +27,8 @@ import { UpdateDialog } from "./UpdateDialog";
 
 // The window: the top strip naming the selected connection; under it the
 // connections on the left, the selected profile's
-// structure under them; on the right that profile's workspace: its editor
+// structure under them (collapsible to its header, which then sits under
+// the connections); on the right that profile's workspace: its editor
 // tabs, the active tab's editor above its results; on the far right,
 // while open, the row details panel. There is no status bar: the top strip
 // says how the connection is, the results footer what a run is doing, and
@@ -43,6 +44,7 @@ export function AppShell() {
   const rowDetails = useApp((s) => s.rowDetails);
   const showSidebar = useApp(sidebarShown);
   const resultsHidden = useApp((s) => s.resultsHidden);
+  const structureFolded = useApp(structureCollapsed);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -52,15 +54,33 @@ export function AppShell() {
         {showSidebar && (
           <>
             <ResizablePanel id="sidebar" defaultSize="22" minSize={180} className="bg-chrome" data-quel-sidebar="">
-              <ResizablePanelGroup orientation="vertical">
-                <ResizablePanel defaultSize="40" minSize={80}>
-                  <ConnectionsPanel />
-                </ResizablePanel>
-                <ResizableHandle />
-                <ResizablePanel minSize={120}>
-                  <StructureTree />
-                </ResizablePanel>
-              </ResizablePanelGroup>
+              <div className="flex h-full min-h-0 flex-col">
+                {/* The default size sits on Structure, which comes and goes:
+                    the connections take what is left, all of it while
+                    Structure is collapsed to its header below them. */}
+                <ResizablePanelGroup orientation="vertical" className="min-h-0 flex-1">
+                  <ResizablePanel id="connections" minSize={80}>
+                    <ConnectionsPanel />
+                  </ResizablePanel>
+                  {!structureFolded && (
+                    <>
+                      <ResizableHandle />
+                      <ResizablePanel id="structure" defaultSize="60" minSize={120}>
+                        <StructureTree />
+                      </ResizablePanel>
+                    </>
+                  )}
+                </ResizablePanelGroup>
+                {structureFolded && (
+                  <section
+                    aria-labelledby="structure-title"
+                    data-quel-structure=""
+                    className="shrink-0 border-t pb-1 text-[15px]"
+                  >
+                    <StructureHeader collapsed />
+                  </section>
+                )}
+              </div>
             </ResizablePanel>
             <ResizableHandle />
           </>
