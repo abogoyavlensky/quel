@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SqlEditor } from "@/editor/SqlEditor";
 import { namespaceOf } from "@/editor/namespace";
 import { type Completion, dialectFor } from "@/editor/setup";
-import * as api from "@/lib/api";
-import { metaKeys } from "@/lib/query";
+import { completionQuery } from "@/lib/query";
 import type { Engine } from "@/lib/types";
 import { sidebarShown, structureCollapsed } from "@/state/layout";
 import { retryLoad } from "@/state/runner";
@@ -150,11 +149,7 @@ export function AppShell() {
 // the structure tree's metadata. The same object until the data changes,
 // so the editor reconfigures only then.
 function useCompletion(connId: string | null, engine: Engine | null): Completion | null {
-  const { data } = useQuery({
-    queryKey: metaKeys.completion(connId ?? ""),
-    queryFn: () => api.completionSchema(connId!),
-    enabled: connId !== null,
-  });
+  const { data } = useQuery(completionQuery(connId));
   return useMemo(
     () =>
       connId && data

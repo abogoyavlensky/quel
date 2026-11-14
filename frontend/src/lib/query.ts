@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import * as api from "@/lib/api";
 
 // The one query client, for metadata reads (the structure tree and the
 // editor's completion). Nothing refetches on its own: a failed read shows
@@ -20,3 +21,11 @@ export const metaKeys = {
   object: (connId: string, schema: string, name: string) => ["meta", connId, "object", schema, name] as const,
   completion: (connId: string) => ["meta", connId, "completion"] as const,
 };
+
+// The connected database's names for completion, shared by the editor and
+// the structure filter (one query, one cache entry).
+export const completionQuery = (connId: string | null) => ({
+  queryKey: metaKeys.completion(connId ?? ""),
+  queryFn: () => api.completionSchema(connId!),
+  enabled: connId !== null,
+});

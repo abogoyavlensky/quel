@@ -14,22 +14,28 @@ import {
   ListIcon,
   type LucideIcon,
   RefreshCwIcon,
+  SearchIcon,
   ShapesIcon,
   SquareFunctionIcon,
   Table2Icon,
+  XIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
+import { modKey } from "@/components/keys";
 import * as api from "@/lib/api";
-import { metaKeys, queryClient } from "@/lib/query";
+import { completionQuery, metaKeys, queryClient } from "@/lib/query";
 import type { ObjectDetails, SchemaContents } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { toggleStructure } from "@/state/layout";
-import { cancelConnect, connectProfile, setTreeExpanded } from "@/state/runner";
+import { cancelConnect, connectProfile, setTreeExpanded, setTreeFilter } from "@/state/runner";
 import { type Workspace, selectedWorkspace, useApp } from "@/state/store";
 import {
   type ItemIcon,
   type Loaded,
+  type TreeFilter,
   type TreeRow,
+  filterSchemas,
   initialExpanded,
   isExpandable,
   openObjects,
@@ -42,7 +48,9 @@ import {
 // tables, views, functions, types and sequences, and a table's columns,
 // indexes, keys and sequences, each level read when it is first opened (TanStack Query caches it per connection until the refresh
 // button). The rows are a flat, virtualized list (state/tree.ts) with one
-// focused row, walked by the keyboard as an ARIA tree.
+// focused row, walked by the keyboard as an ARIA tree. The input above it
+// filters the tables and views by name: completion's cached names pick the
+// schemas to load, so typing runs no query.
 
 const ROW_H = 32;
 const INDENT = 14;
@@ -133,18 +141,25 @@ export function StructureTree() {
 }
 
 function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
-  const { profileId, treeExpanded } = workspace;
+  const { profileId, treeExpanded, treeFilter } = workspace;
   const expanded = useMemo(() => new Set(treeExpanded ?? []), [treeExpanded]);
+  const text = treeFilter.trim();
 
   const schemas = useQuery({ queryKey: metaKeys.schemas(connId), queryFn: () => api.listSchemas(connId) });
+  const completion = useQuery(completionQuery(connId));
 
   // The first look at a database opens its default schema.
   useEffect(() => {
     if (schemas.data && treeExpanded === null) setTreeExpanded(profileId, [...initialExpanded(schemas.data)]);
   }, [schemas.data, treeExpanded, profileId]);
 
+  // The schema and group rows closed under the filter, for the text they
+  // were closed under: a new text starts with everything open.
+  const [folds, setFolds] = useState<{ text: string; keys: ReadonlySet<string> }>({ text: "", keys: new Set() });
+  const filter: TreeFilter | undefined = text ? { text, closed: folds.text === text ? folds.keys : new Set() } : undefined;
+
   const schemaList = schemas.data ?? [];
-  const shown = openSchemas(schemaList, expanded);
+  const shown = filter ? filterSchemas(schemaList, completion.data, text, expanded) : openSchemas(schemaList, expanded);
   const contentQueries = useQueries({
     queries: shown.map((s) => ({ queryKey: metaKeys.schema(connId, s), queryFn: () => api.describeSchema(connId, s) })),
   });
@@ -152,7 +167,7 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
   shown.forEach((s, i) => (contents[s] = loaded(contentQueries[i])));
 
   // Which objects show their details follows from the rows without them.
-  const open = openObjects(treeRows({ connId, schemas: schemaList, contents, details: {} }, expanded));
+  const open = openObjects(treeRows({ connId, schemas: schemaList, contents, details: {} }, expanded, filter));
   const detailQueries = useQueries({
     queries: open.map((o) => ({
       queryKey: metaKeys.object(connId, o.schema, o.name),
@@ -162,7 +177,8 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
   const details: Record<string, Loaded<ObjectDetails>> = {};
   open.forEach((o, i) => (details[o.key] = loaded(detailQueries[i])));
 
-  const rows = treeRows({ connId, schemas: schemaList, contents, details }, expanded);
+  const rows = treeRows({ connId, schemas: schemaList, contents, details }, expanded, filter);
+  const filterLoading = !!filter && (completion.isPending || contentQueries.some((q) => q.isPending));
 
   // The focused row. When it goes away (its parent closed, a refresh), the
   // focus falls back to its nearest ancestor still shown, else the first
@@ -218,7 +234,17 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
     };
   }, [moved, focusIndex, virtual]);
 
-  const flip = (row: TreeRow) => setTreeExpanded(profileId, [...toggle(expanded, row)]);
+  const flip = (row: TreeRow) => {
+    if (filter && (row.kind === "schema" || row.kind === "group")) {
+      const keys = new Set(filter.closed);
+      if (keys.has(row.key)) keys.delete(row.key);
+      else keys.add(row.key);
+      setFolds({ text, keys });
+    } else {
+      setTreeExpanded(profileId, [...toggle(expanded, row)]);
+    }
+  };
+  const input = useRef<HTMLInputElement>(null);
   const moveTo = (i: number) => {
     const r = rows[Math.max(0, Math.min(rows.length - 1, i))];
     if (!r) return;
@@ -237,6 +263,12 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
       e.preventDefault();
       e.stopPropagation();
     };
+    // ⌘F: the filter (the registry's "find", caught here).
+    if (modKey(e) && !e.shiftKey && e.key.toLowerCase() === "f") {
+      handled();
+      input.current?.select();
+      return;
+    }
     switch (e.key) {
       case "ArrowDown":
         handled();
@@ -284,47 +316,111 @@ function Tree({ workspace, connId }: { workspace: Workspace; connId: string }) {
         </Button>
       </div>
     );
-  if (rows.length === 0) return <p className="px-3 py-1 text-xs text-muted-foreground">No schemas.</p>;
+  if (schemaList.length === 0) return <p className="px-3 py-1 text-xs text-muted-foreground">No schemas.</p>;
+
+  const onFilterKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Escape" && treeFilter !== "") {
+      e.preventDefault();
+      e.stopPropagation();
+      setTreeFilter(profileId, "");
+    } else if (e.key === "ArrowDown" && rows.length > 0) {
+      e.preventDefault();
+      moveTo(0);
+    }
+  };
 
   return (
-    <div ref={scroller} className="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
-      <div
-        role="tree"
-        aria-label="Structure"
-        onKeyDown={onKeyDown}
-        className="relative w-full"
-        style={{ height: virtual.getTotalSize() }}
-      >
-        {virtual.getVirtualItems().map((item) => {
-          const row = rows[item.index];
-          const isFocused = item.index === focusIndex;
-          return (
-            <div
-              key={row.key}
-              data-index={item.index}
-              role="treeitem"
-              aria-level={row.depth + 1}
-              aria-expanded={isExpandable(row) ? row.expanded : undefined}
-              aria-selected={isFocused}
-              tabIndex={isFocused ? 0 : -1}
-              title={"label" in row ? ("detail" in row && row.detail ? `${row.label} ${row.detail}` : row.label) : undefined}
-              onClick={() => {
-                setFocusKey(row.key);
-                if (isExpandable(row)) flip(row);
-              }}
-              onFocus={() => setFocusKey(row.key)}
-              className={cn(
-                "absolute left-0 flex w-full cursor-default items-center gap-1 rounded-sm pr-1.5 outline-none select-none",
-                "hover:bg-muted focus-visible:bg-muted focus-visible:ring-1 focus-visible:ring-ring",
-              )}
-              style={{ top: item.start, height: ROW_H, paddingLeft: 4 + row.depth * INDENT }}
-            >
-              <RowBody row={row} />
-            </div>
-          );
-        })}
+    <>
+      <div className="shrink-0 px-1.5 pb-1">
+        <InputGroup className="h-7">
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+          <InputGroupInput
+            ref={input}
+            aria-label="Filter structure"
+            placeholder="Filter tables and views"
+            className="text-xs"
+            value={treeFilter}
+            onChange={(e) => setTreeFilter(profileId, e.target.value)}
+            onKeyDown={onFilterKeyDown}
+          />
+          {treeFilter !== "" && (
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton
+                size="icon-xs"
+                aria-label="Clear filter"
+                title="Clear filter"
+                onClick={() => {
+                  setTreeFilter(profileId, "");
+                  input.current?.focus();
+                }}
+              >
+                <XIcon />
+              </InputGroupButton>
+            </InputGroupAddon>
+          )}
+        </InputGroup>
       </div>
-    </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-1 text-xs text-muted-foreground">
+          {filterLoading ? "Loading…" : filter ? "No tables or views match." : "No schemas."}
+        </p>
+      ) : (
+        <div ref={scroller} className="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
+          <div
+            role="tree"
+            aria-label="Structure"
+            onKeyDown={onKeyDown}
+            className="relative w-full"
+            style={{ height: virtual.getTotalSize() }}
+          >
+            {virtual.getVirtualItems().map((item) => {
+              const row = rows[item.index];
+              const isFocused = item.index === focusIndex;
+              return (
+                <div
+                  key={row.key}
+                  data-index={item.index}
+                  role="treeitem"
+                  aria-level={row.depth + 1}
+                  aria-expanded={isExpandable(row) ? row.expanded : undefined}
+                  aria-selected={isFocused}
+                  tabIndex={isFocused ? 0 : -1}
+                  title={"label" in row ? ("detail" in row && row.detail ? `${row.label} ${row.detail}` : row.label) : undefined}
+                  onClick={() => {
+                    setFocusKey(row.key);
+                    if (isExpandable(row)) flip(row);
+                  }}
+                  onFocus={() => setFocusKey(row.key)}
+                  className={cn(
+                    "absolute left-0 flex w-full cursor-default items-center gap-1 rounded-sm pr-1.5 outline-none select-none",
+                    "hover:bg-muted focus-visible:bg-muted focus-visible:ring-1 focus-visible:ring-ring",
+                  )}
+                  style={{ top: item.start, height: ROW_H, paddingLeft: 4 + row.depth * INDENT }}
+                >
+                  <RowBody row={row} filterText={text} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// The label with the filter's match marked, when the match is where
+// matchAt said (lower-casing can shift it in rare Unicode).
+function Marked({ label, at, text }: { label: string; at: number | undefined; text: string }) {
+  if (at === undefined || at < 0 || !text || label.slice(at, at + text.length).toLowerCase() !== text.toLowerCase())
+    return <>{label}</>;
+  return (
+    <>
+      {label.slice(0, at)}
+      <span className="rounded-[2px] bg-(--search-match)">{label.slice(at, at + text.length)}</span>
+      {label.slice(at + text.length)}
+    </>
   );
 }
 
@@ -339,7 +435,7 @@ const ITEM_ICONS: Record<ItemIcon, LucideIcon> = {
   value: DotIcon,
 };
 
-function RowBody({ row }: { row: TreeRow }) {
+function RowBody({ row, filterText }: { row: TreeRow; filterText: string }) {
   const chevron = (open: boolean) => (
     <ChevronRightIcon className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")} />
   );
@@ -372,7 +468,9 @@ function RowBody({ row }: { row: TreeRow }) {
           ) : (
             <LayersIcon className={icon} />
           )}
-          <span className="min-w-0 flex-1 truncate">{row.label}</span>
+          <span className="min-w-0 flex-1 truncate">
+            <Marked label={row.label} at={row.match} text={filterText} />
+          </span>
         </>
       );
     case "column":

@@ -147,6 +147,8 @@ export interface Workspace {
   // null until the tree first opens the default schema. Names, not ids, so
   // they hold across a reconnect.
   treeExpanded: string[] | null;
+  // The structure filter's text, as typed; in memory only.
+  treeFilter: string;
   // A run was refused while disconnected: the results say so until a
   // connect. In memory only.
   runRefused: boolean;
@@ -225,6 +227,7 @@ export function newWorkspace(profileId: string): Workspace {
     closed: [],
     loadError: null,
     treeExpanded: null,
+    treeFilter: "",
     runRefused: false,
   };
 }
