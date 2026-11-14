@@ -52,6 +52,7 @@
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "cancel-connect" "choose-file"
            "export-begin" "export-append" "export-finish" "export-abort"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
+           "structure-collapsed" "set-structure-collapsed"
            "zoom" "restore-zoom" "save-window-state"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))

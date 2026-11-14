@@ -199,17 +199,39 @@
                       (str id)]))
   nil)
 
+(defn- flag?
+  "Whether the settings row k is there."
+  [db k]
+  (some? (sql/execute-one! db ["select 1 as one from settings where key = ?" k])))
+
+(defn- set-flag!
+  "Write the settings row k while on?, remove it otherwise."
+  [db k on?]
+  (if on?
+    (sql/execute! db [(str "insert into settings (key, value) values (?, 'true')"
+                           " on conflict (key) do update set value = excluded.value")
+                      k])
+    (sql/execute! db ["delete from settings where key = ?" k]))
+  nil)
+
 (defn sidebar-hidden
   "Whether the user hid the sidebar: a settings row while hidden, none
    while shown."
   [db]
-  (some? (sql/execute-one! db ["select 1 as one from settings where key = 'sidebar-hidden'"])))
+  (flag? db "sidebar-hidden"))
 
 (defn set-sidebar-hidden!
   "Remember whether the sidebar is hidden."
   [db hidden?]
-  (if hidden?
-    (sql/execute! db [(str "insert into settings (key, value) values ('sidebar-hidden', 'true')"
-                           " on conflict (key) do update set value = excluded.value")])
-    (sql/execute! db ["delete from settings where key = 'sidebar-hidden'"]))
-  nil)
+  (set-flag! db "sidebar-hidden" hidden?))
+
+(defn structure-collapsed
+  "Whether the user collapsed the Structure section: a settings row while
+   collapsed, none while expanded."
+  [db]
+  (flag? db "structure-collapsed"))
+
+(defn set-structure-collapsed!
+  "Remember whether the Structure section is collapsed."
+  [db collapsed?]
+  (set-flag! db "structure-collapsed" collapsed?))

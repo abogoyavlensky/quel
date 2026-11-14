@@ -1012,6 +1012,10 @@ export function setTreeExpanded(profileId: string, keys: string[]): void {
   updateWorkspace(profileId, (w) => ({ ...w, treeExpanded: keys }));
 }
 
+export function setTreeFilter(profileId: string, text: string): void {
+  updateWorkspace(profileId, (w) => ({ ...w, treeFilter: text }));
+}
+
 
 // The selected workspace's active tab, for the menu actions.
 export function selectedTabId(): string | null {

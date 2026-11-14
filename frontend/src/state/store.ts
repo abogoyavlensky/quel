@@ -147,6 +147,8 @@ export interface Workspace {
   // null until the tree first opens the default schema. Names, not ids, so
   // they hold across a reconnect.
   treeExpanded: string[] | null;
+  // The structure filter's text, as typed; in memory only.
+  treeFilter: string;
   // A run was refused while disconnected: the results say so until a
   // connect. In memory only.
   runRefused: boolean;
@@ -178,6 +180,10 @@ export interface AppState {
   // The user hid the sidebar (saved in the app database); null until it is
   // read at start-up, which shows it. state/layout.ts.
   sidebarHidden: boolean | null;
+  // The user collapsed the sidebar's Structure section to its header
+  // (saved in the app database); null until read at start-up, which shows
+  // it expanded. state/layout.ts.
+  structureCollapsed: boolean | null;
   resultsHidden: boolean; // the results pane is hidden; in memory only
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
@@ -221,6 +227,7 @@ export function newWorkspace(profileId: string): Workspace {
     closed: [],
     loadError: null,
     treeExpanded: null,
+    treeFilter: "",
     runRefused: false,
   };
 }
@@ -234,6 +241,7 @@ export function initialState(): AppState {
     workspaces: {},
     rowDetails: false,
     sidebarHidden: null,
+    structureCollapsed: null,
     resultsHidden: false,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },

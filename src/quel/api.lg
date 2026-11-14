@@ -171,6 +171,12 @@
 (defn set-sidebar-hidden [{:keys [store]} hidden?]
   (workspace/set-sidebar-hidden! store (true? hidden?)))
 
+(defn structure-collapsed [{:keys [store]}]
+  (workspace/structure-collapsed store))
+
+(defn set-structure-collapsed [{:keys [store]} collapsed?]
+  (workspace/set-structure-collapsed! store (true? collapsed?)))
+
 ;; New versions (quel.updates).
 
 ;; Zoom. The level is applied here rather than when the window is created:
@@ -242,6 +248,8 @@
    "select-profile" #'select-profile
    "sidebar-hidden" #'sidebar-hidden
    "set-sidebar-hidden" #'set-sidebar-hidden
+   "structure-collapsed" #'structure-collapsed
+   "set-structure-collapsed" #'set-structure-collapsed
    "zoom" #'zoom
    "restore-zoom" #'restore-zoom
    "save-window-state" #'save-window-state

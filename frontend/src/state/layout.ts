@@ -10,6 +10,13 @@ import { type AppState, selectedWorkspace, store } from "./store";
 // bring the sidebar back; the saved choice applies again once a workspace
 // loads.
 //
+// Whether the sidebar's Structure section is collapsed to its header,
+// likewise saved app-wide, through the same save chain. Unlike the
+// sidebar it toggles with or without a tab strip: its header shows
+// whenever the sidebar does. A toggle moves the header (into the
+// Structure panel, or under the connections), so focus inside the
+// section follows it to the new header.
+//
 // Whether the results pane shows, likewise (⌘J, the strip's button, the
 // Command Palette), but in memory only, as a run brings it back.
 
@@ -35,6 +42,21 @@ export async function loadSidebar(): Promise<void> {
   if (store.getState().sidebarHidden === null) store.setState({ sidebarHidden: hidden });
 }
 
+export function structureCollapsed(s: AppState): boolean {
+  return s.structureCollapsed === true;
+}
+
+// The saved choice, at start-up, as loadSidebar.
+export async function loadStructure(): Promise<void> {
+  let collapsed: boolean;
+  try {
+    collapsed = await api.structureCollapsed();
+  } catch {
+    return;
+  }
+  if (store.getState().structureCollapsed === null) store.setState({ structureCollapsed: collapsed });
+}
+
 // Saves go one after another: the backend runs bridge calls concurrently,
 // so two quick toggles could otherwise land in the wrong order.
 let saving: Promise<void> = Promise.resolve();
@@ -50,6 +72,17 @@ export function toggleSidebar(): void {
   store.setState({ sidebarHidden: hidden });
   saving = saving.then(() => api.setSidebarHidden(hidden)).catch(() => {});
   if (hidden && document.activeElement?.closest("[data-quel-sidebar]")) setTimeout(focusEditor);
+}
+
+// Collapse or expand the Structure section, and save the choice in the
+// background; a failed save is dropped. With focus in the section, the
+// new header takes it once drawn.
+export function toggleStructure(): void {
+  const collapsed = !structureCollapsed(store.getState());
+  const refocus = !!document.activeElement?.closest("[data-quel-structure]");
+  store.setState({ structureCollapsed: collapsed });
+  saving = saving.then(() => api.setStructureCollapsed(collapsed)).catch(() => {});
+  if (refocus) setTimeout(() => document.querySelector<HTMLElement>("[data-quel-structure-toggle]")?.focus());
 }
 
 // Hide or show the results. Nothing to do without a tab strip: there are no
