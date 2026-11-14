@@ -852,17 +852,39 @@ unavailable, so the browser downloads a `Blob`. The suggested name is
 | ⌘F / Ctrl+F | Opens Find: in the editor (with replace), or in the result when its grid has focus |
 | ⌘G, ⇧⌘G / Ctrl+G, Ctrl+Shift+G | Next and previous match, in the editor or the result |
 | ⌥⌘G / Ctrl+Alt+G | Opens Go to Line |
+| ⌘, / Ctrl+, | Opens **Settings** |
 
 Tabs count left to right as the tab bar shows them (pinned first). A digit
 past the last tab does nothing.
 
-**Two dialogs, no registry.** The palettes are two separate shadcn
-`CommandDialog`s (`CommandPalette.tsx`, `GoToConnection.tsx`), not one
-palette with modes, and the Command Palette's entries are a hand-written
-list (`state/commands.ts`), not a registry the native menu is built from.
-The list repeats some menu actions on purpose: it calls the same runner
-functions, so it can only drift on titles and key labels. The `⌘K` object
-jump stays a separate, later feature.
+**One registry of commands and keys.** Every command is an entry in
+`state/keymap.ts`: an id, a group, the name Settings lists, its keys and
+where they are caught. Keys are written per platform with the modifier
+that platform uses (`keys.mac` with `Cmd`, `keys.other` with `Ctrl`),
+both in full, so a platform can differ where it should and a rebinding
+(`docs/backlog/custom-keybindings.md`) changes only the current
+platform's list. `components/keys.ts` parses a binding (`Cmd-Shift-p`),
+formats its label (`⇧⌘P`, `Ctrl+Shift+P`) and matches a keydown against
+it. The registry is data only: the find bars read labels from it, and an
+import of the runner would put them in cycles. What a command does is
+attached by id: the Command Palette's entries in `state/commands.ts`
+(when an entry can run, its title by state, what it runs; its key label
+comes from the registry) and the page's key actions in
+`state/pageKeys.ts`. Tests check both line up with the registry.
+
+A key is caught in one or two of three places, and the entry says which:
+`page`, the page's one listener; `menu`, the native menu's accelerator
+(`src/quel/menu.lg`); `local`, CodeMirror or a component's own
+`onKeyDown` (Run, Find, Go to Line), which the registry only labels. The
+menu's accelerators are a second copy of the `menu` keys, and
+`keymap.test.ts` reads `menu.lg` and checks that both sides have the
+same set.
+
+The palettes are two separate shadcn `CommandDialog`s
+(`CommandPalette.tsx`, `GoToConnection.tsx`), not one palette with
+modes. The palette repeats some menu actions on purpose: it calls the
+same runner functions. The `⌘K` object jump stays a separate, later
+feature.
 
 **Go to Connection only selects.** Enter does what a click in the sidebar
 does (`selectProfile`) and puts the cursor in that workspace's editor. It
@@ -874,13 +896,16 @@ on a pinned tab. Search matches the keywords (the title; a connection's
 name and engine), not the ids that stand in as cmdk values
 (`keywordsFilter`).
 
-**Keys.** One capture-phase `window` listener (`useGlobalKeys`) matches
-all of them with the pure `shortcutOf` (`state/shortcuts.ts`); digits go
-by `e.code`, because Shift or the layout changes `e.key`. It catches ⌘P
+**Keys.** One capture-phase `window` listener (`useKeys` in `App.tsx`,
+`onPageKey` in `state/pageKeys.ts`) matches the registry's `page` keys
+with `keyFor`, and stops only a key it has an action for. Modifiers must
+match exactly; digits go by `e.code`, because Shift or the layout changes
+`e.key`. It catches ⌘P
 before the webview prints, and ⌘R before a browser reloads (server mode).
 None of the keys collide with CodeMirror's keymaps (its only `b` binding
-is the macOS emacs-style `Ctrl-b`). Only the palettes also have native
-View menu items; nine "Tab N" items would be clutter, ⌘PageUp and
+is the macOS emacs-style `Ctrl-b`); ⌘I is CodeMirror's too, but the
+capture phase gets it first. ⌘. (Cancel) and the palettes also have
+native menu items, which is safe because both can run twice; nine "Tab N" items would be clutter, ⌘PageUp and
 ⌘PageDown act on the focused area, which a menu or palette would take
 focus from, ⌘B and ⌘J are toggles that cannot take a double delivery (as
 ⌘I), and server mode has no native menu. In server mode in a real
@@ -891,8 +916,8 @@ and the page both see a key, the palette opens twice, which is harmless:
 opening sets the state, it does not toggle it.
 
 **Dialog guards.** At most one palette is open (`store.palette`); opening
-the other switches to it. A palette does not open over the profile or
-update dialog, and ⌘E, ⌘R, ⌘B, ⌘J, ⌘1–9, ⌘PageUp and ⌘PageDown do nothing while any
+the other switches to it. A palette does not open over the profile,
+update, run-confirm or Settings dialog, and ⌘E, ⌘R, ⌘B, ⌘J, ⌘1–9, ⌘PageUp and ⌘PageDown do nothing while any
 dialog or palette is open: in those, the keys belong to the dialog. Picking an entry closes the
 palette first and runs the action on the next tick, so actions that open
 the profile dialog are not refused.
@@ -904,6 +929,23 @@ outside), or the editor if it is gone. After an entry runs, the action
 decides: those that move focus (a new tab, a connection, a dialog) do, and
 the rest (`keepsFocus`: Run, Cancel, Connect, Close Tab...) get the old
 element back. Switching between the palettes restores nothing.
+
+**Settings.** A dialog (`SettingsDialog.tsx`, `state/settings.ts`),
+opened with ⌘, or the palette's Settings…, not under another dialog or a
+palette. It has one section for now, Keyboard Shortcuts: every registry
+entry by group, with its key label or a dash, read-only. The sections
+are a list, so a side navigation comes with the second one; the backlog
+has rebinding (`custom-keybindings.md`), an editor font size
+(`editor-font-size.md`) and themes (`themes-setting.md`). Zoom is not a
+setting: View and the palette have it. ⌘, is the page's key; a Quel >
+Settings… item in the macOS app menu needs the wails shim
+(`settings-in-app-menu.md`). On close, focus goes back to where it was,
+or to the editor when that is gone or was the body (after a pick from the
+palette).
+
+**Pointing to the palette.** The empty results pane of a connected tab
+says, under "Run the statement under the cursor with ⌘↵", "All commands:
+⇧⌘P".
 
 ### Workspaces
 
