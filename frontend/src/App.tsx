@@ -5,7 +5,7 @@ import { focusEditor } from "@/editor/states";
 import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
-import { loadSidebar } from "@/state/layout";
+import { loadSidebar, loadStructure } from "@/state/layout";
 import { openPalette } from "@/state/palette";
 import { onPageKey } from "@/state/pageKeys";
 import { loadZoom, stepZoom, watchWindowState } from "@/state/window";
@@ -77,6 +77,7 @@ export default function App() {
   useEffect(() => {
     void loadProfiles().then(restoreSelection);
     void loadSidebar();
+    void loadStructure();
     void loadZoom();
   }, []);
   useEffect(() => {

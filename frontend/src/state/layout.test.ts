@@ -2,10 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const focusEditor = vi.hoisted(() => vi.fn());
 vi.mock("@/editor/states", () => ({ focusEditor }));
-const api = vi.hoisted(() => ({ sidebarHidden: vi.fn(), setSidebarHidden: vi.fn() }));
+const api = vi.hoisted(() => ({
+  sidebarHidden: vi.fn(),
+  setSidebarHidden: vi.fn(),
+  structureCollapsed: vi.fn(),
+  setStructureCollapsed: vi.fn(),
+}));
 vi.mock("@/lib/api", () => api);
 
-import { loadSidebar, showResults, sidebarShown, toggleResults, toggleSidebar } from "./layout";
+import {
+  loadSidebar,
+  loadStructure,
+  showResults,
+  sidebarShown,
+  structureCollapsed,
+  toggleResults,
+  toggleSidebar,
+  toggleStructure,
+} from "./layout";
 import { type AppState, initialState, newWorkspace, store } from "./store";
 
 // A selected profile p with a loaded workspace (the tab strip shows).
@@ -24,6 +38,8 @@ beforeEach(() => {
   focusEditor.mockReset();
   api.sidebarHidden.mockReset();
   api.setSidebarHidden.mockReset().mockResolvedValue(undefined);
+  api.structureCollapsed.mockReset();
+  api.setStructureCollapsed.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal("document", { activeElement: null });
   store.setState(initialState(), true);
 });
@@ -174,5 +190,97 @@ describe("toggleSidebar", () => {
     toggleSidebar();
     vi.runAllTimers();
     expect(focusEditor).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadStructure", () => {
+  it("applies the saved choice", async () => {
+    api.structureCollapsed.mockResolvedValue(true);
+    await loadStructure();
+    expect(store.getState().structureCollapsed).toBe(true);
+  });
+
+  it("lets a toggle made before the answer win", async () => {
+    api.structureCollapsed.mockResolvedValue(true);
+    store.setState({ structureCollapsed: false });
+    await loadStructure();
+    expect(store.getState().structureCollapsed).toBe(false);
+  });
+
+  it("leaves it expanded when the read fails", async () => {
+    api.structureCollapsed.mockRejectedValue(new Error("no database"));
+    await loadStructure();
+    expect(store.getState().structureCollapsed).toBeNull();
+    expect(structureCollapsed(store.getState())).toBe(false);
+  });
+});
+
+describe("toggleStructure", () => {
+  // A document whose focused element is inside the section or not, and
+  // the toggle button the new header draws.
+  const stubDocument = (inside: boolean) => {
+    const button = { focus: vi.fn() };
+    vi.stubGlobal("document", {
+      activeElement: { closest: (sel: string) => (inside && sel === "[data-quel-structure]" ? {} : null) },
+      querySelector: (sel: string) => (sel === "[data-quel-structure-toggle]" ? button : null),
+    });
+    return button;
+  };
+
+  it("collapses and expands it, and saves each choice, with or without a tab strip", async () => {
+    toggleStructure();
+    expect(store.getState().structureCollapsed).toBe(true);
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed).toHaveBeenLastCalledWith(true);
+    toggleStructure();
+    expect(store.getState().structureCollapsed).toBe(false);
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed).toHaveBeenLastCalledWith(false);
+  });
+
+  it("saves quick toggles one at a time, in order", async () => {
+    let finish = () => {};
+    api.setStructureCollapsed.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    toggleStructure();
+    toggleStructure();
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed.mock.calls).toEqual([[true]]);
+    finish();
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("waits behind a slow sidebar save", async () => {
+    let finish = () => {};
+    api.setSidebarHidden.mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    store.setState(loaded(), true);
+    toggleSidebar();
+    toggleStructure();
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed).not.toHaveBeenCalled();
+    finish();
+    await vi.runAllTimersAsync();
+    expect(api.setStructureCollapsed).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps the new state when the save fails", async () => {
+    api.setStructureCollapsed.mockRejectedValue(new Error("disk full"));
+    toggleStructure();
+    await vi.runAllTimersAsync();
+    expect(store.getState().structureCollapsed).toBe(true);
+  });
+
+  it("moves focus to the new header when focus was in the section", () => {
+    const button = stubDocument(true);
+    toggleStructure();
+    vi.runAllTimers();
+    expect(button.focus).toHaveBeenCalledOnce();
+  });
+
+  it("leaves focus alone when it was elsewhere", () => {
+    const button = stubDocument(false);
+    toggleStructure();
+    vi.runAllTimers();
+    expect(button.focus).not.toHaveBeenCalled();
   });
 });

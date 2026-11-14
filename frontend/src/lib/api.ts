@@ -148,6 +148,10 @@ export const selectProfile = (profileId: string | null) => call<void>("select-pr
 export const sidebarHidden = async () => (await call<unknown>("sidebar-hidden")) === true;
 export const setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hidden", hidden);
 
+// Whether the user collapsed the sidebar's Structure section, saved app-wide.
+export const structureCollapsed = async () => (await call<unknown>("structure-collapsed")) === true;
+export const setStructureCollapsed = (collapsed: boolean) => call<void>("set-structure-collapsed", collapsed);
+
 // One step on the backend's zoom ladder, or back to 100%. Both answer the
 // level now applied.
 export type ZoomDirection = "in" | "out" | "reset";

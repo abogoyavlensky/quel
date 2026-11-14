@@ -178,6 +178,10 @@ export interface AppState {
   // The user hid the sidebar (saved in the app database); null until it is
   // read at start-up, which shows it. state/layout.ts.
   sidebarHidden: boolean | null;
+  // The user collapsed the sidebar's Structure section to its header
+  // (saved in the app database); null until read at start-up, which shows
+  // it expanded. state/layout.ts.
+  structureCollapsed: boolean | null;
   resultsHidden: boolean; // the results pane is hidden; in memory only
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
@@ -234,6 +238,7 @@ export function initialState(): AppState {
     workspaces: {},
     rowDetails: false,
     sidebarHidden: null,
+    structureCollapsed: null,
     resultsHidden: false,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
