@@ -6,20 +6,11 @@ import { onEvent } from "@/lib/bridge";
 import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profiles";
 import { flushAll } from "@/state/persist";
 import { loadSidebar } from "@/state/layout";
-import {
-  cycleTabsKey,
-  focusEditorKey,
-  focusResultKey,
-  focusTabKey,
-  openPalette,
-  toggleResultsKey,
-  toggleSidebarKey,
-} from "@/state/palette";
-import { shortcutOf } from "@/state/shortcuts";
+import { openPalette } from "@/state/palette";
+import { onPageKey } from "@/state/pageKeys";
 import { loadZoom, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
-import { isMac } from "@/components/keys";
-import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId, toggleRowDetails } from "@/state/runner";
+import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId } from "@/state/runner";
 
 // The app's menu items (quel.menu) arrive as events; the work happens here,
 // on the selected profile's workspace (nothing, when none is selected).
@@ -51,76 +42,14 @@ function useMenu() {
   }, []);
 }
 
-// ⌘I / Ctrl+I opens and closes the row details panel. Not a native menu
-// item: a toggle cannot take the double delivery Run tolerates (menu plus
-// page), and CodeMirror binds Mod-i itself. Caught in the capture phase,
-// before the editor sees it.
-function useRowDetailsKey() {
+// The keys the page catches (state/keymap.ts, "page"), in the capture
+// phase so the editor never sees them. What each does, and why some are
+// the page's alone, is in state/pageKeys.ts.
+function useKeys() {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      if (!mod || e.shiftKey || e.altKey || e.key.toLowerCase() !== "i") return;
-      e.preventDefault();
-      e.stopPropagation();
-      toggleRowDetails();
-    };
-    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keydown", onPageKey, true);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
-}
-
-// ⌘. / Ctrl+. stops the running statement. The native Query menu has it
-// too, so with the app window it may arrive twice; that is harmless:
-// cancel only marks the tab as stopping and asks the backend again, and a
-// failed ask is swallowed. Server mode has no native menu, so there the
-// key comes from here alone.
-function useStopKey() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
-      if (!mod || e.shiftKey || e.altKey || e.key !== ".") return;
-      e.preventDefault();
-      e.stopPropagation();
-      const id = selectedTabId();
-      if (id) cancel(id);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
-}
-
-// ⇧⌘P and ⌘P open the palettes, ⌘E focuses the editor, ⌘R the result
-// grid, ⌘1–⌘9 pick a tab, ⌘PageUp / ⌘PageDown the previous or next tab
-// of the focused area (results or editor), ⌘B hides or shows the sidebar,
-// ⌘J the results (state/shortcuts.ts). Only the palettes have native View
-// menu items: nine "Tab N" items would be clutter, the cycle keys need the
-// focus a menu or palette would take, a toggle like ⌘B or ⌘J cannot take
-// the double delivery (as ⌘I), and a menu item does not exist in server
-// mode, where the key must come from here. With the app window a palette
-// key may arrive twice (menu and page); opening sets the state, so that is
-// harmless. Caught in the capture phase, before the editor sees it.
-function useGlobalKeys() {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const k = shortcutOf(e, isMac);
-      if (!k) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (k.kind === "palette") openPalette(k.palette);
-      else if (k.kind === "editor") focusEditorKey();
-      else if (k.kind === "result") focusResultKey();
-      else if (k.kind === "sidebar") toggleSidebarKey();
-      else if (k.kind === "resultsPane") toggleResultsKey();
-      else if (k.kind === "cycle") cycleTabsKey(k.dir);
-      else focusTabKey(k.n);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keydown", onPageKey, true);
     };
   }, []);
 }
@@ -143,9 +72,7 @@ function useFlushOnHide() {
 
 export default function App() {
   useMenu();
-  useRowDetailsKey();
-  useStopKey();
-  useGlobalKeys();
+  useKeys();
   useFlushOnHide();
   useEffect(() => {
     void loadProfiles().then(restoreSelection);

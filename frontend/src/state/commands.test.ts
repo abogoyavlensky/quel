@@ -22,10 +22,12 @@ vi.mock("./palette", () => palette);
 const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
 vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
 vi.mock("./window", () => ({ stepZoom: vi.fn() }));
+vi.mock("./settings", () => ({ openSettings: vi.fn() }));
 vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
 import { commands } from "./commands";
+import { keyLabel } from "./keymap";
 import { type AppState, type ConnStatus, initialState, newWorkspace } from "./store";
 
 const profile = (id: string): Profile => ({
@@ -52,7 +54,7 @@ function state(status: ConnStatus = "disconnected", patch: (w: ReturnType<typeof
 }
 
 const ids = (s: AppState) => commands(s).map((c) => c.id);
-const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "check-updates"];
+const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "settings", "check-updates"];
 
 beforeEach(() => {
   for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates)]) f.mockReset();
@@ -81,6 +83,7 @@ describe("commands", () => {
       "zoom-in",
       "zoom-out",
       "zoom-reset",
+      "settings",
       "check-updates",
     ]);
   });
@@ -184,7 +187,7 @@ describe("focus", () => {
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
     expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "zoom-in", "zoom-out", "zoom-reset"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
-    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
+    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "settings", "check-updates"]);
   });
 });
 
@@ -220,5 +223,33 @@ describe("run", () => {
     expect(palette.openPalette).toHaveBeenCalledWith("connections");
     void find(state(), "check-updates").run();
     expect(updates.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+  });
+});
+
+describe("keys", () => {
+  it("labels every entry from the registry, across the states that show them", () => {
+    const withResult = state("connected", (w) => {
+      w.tabs[0].results = [{ id: "r1", kind: "rows" } as (typeof w.tabs)[0]["results"][number]];
+      w.tabs[0].active = "r1";
+      w.closed = [{ id: "c1" } as (typeof w.closed)[number]];
+    });
+    const states = [
+      initialState(),
+      state(),
+      state("connecting"),
+      withResult,
+      state("connected", (w) => (w.tabs[0].runningQueryId = "q1")),
+    ];
+    const seen = new Set<string>();
+    for (const s of states) {
+      for (const c of commands(s)) {
+        expect(c.keys, c.id).toBe(keyLabel(c.id));
+        seen.add(c.id);
+      }
+    }
+    for (const id of ["run", "cancel", "connect", "cancel-connect", "disconnect", "reopen-tab", "focus-result"]) {
+      expect(seen, id).toContain(id);
+    }
+    expect(commands(state()).find((c) => c.id === "run")!.keys).toMatch(/^(⌘↵|Ctrl\+Enter)$/);
   });
 });

@@ -50,6 +50,9 @@
 ;; The zoom keys are here alone, with nothing on the page: a zoom step
 ;; cannot take the double delivery. The key is = rather than Plus so the
 ;; unshifted key works.
+;; The accelerators mirror the "menu" keys of the frontend's key registry
+;; (frontend/src/state/keymap.ts); its test reads this file and checks that
+;; both have the same set. Change one, change the other.
 (defn spec [env]
   [{:role :app-menu}
    {:label "File"

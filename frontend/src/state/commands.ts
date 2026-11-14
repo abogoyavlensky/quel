@@ -1,20 +1,3 @@
-import {
-  CLOSE_TAB_KEY,
-  FOCUS_KEY,
-  GOTO_KEY,
-  NEW_TAB_KEY,
-  REOPEN_KEY,
-  RESULT_KEY,
-  RESULTS_PANE_KEY,
-  ROW_KEY,
-  RUN_KEY,
-  SCRIPT_KEY,
-  SIDEBAR_KEY,
-  STOP_KEY,
-  ZOOM_IN_KEY,
-  ZOOM_OUT_KEY,
-  ZOOM_RESET_KEY,
-} from "@/components/keys";
 import { focusEditor } from "@/editor/states";
 import { sidebarShown, toggleResults, toggleSidebar } from "./layout";
 import { focusResult, openPalette } from "./palette";
@@ -31,6 +14,8 @@ import {
   toggleRowDetails,
 } from "./runner";
 import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
+import { type CommandId, keyLabel } from "./keymap";
+import { openSettings } from "./settings";
 import { checkForUpdates } from "./updates";
 import { stepZoom } from "./window";
 
@@ -38,10 +23,10 @@ import { stepZoom } from "./window";
 // It repeats some native menu items on purpose: both call the same runner
 // functions, so the two can only drift on titles and key labels.
 export interface Command {
-  id: string; // stable, also the cmdk value
+  id: CommandId; // stable, also the cmdk value
   group: "Tabs" | "Query" | "Connection" | "View" | "Help";
   title: string;
-  keys?: string; // a label from components/keys.ts
+  keys?: string; // the registry's label (state/keymap.ts), filled in by commands()
   // The action leaves focus alone, so the palette gives it back to where it
   // was. The others move it themselves (the editor, a dialog).
   keepsFocus?: boolean;
@@ -57,8 +42,8 @@ export function commands(s: AppState): Command[] {
   const running = tab !== undefined && tab.runningQueryId !== null;
   const selected = s.selected;
   const list: Command[] = [];
-  const add = (c: Command | false) => {
-    if (c) list.push(c);
+  const add = (c: Omit<Command, "keys"> | false) => {
+    if (c) list.push({ ...c, keys: keyLabel(c.id) });
   };
 
   add(
@@ -66,7 +51,6 @@ export function commands(s: AppState): Command[] {
       id: "new-tab",
       group: "Tabs",
       title: "New Tab",
-      keys: NEW_TAB_KEY,
       run: () => {
         newTab();
         setTimeout(focusEditor);
@@ -80,7 +64,6 @@ export function commands(s: AppState): Command[] {
         keepsFocus: true,
         group: "Tabs",
         title: "Close Tab",
-        keys: CLOSE_TAB_KEY,
         run: () => closeTab(tab!.id),
       },
   );
@@ -91,7 +74,6 @@ export function commands(s: AppState): Command[] {
         keepsFocus: true,
         group: "Tabs",
         title: "Reopen Closed Tab",
-        keys: REOPEN_KEY,
         run: () => reopenTab(),
       },
   );
@@ -100,7 +82,6 @@ export function commands(s: AppState): Command[] {
       id: "focus-editor",
       group: "Tabs",
       title: "Focus Editor",
-      keys: FOCUS_KEY,
       run: () => void setTimeout(focusEditor),
     },
   );
@@ -110,7 +91,6 @@ export function commands(s: AppState): Command[] {
         id: "focus-result",
         group: "Tabs",
         title: "Focus Result",
-        keys: RESULT_KEY,
         run: () => void setTimeout(focusResult),
       },
   );
@@ -122,7 +102,6 @@ export function commands(s: AppState): Command[] {
         keepsFocus: true,
         group: "Query",
         title: "Run",
-        keys: RUN_KEY,
         run: () => runCurrent("statement"),
       },
   );
@@ -133,7 +112,6 @@ export function commands(s: AppState): Command[] {
         keepsFocus: true,
         group: "Query",
         title: "Run Script",
-        keys: SCRIPT_KEY,
         run: () => runCurrent("script"),
       },
   );
@@ -143,7 +121,6 @@ export function commands(s: AppState): Command[] {
       keepsFocus: true,
       group: "Query",
       title: "Cancel",
-      keys: STOP_KEY,
       run: () => cancel(tab!.id),
     },
   );
@@ -183,7 +160,6 @@ export function commands(s: AppState): Command[] {
       id: "go-to-connection",
       group: "Connection",
       title: "Go to Connection…",
-      keys: GOTO_KEY,
       run: () => openPalette("connections"),
     },
   );
@@ -207,7 +183,6 @@ export function commands(s: AppState): Command[] {
     keepsFocus: true,
     group: "View",
     title: s.rowDetails ? "Hide Row Details" : "Show Row Details",
-    keys: ROW_KEY,
     run: toggleRowDetails,
   });
   add(
@@ -216,7 +191,6 @@ export function commands(s: AppState): Command[] {
       keepsFocus: true,
       group: "View",
       title: sidebarShown(s) ? "Hide Sidebar" : "Show Sidebar",
-      keys: SIDEBAR_KEY,
       run: toggleSidebar,
     },
   );
@@ -226,7 +200,6 @@ export function commands(s: AppState): Command[] {
       keepsFocus: true,
       group: "View",
       title: s.resultsHidden ? "Show Results" : "Hide Results",
-      keys: RESULTS_PANE_KEY,
       run: toggleResults,
     },
   );
@@ -235,7 +208,6 @@ export function commands(s: AppState): Command[] {
     keepsFocus: true,
     group: "View",
     title: "Zoom In",
-    keys: ZOOM_IN_KEY,
     run: () => stepZoom("in"),
   });
   add({
@@ -243,7 +215,6 @@ export function commands(s: AppState): Command[] {
     keepsFocus: true,
     group: "View",
     title: "Zoom Out",
-    keys: ZOOM_OUT_KEY,
     run: () => stepZoom("out"),
   });
   add({
@@ -251,8 +222,14 @@ export function commands(s: AppState): Command[] {
     keepsFocus: true,
     group: "View",
     title: "Actual Size",
-    keys: ZOOM_RESET_KEY,
     run: () => stepZoom("reset"),
+  });
+  // Not keepsFocus: it moves focus into the dialog, which gives it back.
+  add({
+    id: "settings",
+    group: "View",
+    title: "Settings…",
+    run: openSettings,
   });
 
   add({

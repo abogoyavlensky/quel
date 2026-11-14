@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useDelayed } from "@/lib/useDelayed";
 import { cancel, runCurrent } from "@/state/runner";
 import { type EditorTab, isRunning } from "@/state/store";
-import { RUN_KEY, SCRIPT_KEY, STOP_KEY } from "./keys";
+import { keyLabelOf } from "@/state/keymap";
 
 // Run in the editor's corner, and Stop while a statement or script runs.
 // It turns to Stop only 300ms into a run: a double-click on Run never
@@ -25,7 +25,7 @@ export function RunButton({ tab }: { tab: EditorTab }) {
           variant="secondary"
           className="shadow-sm"
           aria-label="Stop"
-          title={`Stop (${STOP_KEY})`}
+          title={`Stop (${keyLabelOf("cancel")})`}
           disabled={tab.stopping}
           onMouseDown={keepFocus}
           onClick={() => cancel(tab.id)}
@@ -39,7 +39,7 @@ export function RunButton({ tab }: { tab: EditorTab }) {
           variant="secondary"
           className="bg-primary/10 text-primary shadow-none hover:bg-primary/15"
           aria-label="Run"
-          title={`Run statement (${RUN_KEY}) · Run all (${SCRIPT_KEY})`}
+          title={`Run statement (${keyLabelOf("run")}) · Run all (${keyLabelOf("run-script")})`}
           onMouseDown={keepFocus}
           onClick={() => void runCurrent("statement")}
         >

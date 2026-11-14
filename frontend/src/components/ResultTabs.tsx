@@ -16,7 +16,7 @@ import { MessagesView } from "./MessagesView";
 import { NameInput } from "./NameInput";
 import { ResultFooter } from "./ResultFooter";
 import { ResultOutcome } from "./ResultOutcome";
-import { RUN_KEY } from "./keys";
+import { keyLabelOf } from "@/state/keymap";
 import { useResultTabDrag } from "./useResultTabDrag";
 
 // A result tab is named by its statement, as far as it fits.
@@ -200,9 +200,10 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
           offline ? (
             <NotConnected banner={false} />
           ) : (
-            <p className="p-4 text-sm text-muted-foreground">
-              Run the statement under the cursor with {RUN_KEY}. Its rows show here.
-            </p>
+            <div className="flex flex-col gap-1 p-4 text-sm text-muted-foreground">
+              <p>Run the statement under the cursor with {keyLabelOf("run")}. Its rows show here.</p>
+              <p>All commands: {keyLabelOf("command-palette")}</p>
+            </div>
           )
         ) : current?.kind === "rows" ? (
           <ResultGrid key={current.id} tabId={tab.id} result={current} />

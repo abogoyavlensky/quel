@@ -13,7 +13,7 @@ import { runScopeHandlers } from "@codemirror/view";
 import { ArrowDown, ArrowUp, CaseSensitive, ChevronRight, Regex, Replace, ReplaceAll, WholeWord, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
-import { FIND_NEXT_KEY, FIND_PREV_KEY } from "@/components/keys";
+import { keyLabelOf } from "@/state/keymap";
 import { cn } from "cn";
 import type { PanelHost } from "./panels";
 import { countLabel, countMatches } from "./searchCount";
@@ -120,7 +120,7 @@ export function FindPanel({ host }: { host: PanelHost; rev: number }) {
           variant="ghost"
           size="icon-xs"
           aria-label="Previous match"
-          title={`Previous match (${FIND_PREV_KEY})`}
+          title={`Previous match (${keyLabelOf("find-previous")})`}
           onClick={() => findPrevious(view)}
         >
           <ArrowUp />
@@ -129,7 +129,7 @@ export function FindPanel({ host }: { host: PanelHost; rev: number }) {
           variant="ghost"
           size="icon-xs"
           aria-label="Next match"
-          title={`Next match (${FIND_NEXT_KEY})`}
+          title={`Next match (${keyLabelOf("find-next")})`}
           onClick={() => findNext(view)}
         >
           <ArrowDown />
