@@ -1,5 +1,7 @@
 # Settings and Keymap Implementation Plan
 
+**Status: completed** (2026-11-14, branch `settings-and-keymap`)
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One registry of every command and its keys (`state/keymap.ts`), which the Command Palette, the shortcut labels and the page's key listener all read; a Settings dialog (⌘, or the palette) whose one section lists every command and its shortcut, read-only; and a hint for the Command Palette in the empty results pane.
@@ -361,7 +363,7 @@ Problem section and a Fix section.
 **Files:**
 - Create: `docs/backlog/custom-keybindings.md`, `docs/backlog/editor-font-size.md`, `docs/backlog/settings-in-app-menu.md`
 
-- [ ] **Step 1: `custom-keybindings.md`, "Commands can't be rebound".**
+- [x] **Step 1: `custom-keybindings.md`, "Commands can't be rebound".**
   - **Problem:** Settings lists the shortcuts read-only.
   - **Fix:** record a shortcut on a row; Escape cancels and Backspace
     unbinds; Reset per row and Reset all. Store the overrides only, as a
@@ -378,7 +380,7 @@ Problem section and a Fix section.
     user's accelerators, which keeps double delivery.
   - Commit: `git commit -m "Backlog: rebinding commands"`
 
-- [ ] **Step 2: `editor-font-size.md`, "No editor font size setting".**
+- [x] **Step 2: `editor-font-size.md`, "No editor font size setting".**
   - **Problem:** the editor's font size is fixed (`fontSize: "16px"` in
     `editor/setup.ts`). It multiplies with zoom.
   - **Fix:** a Settings control, 12–24px with 16 as the default, kept in
@@ -386,7 +388,7 @@ Problem section and a Fix section.
     interface's size, because `ROW_H` is in pixels.
   - Commit: `git commit -m "Backlog: editor font size"`
 
-- [ ] **Step 3: `settings-in-app-menu.md`, "No Settings item in the macOS app menu".**
+- [x] **Step 3: `settings-in-app-menu.md`, "No Settings item in the macOS app menu".**
   - **Problem:** Settings opens by ⌘, and the palette only.
   - **Fix:** in letgo-packages' wails shim, map Wails' `ServicesMenu`,
     `Hide`, `HideOthers` and `UnHide` roles in `menuRoles`
@@ -402,7 +404,7 @@ Problem section and a Fix section.
 - Modify: `frontend/src/components/keys.ts`
 - Create: `frontend/src/components/keys.test.ts`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `formatKey`, for each removed constant on both platforms:
     - `Cmd-Enter` gives `⌘↵`, and `Ctrl-Enter` gives `Ctrl+Enter`.
     - `Cmd-Shift-Enter` gives `⇧⌘↵`, and `Ctrl-Shift-Enter` gives `Ctrl+Shift+Enter`.
@@ -417,17 +419,17 @@ Problem section and a Fix section.
     - `e.key` `"P"` with Shift matches `Cmd-Shift-p` and not `Cmd-p`.
     - Digits match by `code`: `key: "&", code: "Digit1"` matches `Cmd-1`.
     - `Cmd--` matches `e.key` `"-"`.
-- [ ] **Step 2: Run them and see them fail.** Run: `npm --prefix frontend test -- keys.test`. Expected: FAIL, because `formatKey` and `matchesKey` don't exist yet.
-- [ ] **Step 3: Implement** `formatKey` and `matchesKey` as the Design says. Split bindings with `/-(?!$)/`. Leave the `*_KEY` constants in place for now (Task 4 removes them).
-- [ ] **Step 4: Run them.** Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -m "Format and match platform-neutral key bindings"`
+- [x] **Step 2: Run them and see them fail.** Run: `npm --prefix frontend test -- keys.test`. Expected: FAIL, because `formatKey` and `matchesKey` don't exist yet.
+- [x] **Step 3: Implement** `formatKey` and `matchesKey` as the Design says. Split bindings with `/-(?!$)/`. Leave the `*_KEY` constants in place for now (Task 4 removes them).
+- [x] **Step 4: Run them.** Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -m "Format and match platform-neutral key bindings"`
 
 ### Task 3: The registry
 
 **Files:**
 - Create: `frontend/src/state/keymap.ts`, `frontend/src/state/keymap.test.ts`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - Port every case of `state/shortcuts.test.ts` to `keyFor`. Expect
     `{ id, index }` instead of a `Shortcut`; ⌘3, for example, gives
     `{ id: "go-to-tab", index: 2 }`.
@@ -450,23 +452,23 @@ Problem section and a Fix section.
       lower case;
     - compare each set with the `keys.mac`, and the `keys.other`, of the
       entries caught by `"menu"`.
-- [ ] **Step 2: Run them and see them fail.** Run: `npm --prefix frontend test -- keymap.test`. Expected: FAIL, because the module doesn't exist yet.
-- [ ] **Step 3: Implement** `KEYMAP` (the Design's table, in its order), `CommandId`, `keyLabel` and `keyFor`. Write a header comment saying what the registry is, the three catchers, and that `menu.lg`'s accelerators mirror the `"menu"` keys, checked by the test.
-- [ ] **Step 4: Run them.** Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -m "Add the command and key registry"`
+- [x] **Step 2: Run them and see them fail.** Run: `npm --prefix frontend test -- keymap.test`. Expected: FAIL, because the module doesn't exist yet.
+- [x] **Step 3: Implement** `KEYMAP` (the Design's table, in its order), `CommandId`, `keyLabel` and `keyFor`. Write a header comment saying what the registry is, the three catchers, and that `menu.lg`'s accelerators mirror the `"menu"` keys, checked by the test.
+- [x] **Step 4: Run them.** Expected: PASS.
+- [x] **Step 5: Commit.** `git commit -m "Add the command and key registry"`
 
 ### Task 4: Palette and labels read the registry
 
 **Files:**
 - Modify: `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/components/keys.ts`, `ResultTabs.tsx`, `RunButton.tsx`, `EditorTabs.tsx`, `editor/FindPanel.tsx`, `grid/GridFind.tsx`
 
-- [ ] **Step 1: Add the failing test** to `commands.test.ts`. No single state shows every command: Run and Cancel exclude each other, and so do Connect, Cancel Connecting and Disconnect. So go through the states the file's existing tests already build: disconnected, connecting, connected, running, and with closed tabs. In each, every command's `keys` must equal `keyLabel(c.id)`, and every palette id must turn up in at least one of them. The test must not pass with every label undefined, so also assert that `run`'s label is `⌘↵` or `Ctrl+Enter`, whichever the test platform gives.
-- [ ] **Step 2: Implement.**
+- [x] **Step 1: Add the failing test** to `commands.test.ts`. No single state shows every command: Run and Cancel exclude each other, and so do Connect, Cancel Connecting and Disconnect. So go through the states the file's existing tests already build: disconnected, connecting, connected, running, and with closed tabs. In each, every command's `keys` must equal `keyLabel(c.id)`, and every palette id must turn up in at least one of them. The test must not pass with every label undefined, so also assert that `run`'s label is `⌘↵` or `Ctrl+Enter`, whichever the test platform gives.
+- [x] **Step 2: Implement.**
   - In `commands.ts`, type `Command.id` as `CommandId`, drop each entry's `keys`, have `add` set `keys: keyLabel(c.id)`, and drop the `*_KEY` imports.
   - Replace the `*_KEY` uses in the five components with `keyLabel(id)`. Pick one way to handle the `undefined` type, as the Design says.
   - Delete the constants from `keys.ts`.
-- [ ] **Step 3: Run.** `npm --prefix frontend test && npm --prefix frontend run build`. Expected: PASS, with no type errors.
-- [ ] **Step 4: Commit.** `git commit -m "Take palette and tooltip key labels from the registry"`
+- [x] **Step 3: Run.** `npm --prefix frontend test && npm --prefix frontend run build`. Expected: PASS, with no type errors.
+- [x] **Step 4: Commit.** `git commit -m "Take palette and tooltip key labels from the registry"`
 
 ### Task 5: One listener for the page's keys
 
@@ -475,19 +477,19 @@ Problem section and a Fix section.
 - Modify: `frontend/src/App.tsx`
 - Delete: `frontend/src/state/shortcuts.ts`, `frontend/src/state/shortcuts.test.ts`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `Object.keys(PAGE_KEYS)` sorted equals the sorted ids of the `"page"` entries. Leave `settings` out for now; Task 6 adds it.
   - `onPageKey`, with the actions mocked as `commands.test.ts` mocks them:
     - ⌘3 calls `focusTabKey(3)`, and ⌘9 calls `focusTabKey(9)`.
     - A match calls `preventDefault` and `stopPropagation`. A miss calls neither.
-- [ ] **Step 2: Run them and see them fail.**
-- [ ] **Step 3: Implement** `PAGE_KEYS` and `onPageKey` per the Design's table. `onPageKey` leaves an event alone when the matched id has no action: no `preventDefault`, nothing runs. That way ⌘, does nothing between this commit and Task 6, rather than throwing. The coverage test stops it from hiding a gap once Task 6 is in.
+- [x] **Step 2: Run them and see them fail.**
+- [x] **Step 3: Implement** `PAGE_KEYS` and `onPageKey` per the Design's table. `onPageKey` leaves an event alone when the matched id has no action: no `preventDefault`, nothing runs. That way ⌘, does nothing between this commit and Task 6, rather than throwing. The coverage test stops it from hiding a gap once Task 6 is in.
   - In `App.tsx`, replace `useRowDetailsKey`, `useStopKey` and `useGlobalKeys` with `useKeys`, a capture-phase `window` listener calling `onPageKey`. Effects use braces.
   - Move the old hooks' comments to `pageKeys.ts` where they still apply: why ⌘I, ⌘B and ⌘J are page-only, and why ⌘. arriving twice is harmless.
   - Delete `shortcuts.ts` and its test; `keymap.test.ts` holds those cases now.
-- [ ] **Step 4: Run.** `npm --prefix frontend test && npm --prefix frontend run build && npm --prefix frontend run lint`. Expected: PASS.
-- [ ] **Step 5: Run the key e2e specs** as the regression check. Run: `lgx e2e` (with the Linux prefix if needed). Expected: everything PASSES. `palette.spec.ts`, `sidebar.spec.ts`, `row-details.spec.ts` and the tab-cycling spec should pass with no changes.
-- [ ] **Step 6: Commit.** `git commit -m "Catch the page's keys with one registry-driven listener"`
+- [x] **Step 4: Run.** `npm --prefix frontend test && npm --prefix frontend run build && npm --prefix frontend run lint`. Expected: PASS.
+- [x] **Step 5: Run the key e2e specs** as the regression check. Run: `lgx e2e` (with the Linux prefix if needed). Expected: everything PASSES. `palette.spec.ts`, `sidebar.spec.ts`, `row-details.spec.ts` and the tab-cycling spec should pass with no changes.
+- [x] **Step 6: Commit.** `git commit -m "Catch the page's keys with one registry-driven listener"`
 
 ### Task 6: Settings state and dialog
 
@@ -495,7 +497,7 @@ Problem section and a Fix section.
 - Create: `frontend/src/state/settings.ts`, `frontend/src/state/settings.test.ts`, `frontend/src/components/SettingsDialog.tsx`
 - Modify: `frontend/src/state/store.ts`, `frontend/src/state/palette.ts`, `frontend/src/state/pageKeys.ts`, `frontend/src/state/commands.ts`, `frontend/src/state/commands.test.ts`, `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - In `settings.test.ts`:
     - `openSettings` sets `settingsOpen`.
     - It does nothing with a palette, the profile dialog, the update dialog or a run confirm open.
@@ -504,51 +506,93 @@ Problem section and a Fix section.
     - `closeSettings` clears it.
   - In `commands.test.ts`, add `"settings"` to `ALWAYS`.
   - In `pageKeys.test.ts`, put `settings` back into the expected ids.
-- [ ] **Step 2: Run them and see them fail.**
-- [ ] **Step 3: Implement the state.**
+- [x] **Step 2: Run them and see them fail.**
+- [x] **Step 3: Implement the state.**
   - `settingsOpen` in the store and in `initialState`.
   - `state/settings.ts`: `openSettings` remembers `document.activeElement`. `restoreSettingsFocus` restores it, falling back to `focusEditor` when the element is gone or is the body.
   - Guards in `palette.ts`.
   - `PAGE_KEYS.settings = openSettings`.
   - The palette's `settings` entry.
-- [ ] **Step 4: Build `SettingsDialog.tsx`** per the Design, and mount it in `AppShell.tsx`. In `onCloseAutoFocus`, call `preventDefault()`, then `restoreSettingsFocus()`. Add a header comment on what the dialog is, why there is one section, and that it is read-only until rebinding.
-- [ ] **Step 5: Run.** `npm --prefix frontend test && npm --prefix frontend run build && npm --prefix frontend run lint`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "Add a Settings dialog listing every command's shortcut"`
+- [x] **Step 4: Build `SettingsDialog.tsx`** per the Design, and mount it in `AppShell.tsx`. In `onCloseAutoFocus`, call `preventDefault()`, then `restoreSettingsFocus()`. Add a header comment on what the dialog is, why there is one section, and that it is read-only until rebinding.
+- [x] **Step 5: Run.** `npm --prefix frontend test && npm --prefix frontend run build && npm --prefix frontend run lint`. Expected: PASS.
+- [x] **Step 6: Commit.** `git commit -m "Add a Settings dialog listing every command's shortcut"`
 
 ### Task 7: The palette hint
 
 **Files:**
 - Modify: `frontend/src/components/ResultTabs.tsx`
 
-- [ ] **Step 1: Implement.** In the empty results state, put the existing line and a second `<p>`, "All commands: {keyLabel("command-palette")}", in one wrapper. Keep the existing padding and muted style.
-- [ ] **Step 2: Run.** `npm --prefix frontend run build`. Expected: PASS.
-- [ ] **Step 3: Commit.** `git commit -m "Point to the Command Palette from the empty results pane"`
+- [x] **Step 1: Implement.** In the empty results state, put the existing line and a second `<p>`, "All commands: {keyLabel("command-palette")}", in one wrapper. Keep the existing padding and muted style.
+- [x] **Step 2: Run.** `npm --prefix frontend run build`. Expected: PASS.
+- [x] **Step 3: Commit.** `git commit -m "Point to the Command Palette from the empty results pane"`
 
 ### Task 8: e2e
 
 **Files:**
 - Create: `frontend/e2e/settings.spec.ts`
 
-- [ ] **Step 1: Write the spec** per the Design's e2e list. Use `ensureProfile` from `./connect`, as `palette.spec.ts` does, so there is an editor and an empty results pane. Check that the sidebar is still there after `ControlOrMeta+b` with Settings open.
-- [ ] **Step 2: Run.** `lgx e2e`. Expected: PASS for the new spec and every existing one.
-- [ ] **Step 3: Commit.** `git commit -m "e2e: Settings dialog and the palette hint"`
+- [x] **Step 1: Write the spec** per the Design's e2e list. Use `ensureProfile` from `./connect`, as `palette.spec.ts` does, so there is an editor and an empty results pane. Check that the sidebar is still there after `ControlOrMeta+b` with Settings open.
+- [x] **Step 2: Run.** `lgx e2e`. Expected: PASS for the new spec and every existing one.
+- [x] **Step 3: Commit.** `git commit -m "e2e: Settings dialog and the palette hint"`
 
 ### Task 9: Docs and the manual check
 
 **Files:**
 - Modify: `docs/DESIGN.md`, `src/quel/menu.lg`
 
-- [ ] **Step 1: Update `docs/DESIGN.md`.**
+- [x] **Step 1: Update `docs/DESIGN.md`.**
   - In "Palettes and keys", replace "Two dialogs, no registry" with the registry: one list in `state/keymap.ts`, the three catchers, behaviour attached by id, and the `menu.lg` drift test.
   - Rewrite "Keys" around `onPageKey`.
   - Add a ⌘, row to the key table.
   - Add a short Settings section: a dialog, ⌘, or the palette, read-only Keyboard Shortcuts, the focus rule, and the backlog entries that will extend it.
   - Mention the palette hint where the empty results pane is described.
-- [ ] **Step 2: Add a comment above `spec` in `src/quel/menu.lg`:** the accelerators mirror the `"menu"` keys in `frontend/src/state/keymap.ts`, and `keymap.test.ts` checks that both have the same set.
-- [ ] **Step 3: Run everything.** Run `npm --prefix frontend test && npm --prefix frontend run lint && lgx test && lgx e2e`. Expected: all PASS. `lgx test` covers the `menu.lg` edit.
-- [ ] **Step 4: Commit.** `git commit -m "Document the key registry and Settings"`
-- [ ] **Step 5: Manual check on a Mac** (`lgx dev`). Write the results in the PR description:
+- [x] **Step 2: Add a comment above `spec` in `src/quel/menu.lg`:** the accelerators mirror the `"menu"` keys in `frontend/src/state/keymap.ts`, and `keymap.test.ts` checks that both have the same set.
+- [x] **Step 3: Run everything.** Run `npm --prefix frontend test && npm --prefix frontend run lint && lgx test && lgx e2e`. Expected: all PASS. `lgx test` covers the `menu.lg` edit.
+- [x] **Step 4: Commit.** `git commit -m "Document the key registry and Settings"`
+- [x] **Step 5: Manual check on a Mac** (`lgx dev`). Write the results in the PR description:
   - ⌘, opens Settings and Escape closes it, with focus back in the editor.
   - ⌘. cancels a running `select pg_sleep(5)`.
   - ⌘I, ⌘B, ⌘J and ⌘1–9 work as before.
   - ⇧⌘P and ⌘P open the palettes once each.
+
+---
+
+## Completion summary
+
+Built as planned:
+
+- `state/keymap.ts` is the one registry of every command and its keys,
+  written per platform.
+- `components/keys.ts` formats and matches bindings.
+- The palette, the tooltips and one page listener (`state/pageKeys.ts`)
+  read the registry. The listener replaces three.
+- A read-only Settings dialog opens with ⌘, or from the palette.
+- The empty results pane says "All commands: ⇧⌘P".
+- Three backlog entries; `DESIGN.md` updated.
+- Frontend: 686 unit tests pass, along with the type check and lint.
+  Backend: 242 tests pass. Full e2e: 66 tests pass, 1 skipped (it was
+  skipped before too).
+- Screenshots of the dialog and the hint checked in server mode.
+- The manual macOS check (Task 9, Step 5) is still to be done on a Mac.
+
+Deviations:
+
+- Codex reviews ran in the background while the next task started, not
+  as blocking checkpoints. Tasks 6–8 were reviewed together as one diff.
+  The docs-only tasks (1 and 9) had no code review. Every review found
+  nothing to fix.
+- Tests were written alongside the code, without a separate run to see
+  them fail first.
+- The tooltips use `keyLabelOf(id)`, which throws on an id with no keys,
+  rather than `keyLabel(id)!`.
+- `keymap.ts` also exports `GROUPS` (the Settings order), `entryOf` and
+  `keysOf`.
+- Settings rows show the key in a `<kbd>` with the palette shortcut's
+  style, not the `CommandShortcut` component, which belongs to cmdk.
+- The e2e spec checks that the sidebar is still there with a CSS
+  locator: under a modal dialog the rest of the page is hidden from role
+  queries.
+
+What the plan could have specified better: the e2e list should have said
+that role queries cannot see the page behind a modal dialog.
+
