@@ -1,5 +1,7 @@
 # Structure Collapse and Filter Implementation Plan
 
+**Status: completed** (2026-11-14)
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The sidebar's Structure section folds to its header like a VS Code
@@ -171,7 +173,7 @@ t (id integer); create table t2 (id integer)"`).
 - Modify: `src/quel/workspace.lg`, `src/quel/api.lg`
 - Test: `test/quel/workspace_test.lg`, `test/quel/api_test.lg`
 
-- [ ] **Step 1: Write the failing tests.** In `workspace_test.lg`, next to
+- [x] **Step 1: Write the failing tests.** In `workspace_test.lg`, next to
   `the-sidebar-setting-round-trips`, add
   `the-structure-setting-round-trips` with the same shape against
   `structure-collapsed` / `set-structure-collapsed!` (false at first; true
@@ -179,10 +181,10 @@ t (id integer); create table t2 (id integer)"`).
   `'structure-collapsed'`). In `api_test.lg`
   `every-handler-is-a-var`, add `"structure-collapsed"
   "set-structure-collapsed"` to the expected set.
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `CGO_ENABLED=1 GOFLAGS=-tags=server lgx test`
   Expected: the two tests fail (unresolved symbol / set mismatch).
-- [ ] **Step 3: Implement.** In `workspace.lg`, add private helpers
+- [x] **Step 3: Implement.** In `workspace.lg`, add private helpers
   `(defn- flag? [db k])` and `(defn- set-flag! [db k on?])` holding the
   existing SQL with the key as a parameter (`where key = ?`,
   `values (?, 'true')`). Rewrite `sidebar-hidden` / `set-sidebar-hidden!`
@@ -194,10 +196,10 @@ t (id integer); create table t2 (id integer)"`).
   register `"structure-collapsed" #'structure-collapsed` and
   `"set-structure-collapsed" #'set-structure-collapsed` after the sidebar
   entries.
-- [ ] **Step 4: Run the tests.**
+- [x] **Step 4: Run the tests.**
   Run: `CGO_ENABLED=1 GOFLAGS=-tags=server lgx test`
   Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -m "Save whether the Structure section is collapsed"`
+- [x] **Step 5: Commit.** `git commit -m "Save whether the Structure section is collapsed"`
 
 ### Task 2: Collapse state in the frontend
 
@@ -206,12 +208,12 @@ t (id integer); create table t2 (id integer)"`).
   `frontend/src/state/layout.ts`, `frontend/src/App.tsx`
 - Test: `frontend/src/state/layout.test.ts`
 
-- [ ] **Step 1: API and store.** In `api.ts`, beside the sidebar pair:
+- [x] **Step 1: API and store.** In `api.ts`, beside the sidebar pair:
   `structureCollapsed = async () => (await call<unknown>("structure-collapsed")) === true`
   and `setStructureCollapsed = (collapsed: boolean) => call<void>("set-structure-collapsed", collapsed)`.
   In `store.ts`, add `structureCollapsed: boolean | null` to `AppState`
   with a comment like `sidebarHidden`'s, `null` in `initialState()`.
-- [ ] **Step 2: Write the failing tests** in `layout.test.ts` (extend the
+- [x] **Step 2: Write the failing tests** in `layout.test.ts` (extend the
   hoisted `api` mock with `structureCollapsed` and `setStructureCollapsed`):
   - `loadStructure` sets the saved value; a toggle made before the answer
     wins; a failed read leaves `null`.
@@ -226,10 +228,10 @@ t (id integer); create table t2 (id integer)"`).
     `document`), after the timers run the element matching
     `[data-quel-structure-toggle]` gets `focus()`; with focus elsewhere,
     nothing is focused.
-- [ ] **Step 3: Run them to see them fail.**
+- [x] **Step 3: Run them to see them fail.**
   Run: `npm --prefix frontend test -- layout`
   Expected: FAIL (missing exports).
-- [ ] **Step 4: Implement** in `layout.ts`: `structureCollapsed(s) =
+- [x] **Step 4: Implement** in `layout.ts`: `structureCollapsed(s) =
   s.structureCollapsed === true`; `loadStructure()` shaped like
   `loadSidebar()`; `toggleStructure()`:
 
@@ -247,17 +249,17 @@ t (id integer); create table t2 (id integer)"`).
   section. Unlike the sidebar, it toggles with or without a tab strip (its
   header is always there while the sidebar is). In `App.tsx`, call
   `void loadStructure();` after `void loadSidebar();`.
-- [ ] **Step 5: Run the tests.**
+- [x] **Step 5: Run the tests.**
   Run: `npm --prefix frontend test -- layout`
   Expected: PASS.
-- [ ] **Step 6: Commit.** `git commit -m "Add the Structure section's collapsed state"`
+- [x] **Step 6: Commit.** `git commit -m "Add the Structure section's collapsed state"`
 
 ### Task 3: Collapsible Structure section in the UI
 
 **Files:**
 - Modify: `frontend/src/components/StructureTree.tsx`, `frontend/src/components/AppShell.tsx`
 
-- [ ] **Step 1: `StructureHeader`.** In `StructureTree.tsx`, export
+- [x] **Step 1: `StructureHeader`.** In `StructureTree.tsx`, export
   `StructureHeader({ collapsed })`. It renders the title row:
   `<h2 id="structure-title">` holding a `<button type="button"
   data-quel-structure-toggle aria-expanded={!collapsed}
@@ -269,11 +271,11 @@ t (id integer); create table t2 (id integer)"`).
   the header from the store, as `StructureTree` does today. The whole
   row's left part is the button. Keep the row's height the same in both
   states.
-- [ ] **Step 2: `StructureTree`.** Render `<StructureHeader collapsed={false} />`
+- [x] **Step 2: `StructureTree`.** Render `<StructureHeader collapsed={false} />`
   in place of today's header block. Give the `section` `data-quel-structure`
   and keep `aria-labelledby="structure-title"`. Wrap what is under the
   header in `<div id="structure-body" className="flex min-h-0 flex-1 flex-col">`.
-- [ ] **Step 3: `AppShell`.** Read `structureCollapsed` from the store
+- [x] **Step 3: `AppShell`.** Read `structureCollapsed` from the store
   (`useApp(structureCollapsed)`). Replace the inner split with:
 
   ```tsx
@@ -308,18 +310,21 @@ t (id integer); create table t2 (id integer)"`).
   pb-1`, or `py-2` if that looks unbalanced at the bottom; pick what reads
   as one header line). Update the `AppShell` top comment: the Structure
   section can be collapsed to its header.
-- [ ] **Step 4: Check it by hand.** Run the app as in "Running the app by
-  hand" above and connect the scratch file. Collapse: Connections fills the column, the header
+- [x] **Step 4: Check it by hand.** Run the app as in "Running the app by
+  hand" above and connect the scratch file.
+  > Deviation: checked after Task 6 instead, through Playwright screenshots of
+  > the server-mode app (expanded, filtered, collapsed) and the e2e spec,
+  > rather than a hand-run browser session. Collapse: Connections fills the column, the header
   sits at the bottom, the Refresh button is gone. Expand: the tree comes
   back with its expanded nodes. Drag the split, collapse, expand: the
   dragged size returns. If react-resizable-panels does not restore it
   here, note that in the DESIGN paragraph (the split comes back at its
   default) instead of working around it. Tab to the header and press
   Enter and Space: focus stays on the header after each toggle.
-- [ ] **Step 5: Build and type-check.**
+- [x] **Step 5: Build and type-check.**
   Run: `npm --prefix frontend run build` (or `lgx fe-build`)
   Expected: no type errors.
-- [ ] **Step 6: Commit.** `git commit -m "Collapse the Structure section from its header"`
+- [x] **Step 6: Commit.** `git commit -m "Collapse the Structure section from its header"`
 
 ### Task 4: Filter rows
 
@@ -352,7 +357,7 @@ export interface TreeFilter {
 // The object row gains `match?: number` (where the text starts in the label).
 ```
 
-- [ ] **Step 1: Write the failing tests** in `tree.test.ts`:
+- [x] **Step 1: Write the failing tests** in `tree.test.ts`:
   - `matchAt`: case-insensitive (`matchAt("Orders", "ord") === 0`,
     `matchAt("orders", "DER") === 2`), `-1` on no match.
   - `filterSchemas`: an open schema is always included; a closed schema is
@@ -374,10 +379,10 @@ export interface TreeFilter {
     - materialized views count as views;
     - with no filter, `treeRows` output is unchanged (the existing tests
       keep passing without edits).
-- [ ] **Step 2: Run them to see them fail.**
+- [x] **Step 2: Run them to see them fail.**
   Run: `npm --prefix frontend test -- tree`
   Expected: FAIL.
-- [ ] **Step 3: Implement.** `matchAt` lower-cases both sides
+- [x] **Step 3: Implement.** `matchAt` lower-cases both sides
   (`toLowerCase`) and uses `indexOf`. Lower-casing can change a string's
   length (rare Unicode), so the index is right for filtering but may be
   off for the highlight: the renderer (Task 5, Step 7) checks the slice
@@ -388,10 +393,10 @@ export interface TreeFilter {
   `match`. Add `match?: number` to the `object` variant of `TreeRow`.
   Update the file's top comment with a short paragraph on filter mode.
   `toggle` is unchanged.
-- [ ] **Step 4: Run the tests.**
+- [x] **Step 4: Run the tests.**
   Run: `npm --prefix frontend test -- tree`
   Expected: PASS.
-- [ ] **Step 5: Commit.** `git commit -m "Build the structure tree's rows under a filter"`
+- [x] **Step 5: Commit.** `git commit -m "Build the structure tree's rows under a filter"`
 
 ### Task 5: Filter input and wiring
 
@@ -399,13 +404,13 @@ export interface TreeFilter {
 - Modify: `frontend/src/state/store.ts`, `frontend/src/state/runner.ts`,
   `frontend/src/components/StructureTree.tsx`
 
-- [ ] **Step 1: State.** Add `treeFilter: string` to `Workspace` (comment:
+- [x] **Step 1: State.** Add `treeFilter: string` to `Workspace` (comment:
   the structure filter's text, in memory only, per profile) and
   `treeFilter: ""` to `newWorkspace`. Fix any place that builds a
   `Workspace` literal and now fails to type-check (tests included). In
   `runner.ts`, add `setTreeFilter(profileId, text)` beside
   `setTreeExpanded`.
-- [ ] **Step 2: Data in `Tree`.** Read `workspace.treeFilter`;
+- [x] **Step 2: Data in `Tree`.** Read `workspace.treeFilter`;
   `text = treeFilter.trim()`. Read completion with
   `useQuery({ queryKey: metaKeys.completion(connId), queryFn: () => api.completionSchema(connId) })`
   (the same key and function as `useCompletion`, so it shares the cache;
@@ -418,10 +423,10 @@ export interface TreeFilter {
   `{ text, keys }` and treat a stale `text` as empty, rather than an
   effect, so there is no render with stale keys). Pass
   `filter = text ? { text, closed } : undefined` to both `treeRows` calls.
-- [ ] **Step 3: Toggles.** `flip(row)`: under a filter, a `schema` or
+- [x] **Step 3: Toggles.** `flip(row)`: under a filter, a `schema` or
   `group` row toggles its key in `filterClosed`; every other row (and
   every row without a filter) goes through `setTreeExpanded` as today.
-- [ ] **Step 4: The input.** Above the scroller (inside `Tree`, so it
+- [x] **Step 4: The input.** Above the scroller (inside `Tree`, so it
   shows only while the tree does), an `InputGroup` (`ui/input-group.tsx`)
   or plain `Input` with a `SearchIcon` addon and, while there is text, a
   clear button (`aria-label="Clear filter"`, `XIcon`). Compact: `h-7`,
@@ -431,41 +436,46 @@ export interface TreeFilter {
   Escape with text clears it and stops propagation; ArrowDown prevents
   default and calls `moveTo(0)` when there are rows. Keep a ref to the
   input.
-- [ ] **Step 5: ⌘F in the tree.** In the tree's `onKeyDown`, before the
+- [x] **Step 5: ⌘F in the tree.** In the tree's `onKeyDown`, before the
   `switch`: `modKey(e) && !e.shiftKey && e.key.toLowerCase() === "f"` →
   `handled()`, then focus and select the input. None of these keys reach
   the page's capture-phase listener first: `onPageKey`
   (`state/pageKeys.ts`) acts only on `PAGE_KEYS` ids, and `find` (⌘F),
   Escape and ArrowDown are not among them, so React's `onKeyDown` sees
   them.
-- [ ] **Step 6: Empty and loading states.** The early returns for the
+- [x] **Step 6: Empty and loading states.** The early returns for the
   schema list stay as they are. When `rows` is empty under a filter, show
   "Loading…" if completion or any `shown` schema is pending, else "No
   tables or views match." in the same style as "No schemas." (under the
   input, not in place of it).
-- [ ] **Step 7: Highlight.** In `RowBody`'s `object` case, when
+- [x] **Step 7: Highlight.** In `RowBody`'s `object` case, when
   `row.match !== undefined && row.match >= 0` and the label's slice at
   `match` lower-cases to the filter text, split the label into three
   spans with the middle one styled as a match (`bg-[var(--search-match)]`
   or the class the grid find uses for matches; reuse it). `RowBody`
   needs the filter text: pass it as a prop.
-- [ ] **Step 8: Check it by hand** in the app run as in "Running the app
+- [x] **Step 8: Check it by hand** in the app run as in "Running the app
   by hand", on the scratch file:
   typing `t2` leaves `main › Tables › t2`; `T` matches both tables;
   Escape clears and the tree is as before; ⌘F in the tree focuses the
   input; ArrowDown from the input focuses the first row; a closed schema
   folds under the filter and the fold is gone after editing the text.
-- [ ] **Step 9: Tests and build.**
+- [x] **Step 9: Tests and build.**
   Run: `npm --prefix frontend test && npm --prefix frontend run build`
   Expected: PASS, no type errors.
-- [ ] **Step 10: Commit.** `git commit -m "Filter the structure tree by table and view names"`
+- [x] **Step 10: Commit.** `git commit -m "Filter the structure tree by table and view names"`
 
 ### Task 6: End-to-end tests
 
 **Files:**
 - Create: `frontend/e2e/structure-panel.spec.ts`
 
-- [ ] **Step 1: Write the spec**, following `sidebar.spec.ts` (fixture
+> Deviation: the fixture file has only table `t` (`t2` is in the second
+> file). The filter test makes its own table, `filter_e2e_orders`, through
+> the editor and refreshes the structure; the closed-schema test filters on
+> `t`.
+
+- [x] **Step 1: Write the spec**, following `sidebar.spec.ts` (fixture
   connection via `connectFixture`, save-response waiting, an `afterEach`
   that expands the section again so later specs see the tree):
   - **Collapse.** The header button has `aria-expanded="true"`; click it
@@ -487,18 +497,18 @@ export interface TreeFilter {
   - Assert presence only ("`t` and `t2` show"), never exact row counts:
     `structure.spec.ts` adds `structure_e2e_*` tables to the shared
     fixture file.
-- [ ] **Step 2: Run it.**
+- [x] **Step 2: Run it.**
   Run: `CGO_ENABLED=1 GOFLAGS=-tags=server lgx e2e`
   Expected: PASS, the existing specs too (`structure.spec.ts`,
   `sidebar.spec.ts`, `palette.spec.ts` touch the sidebar).
-- [ ] **Step 3: Commit.** `git commit -m "Test the Structure section's collapse and filter end to end"`
+- [x] **Step 3: Commit.** `git commit -m "Test the Structure section's collapse and filter end to end"`
 
 ### Task 7: Docs
 
 **Files:**
 - Modify: `docs/DESIGN.md`
 
-- [ ] **Step 1: Update** (use /writing-clearly):
+- [x] **Step 1: Update** (use /writing-clearly):
   - **Look**, after the sidebar paragraph: the Structure section collapses
     to its header (VS Code style), drawn or left out like the sidebar, the
     split's panel ids, saved in `settings` as `structure-collapsed`, focus
@@ -511,28 +521,53 @@ export interface TreeFilter {
   - **Palettes and keys**, if it lists where ⌘F works: add the tree.
   - **Handler API**, Workspace row: add `sidebar-hidden`,
     `set-sidebar-hidden`, `structure-collapsed`, `set-structure-collapsed`.
-- [ ] **Step 2: Commit.** `git commit -m "Document the Structure section's collapse and filter"`
+- [x] **Step 2: Commit.** `git commit -m "Document the Structure section's collapse and filter"`
 
 ### Task 8: Backlog the filter's limits
 
 **Files:**
 - Create: `docs/backlog/structure-filter-completion-cap.md`
 
-- [ ] **Step 1: Write the entry** with the /backlog skill (`**Status:
+- [x] **Step 1: Write the entry** with the /backlog skill (`**Status:
   open**`): the filter finds tables in closed schemas through completion,
   which stops at 50 000 column rows and leaves out objects without
   columns, so on a large database some tables are found only once their
   schema is open. Possible fix: a `search-objects` handler per engine
   (which could also search indexes).
-- [ ] **Step 2: Commit** on its own: `git commit -m "Backlog: structure filter past the completion cap"`
+- [x] **Step 2: Commit** on its own: `git commit -m "Backlog: structure filter past the completion cap"`
 
 ### Task 9: Final check
 
-- [ ] **Step 1:** Run everything once more:
+- [x] **Step 1:** Run everything once more:
   `CGO_ENABLED=1 GOFLAGS=-tags=server lgx test`,
   `npm --prefix frontend test`,
   `CGO_ENABLED=1 GOFLAGS=-tags=server lgx smoke`,
   `CGO_ENABLED=1 GOFLAGS=-tags=server lgx e2e`.
   Expected: all PASS.
-- [ ] **Step 2:** Mark this plan's steps done and commit
+- [x] **Step 2:** Mark this plan's steps done and commit
   (`Record the structure collapse and filter plan's completion`).
+
+## Completion summary
+
+Implemented as designed: the Structure header is a disclosure button that
+collapses the section to a header under the connections (saved as the
+`structure-collapsed` setting, sharing a `flag?` / `set-flag!` helper with
+`sidebar-hidden`); an always-shown input filters the tree to matching
+tables and views, choosing schemas to load from cached completion names,
+with filter-only folds, a highlighted match, Escape / ArrowDown / ⌘F, and
+the text per profile in memory. The completion query options moved into
+`completionQuery` (`lib/query.ts`), shared by the editor and the tree.
+Verified: `lgx test` (243 tests), `npm --prefix frontend test` (704),
+`lgx smoke` (Postgres step skipped, no `QUEL_PG_URL`), `lgx e2e` (69
+passed, 1 skipped). Codex reviews of Tasks 1–2 and 3–6 found nothing
+actionable.
+
+Deviations:
+- Codex reviews ran per pair of tasks (1–2, 3–6) rather than per task.
+- The hand checks (Tasks 3 and 5) were done with Playwright screenshots of
+  the server-mode app plus the e2e spec.
+- The e2e spec makes its own second table; the plan assumed `t2` in the
+  fixture file.
+
+What the plan could have specified better: the e2e fixture's contents
+(it named `t2`, which lives in the second fixture file).
