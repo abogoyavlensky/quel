@@ -15,6 +15,7 @@ import {
 } from "./runner";
 import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { type CommandId, keyLabel } from "./keymap";
+import { openSettings } from "./settings";
 import { checkForUpdates } from "./updates";
 import { stepZoom } from "./window";
 
@@ -222,6 +223,13 @@ export function commands(s: AppState): Command[] {
     group: "View",
     title: "Actual Size",
     run: () => stepZoom("reset"),
+  });
+  // Not keepsFocus: it moves focus into the dialog, which gives it back.
+  add({
+    id: "settings",
+    group: "View",
+    title: "Settings…",
+    run: openSettings,
   });
 
   add({

@@ -22,6 +22,7 @@ import { RowDetails } from "./RowDetails";
 import { StructureTree } from "./StructureTree";
 import { TitleBar } from "./TitleBar";
 import { RunConfirmDialog } from "./RunConfirmDialog";
+import { SettingsDialog } from "./SettingsDialog";
 import { UpdateDialog } from "./UpdateDialog";
 
 // The window: the top strip naming the selected connection; under it the
@@ -119,6 +120,7 @@ export function AppShell() {
       <GoToConnection />
       <ProfileDialog />
       <UpdateDialog />
+      <SettingsDialog />
       <RunConfirmDialog />
     </div>
   );

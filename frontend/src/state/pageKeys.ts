@@ -10,6 +10,7 @@ import {
   toggleSidebarKey,
 } from "./palette";
 import { cancel, selectedTabId, toggleRowDetails } from "./runner";
+import { openSettings } from "./settings";
 
 // What each key the page catches does: the registry's entries caught by
 // "page" (state/keymap.ts), by id. The index is which of the entry's keys
@@ -40,6 +41,7 @@ export const PAGE_KEYS: Record<string, (index: number) => void> = {
   "row-details": () => toggleRowDetails(),
   sidebar: () => toggleSidebarKey(),
   results: () => toggleResultsKey(),
+  settings: () => openSettings(),
 };
 
 // The page's one keydown listener (App.tsx, capture phase). A key the page

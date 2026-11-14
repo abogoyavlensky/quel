@@ -22,6 +22,7 @@ vi.mock("./palette", () => palette);
 const layout = vi.hoisted(() => ({ toggleSidebar: vi.fn() }));
 vi.mock("./layout", async (orig) => ({ ...(await orig<object>()), ...layout }));
 vi.mock("./window", () => ({ stepZoom: vi.fn() }));
+vi.mock("./settings", () => ({ openSettings: vi.fn() }));
 vi.mock("@/lib/api", () => ({}));
 
 import type { Profile } from "@/lib/types";
@@ -53,7 +54,7 @@ function state(status: ConnStatus = "disconnected", patch: (w: ReturnType<typeof
 }
 
 const ids = (s: AppState) => commands(s).map((c) => c.id);
-const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "check-updates"];
+const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "settings", "check-updates"];
 
 beforeEach(() => {
   for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates)]) f.mockReset();
@@ -82,6 +83,7 @@ describe("commands", () => {
       "zoom-in",
       "zoom-out",
       "zoom-reset",
+      "settings",
       "check-updates",
     ]);
   });
@@ -185,7 +187,7 @@ describe("focus", () => {
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
     expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "zoom-in", "zoom-out", "zoom-reset"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
-    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "check-updates"]);
+    expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "settings", "check-updates"]);
   });
 });
 

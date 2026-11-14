@@ -185,6 +185,7 @@ export interface AppState {
   // The open palette: the command list or Go to Connection. At most one
   // (state/palette.ts); in memory only.
   palette: "commands" | "connections" | null;
+  settingsOpen: boolean; // the Settings dialog (state/settings.ts); in memory only
   runConfirm: RunConfirm | null; // RunConfirmDialog
 }
 
@@ -238,6 +239,7 @@ export function initialState(): AppState {
     update: { phase: "idle" },
     updateDialogOpen: false,
     palette: null,
+    settingsOpen: false,
     runConfirm: null,
   };
 }

@@ -12,6 +12,8 @@ const palette = vi.hoisted(() => ({
 vi.mock("./palette", () => palette);
 const runner = vi.hoisted(() => ({ cancel: vi.fn(), selectedTabId: vi.fn(), toggleRowDetails: vi.fn() }));
 vi.mock("./runner", () => runner);
+const settings = vi.hoisted(() => ({ openSettings: vi.fn() }));
+vi.mock("./settings", () => settings);
 vi.mock("@/components/keys", async (orig) => ({ ...(await orig<object>()), isMac: true }));
 
 import { KEYMAP, type KeyEntry } from "./keymap";
@@ -40,7 +42,7 @@ beforeEach(() => {
 describe("PAGE_KEYS", () => {
   it("has an action for every entry the page catches, and no other", () => {
     const page = (KEYMAP as readonly KeyEntry[]).filter((e) => e.caught.includes("page")).map((e) => e.id);
-    expect(Object.keys(PAGE_KEYS).sort()).toEqual(page.filter((id) => id !== "settings").sort());
+    expect(Object.keys(PAGE_KEYS).sort()).toEqual(page.sort());
   });
 });
 
@@ -71,6 +73,8 @@ describe("onPageKey", () => {
     expect(runner.toggleRowDetails).toHaveBeenCalled();
     press("b");
     expect(palette.toggleSidebarKey).toHaveBeenCalled();
+    press(",");
+    expect(settings.openSettings).toHaveBeenCalled();
   });
 
   it("stops a key it catches, and leaves the others alone", () => {
