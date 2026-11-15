@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quel — A lightweight database client for macOS</title>
+  <meta name="description" content="Write SQL, explore your databases, and work with results in a focused macOS app. Free and open source. PostgreSQL, SQLite, DuckDB, and Amazon Redshift.">
+  <link rel="canonical" href="https://quel.absky.dev/">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Quel — A lightweight database client for macOS">
+  <meta property="og:description" content="A focused desktop app for everyday SQL. Free and open source.">
+  <meta property="og:url" content="https://quel.absky.dev/">
+  <meta property="og:image" content="https://quel.absky.dev/assets/workspace.png">
+  <meta property="og:image:alt" content="Quel showing a SQL editor, database structure, query results, and row details.">
+  <meta name="twitter:card" content="summary_large_image">
+  <style>
+    :root { color-scheme: light; --background: #faf9f6; --foreground: #252c2a; --muted-foreground: #626b65; --card: #fff; --secondary: #eef2ed; --border: #ddE2da; --primary: #216653; --primary-foreground: #fff; --ring: #216653; --radius: 14px; --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--background); }
+    body { margin: 0; color: var(--foreground); font-family: var(--font-sans); font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    a { color: var(--primary); text-underline-offset: 4px; }
+    a:hover { text-decoration-thickness: 2px; }
+    a:focus-visible, button:focus-visible { outline: 3px solid var(--ring); outline-offset: 5px; }
+    img { display: block; max-width: 100%; height: auto; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { text-wrap: balance; }
+    p { text-wrap: pretty; }
+    .wrap { width: min(1120px, calc(100% - 64px)); margin-inline: auto; }
+    .skip { position: absolute; top: -80px; left: 16px; padding: 10px 16px; background: var(--card); z-index: 10; }
+    .skip:focus { top: 10px; }
+    nav { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 24px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--foreground); text-decoration: none; font-size: 24px; font-weight: 650; letter-spacing: -.7px; }
+    .brand img { width: 44px; height: 44px; }
+    .nav-links { display: flex; align-items: center; gap: 30px; }
+    .nav-links a { color: var(--muted-foreground); text-decoration: none; font-size: 15px; padding-block: 8px; }
+    .nav-links a:hover { color: var(--primary); }
+    .hero { padding: 70px 0 54px; }
+    h1 { max-width: 850px; font-size: clamp(42px, 6.2vw, 76px); line-height: 1.07; letter-spacing: -.055em; font-weight: 620; }
+    .intro { max-width: 660px; margin-top: 25px; color: var(--muted-foreground); font-size: clamp(18px, 2vw, 21px); line-height: 1.6; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 26px; margin-top: 30px; }
+    .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 50px; padding: 11px 22px; background: var(--primary); color: var(--primary-foreground); border-radius: 9px; text-decoration: none; font-size: 16px; font-weight: 600; }
+    .button:hover { background: #184f40; }
+    .text-link { font-size: 16px; font-weight: 550; }
+    .requirements { margin-top: 17px; color: var(--muted-foreground); font-size: 13px; }
+    .terminal { display: flex; align-items: center; gap: 14px; max-width: 100%; width: fit-content; padding: 13px 16px; background: var(--secondary); border: 1px solid var(--border); border-radius: 9px; }
+    .hero .terminal { margin-top: 22px; }
+    .terminal code { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; }
+    .copy { flex-shrink: 0; border: 0; background: transparent; color: var(--primary); padding: 8px; font: 500 12px var(--font-sans); cursor: pointer; border-radius: 4px; }
+    .copy:hover { background: #dfe8de; }
+    .copy-status { font-size: 13px; color: var(--muted-foreground); }
+    .screenshot { border: 1px solid #d5d9d3; border-radius: 12px; box-shadow: 0 18px 45px -24px #334d4266; width: 100%; }
+    .engines { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px 30px; padding: 30px 0 0; font-size: 15px; }
+    .engines p { color: var(--muted-foreground); }
+    .engines ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 26px; padding: 0; margin: 0; list-style: none; font-weight: 550; }
+    .section { padding-block: 96px; }
+    h2 { font-size: clamp(30px, 4vw, 43px); line-height: 1.15; letter-spacing: -.035em; font-weight: 620; }
+    .section-intro { color: var(--muted-foreground); max-width: 650px; margin-top: 16px; font-size: 18px; }
+    .features { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 44px 32px; margin-top: 40px; }
+    .feature img { width: 100%; aspect-ratio: 3 / 2; object-fit: contain; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+    h3 { font-size: 21px; line-height: 1.3; letter-spacing: -.025em; font-weight: 600; }
+    .feature h3 { margin-top: 22px; }
+    .feature p { margin-top: 10px; color: var(--muted-foreground); font-size: 16px; max-width: 53ch; }
+    .details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin-top: 60px; }
+    .details article { border-top: 1px solid var(--border); padding-top: 20px; }
+    .details h3 { font-size: 18px; }
+    .details p { margin-top: 10px; font-size: 15px; color: var(--muted-foreground); }
+    .privacy { border-top: 1px solid var(--border); padding-block: 64px; display: grid; grid-template-columns: 1fr 1fr; gap: 60px; }
+    .privacy h2 { max-width: 400px; }
+    .privacy h3 { font-size: 18px; margin-bottom: 8px; }
+    .privacy p { color: var(--muted-foreground); font-size: 16px; }
+    .privacy article + article { margin-top: 26px; }
+    .privacy .update-note { margin-top: 20px; font-size: 13px; }
+    .install { background: var(--secondary); border-block: 1px solid var(--border); padding-block: 60px; }
+    .install-inner { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 50px; }
+    .install .terminal { width: 100%; margin-top: 18px; background: var(--card); }
+    .install .button { margin-top: 24px; }
+    .install p { color: var(--muted-foreground); margin-top: 16px; font-size: 16px; }
+    .install .small { font-size: 13px; }
+    footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 30px; font-size: 13px; color: var(--muted-foreground); }
+    footer div { display: flex; flex-wrap: wrap; gap: 20px; }
+    footer a { color: var(--muted-foreground); }
+    @media (max-width: 700px) { .wrap { width: calc(100% - 40px); } nav { gap: 16px; padding-block: 18px; } .nav-links { gap: 18px; } .nav-links .optional { display: none; } .hero { padding: 46px 0 36px; } .section { padding-block: 64px; } .features { gap: 36px; grid-template-columns: 1fr; } .details { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px; margin-top: 40px; } .privacy, .install-inner { grid-template-columns: 1fr; gap: 32px; } .privacy { padding-block: 48px; } footer { align-items: flex-start; flex-direction: column; } }
+    @media (max-width: 420px) { .details { grid-template-columns: 1fr; } .terminal { gap: 6px; padding: 10px; } .terminal code { font-size: 11px; } .engines { gap: 12px; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="wrap">
+  <nav aria-label="Main navigation">
+    <a class="brand" href="#" aria-label="Quel home"><img src="assets/icon.png" alt="" width="44" height="44">Quel</a>
+    <div class="nav-links"><a class="optional" href="#features">Features</a><a class="optional" href="#data">Your data</a><a href="#install">Install</a><a href="https://github.com/abogoyavlensky/quel">GitHub</a></div>
+  </nav>
+</header>
+<main id="main">
+  <section class="hero wrap" aria-labelledby="headline">
+    <h1 id="headline">A lightweight database client for macOS.</h1>
+    <p class="intro">Write SQL, explore your databases, and work with results in a focused desktop app.</p>
+    <div class="actions"><a class="button" href="https://github.com/abogoyavlensky/quel/releases/latest"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v5h14v-5"/></svg>Download for macOS</a><a class="text-link" href="https://github.com/abogoyavlensky/quel">View on GitHub</a></div>
+    <p class="requirements">Free and open source. Apple Silicon · macOS 15 or later.</p>
+    <div class="terminal"><code>brew install --cask abogoyavlensky/tap/quel</code><button class="copy" type="button" aria-label="Copy Homebrew install command" hidden>Copy</button></div>
+  </section>
+  <div class="wrap">
+    <img class="screenshot" src="assets/workspace.png" alt="Quel with saved connections and database structure on the left, a SQL editor and results in the middle, and row details on the right." width="1199" height="799" fetchpriority="high">
+    <div class="engines"><p>Works with</p><ul><li>PostgreSQL</li><li>SQLite</li><li>DuckDB</li><li>Amazon Redshift</li></ul></div>
+  </div>
+  <section id="features" class="section wrap" aria-labelledby="features-title">
+    <h2 id="features-title">Built for everyday SQL.</h2>
+    <p class="section-intro">Write queries, browse database structure, and inspect and export results.</p>
+    <div class="features">
+      <article class="feature"><img src="assets/editor.png" alt="SQL editor showing the current statement and its results." width="635" height="423" loading="lazy"><h3>A proper SQL editor</h3><p>Syntax highlighting and autocomplete for keywords, tables, and columns. Run the statement under the cursor, a selection, or the whole script. Cancel a long-running query when you need to.</p></article>
+      <article class="feature"><img src="assets/safety.png" alt="Connection safety options: never ask, ask before changes, ask before every query, and read-only." width="508" height="339" loading="lazy"><h3>Control when queries can run</h3><p>Choose a confirmation policy for each connection. Read-only mode blocks recognized writes and asks before unfamiliar statements. Data changes happen through SQL you write.</p></article>
+      <article class="feature"><img src="assets/keyboard.png" alt="Command palette with actions and their keyboard shortcuts." width="500" height="333" loading="lazy"><h3>Keyboard-friendly</h3><p>Open the command palette, type a few letters, and go. Most actions have shortcuts, from switching tabs to running a query and focusing its results.</p></article>
+      <article class="feature"><img src="assets/export.png" alt="Result export options for CSV, JSON, and Markdown, with Copy and Save buttons." width="453" height="302" loading="lazy"><h3>Export, or just copy</h3><p>Save results as CSV, JSON, or Markdown. Or copy them straight to the clipboard for a spreadsheet, a script, or a pull request.</p></article>
+    </div>
+    <div class="details">
+      <article><h3>Explore large results</h3><p>Rows load as you scroll. Keep several results open, and pin the ones you want to compare.</p></article>
+      <article><h3>One row, in full</h3><p>Inspect a row in the side panel, with formatted JSON to make nested values easier to read.</p></article>
+      <article><h3>Pick up where you left off</h3><p>Editor tabs save as you type and return on the next launch. Closed a tab too soon? Reopen it.</p></article>
+      <article><h3>Saved connections</h3><p>Keep several databases connected at once, with a color for each to help tell them apart.</p></article>
+      <article><h3>Database structure</h3><p>Browse schemas, tables, views, and more. Expand a table to see its columns, indexes, and keys.</p></article>
+      <article><h3>In-app updates</h3><p>Download and install new versions from Quel, keeping your connections, tabs, and passwords.</p></article>
+    </div>
+  </section>
+  <section id="data" class="privacy wrap" aria-labelledby="privacy-title">
+    <div><h2 id="privacy-title">No telemetry.<br>No account required.</h2><p class="update-note">Quel contacts GitHub to check for and download app updates.</p></div>
+    <div><article><h3>Passwords stay in the macOS Keychain</h3><p>Connection passwords are stored in the Keychain, never in Quel’s own database.</p></article><article><h3>Your workspace stays on your Mac</h3><p>Connection profiles and editor tabs are saved locally. No analytics or usage reporting.</p></article></div>
+  </section>
+  <section id="install" class="install" aria-labelledby="install-title"><div class="wrap install-inner">
+    <div><h2 id="install-title">Get Quel.</h2><p>Free and open source under the MIT license.<br>For Apple Silicon Macs running macOS 15 or later.</p><a class="button" href="https://github.com/abogoyavlensky/quel/releases/latest">Download for macOS</a><p class="small">Signed and notarized. Unzip the download and move Quel.app to Applications.</p></div>
+    <div><h3>Prefer Homebrew?</h3><div class="terminal"><code>brew install --cask abogoyavlensky/tap/quel</code><button class="copy" type="button" aria-label="Copy Homebrew install command" hidden>Copy</button></div><p class="small">Quel is still early in development. <a href="https://github.com/abogoyavlensky/quel/issues">Bug reports and ideas</a> are welcome.</p></div>
+  </div></section>
+</main>
+<footer class="wrap"><p>Quel · Free and open source.</p><div><a href="https://github.com/abogoyavlensky/quel">Source</a><a href="https://github.com/abogoyavlensky/quel/releases">Releases</a><a href="https://github.com/abogoyavlensky/quel/issues">Issues</a><a href="https://github.com/abogoyavlensky/quel/blob/master/LICENSE">MIT License</a></div></footer>
+<p class="copy-status wrap" role="status" aria-live="polite" id="copy-status"></p>
+<script>
+  if (navigator.clipboard && window.isSecureContext) {
+    document.querySelectorAll('.copy').forEach(button => {
+      button.hidden = false;
+      button.addEventListener('click', async () => {
+        const status = document.getElementById('copy-status');
+        try {
+          await navigator.clipboard.writeText(button.previousElementSibling.textContent);
+          button.textContent = 'Copied';
+          status.textContent = 'Homebrew install command copied.';
+          window.setTimeout(() => { button.textContent = 'Copy'; status.textContent = ''; }, 2500);
+        } catch {
+          status.textContent = 'Select the command and copy it manually.';
+        }
+      });
+    });
+  }
+</script>
+</body>
+</html>
