@@ -158,8 +158,11 @@ export type ZoomDirection = "in" | "out" | "reset";
 export const zoom = (direction: ZoomDirection) => call<number>("zoom", direction);
 export const restoreZoom = () => call<number>("restore-zoom");
 
-// Remember whether the window is maximised or fullscreen.
+// Remember whether the window is maximised or fullscreen, and a normal
+// window's frame.
 export const saveWindowState = () => call<void>("save-window-state");
+// Fit the saved frame to the screens, once the window runs.
+export const restoreWindowFrame = () => call<void>("restore-window-frame");
 
 // New versions (quel.updates). download-update resolves once the update is
 // downloaded, verified and staged; restart-to-update quits the app.

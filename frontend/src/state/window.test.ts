@@ -1,9 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const api = vi.hoisted(() => ({ zoom: vi.fn(), restoreZoom: vi.fn(), saveWindowState: vi.fn() }));
+const api = vi.hoisted(() => ({
+  zoom: vi.fn(),
+  restoreZoom: vi.fn(),
+  saveWindowState: vi.fn(),
+  restoreWindowFrame: vi.fn(),
+}));
 vi.mock("@/lib/api", () => api);
 
-import { WINDOW_STATE_DELAY_MS, loadZoom, stepZoom, watchWindowState } from "./window";
+// Wails events: the listeners by name, and the removers handed back.
+const bridge = vi.hoisted(() => {
+  const listeners = new Map<string, Set<(data: unknown) => void>>();
+  return {
+    listeners,
+    onEvent: (name: string, fn: (data: unknown) => void) => {
+      const set = listeners.get(name) ?? new Set();
+      set.add(fn);
+      listeners.set(name, set);
+      return () => set.delete(fn);
+    },
+  };
+});
+vi.mock("@/lib/bridge", () => ({ onEvent: bridge.onEvent }));
+
+import {
+  WINDOW_STATE_DELAY_MS,
+  loadZoom,
+  restoreWindowFrame,
+  stepZoom,
+  watchWindowState,
+} from "./window";
 
 // The tests run under Node: the two globals the module touches.
 const style = new Map<string, string>();
@@ -88,6 +114,19 @@ describe("zoom", () => {
   });
 });
 
+describe("restoreWindowFrame", () => {
+  it("asks the backend to restore the frame", async () => {
+    api.restoreWindowFrame.mockResolvedValue(undefined);
+    await restoreWindowFrame();
+    expect(api.restoreWindowFrame).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a failure", async () => {
+    api.restoreWindowFrame.mockRejectedValue(new Error("no"));
+    await expect(restoreWindowFrame()).resolves.toBeUndefined();
+  });
+});
+
 describe("watchWindowState", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -97,6 +136,33 @@ describe("watchWindowState", () => {
     vi.useRealTimers();
   });
   const resize = () => fakeWindow.dispatchEvent(new Event("resize"));
+  const move = () => bridge.listeners.get("common:WindowDidMove")?.forEach((fn) => fn(null));
+
+  it("saves after a move, which fires no resize", () => {
+    const stop = watchWindowState();
+    move();
+    vi.advanceTimersByTime(WINDOW_STATE_DELAY_MS);
+    expect(api.saveWindowState).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("saves once for a move and a resize close together", () => {
+    const stop = watchWindowState();
+    move();
+    resize();
+    vi.advanceTimersByTime(WINDOW_STATE_DELAY_MS);
+    expect(api.saveWindowState).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it("stops listening for moves on its remover", () => {
+    const stop = watchWindowState();
+    stop();
+    move();
+    vi.advanceTimersByTime(WINDOW_STATE_DELAY_MS);
+    expect(api.saveWindowState).not.toHaveBeenCalled();
+    expect(bridge.listeners.get("common:WindowDidMove")?.size ?? 0).toBe(0);
+  });
 
   it("saves once, after the last resize", () => {
     const stop = watchWindowState();

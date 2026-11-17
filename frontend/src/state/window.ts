@@ -1,7 +1,8 @@
 import * as api from "@/lib/api";
+import { onEvent } from "@/lib/bridge";
 
-// The window's zoom and the state it is left in, both saved by the backend
-// (quel.window).
+// The window's zoom, the state it is left in and its frame, all saved by
+// the backend (quel.window).
 //
 // The zoom level sits in --zoom on the root element too: the title strip
 // divides by it. Steps go one after another: the backend runs bridge calls
@@ -30,19 +31,28 @@ export function stepZoom(direction: api.ZoomDirection): void {
 
 export const WINDOW_STATE_DELAY_MS = 400;
 
-// Save the window's state once a resize settles; the backend asks the
-// window what the state is. A resize covers every way in and out of
-// maximised and fullscreen, on every platform. Returns the fn that stops
-// watching.
+// Fit the saved frame to the screens once the window runs. A failure is
+// dropped: the window stays where Wails put it.
+export function restoreWindowFrame(): Promise<void> {
+  return api.restoreWindowFrame().catch(() => {});
+}
+
+// Save the window's state and frame once a resize or a move settles; the
+// backend asks the window. A resize covers every way in and out of
+// maximised and fullscreen, on every platform. A move fires no resize, so
+// Wails' move event counts too (macOS sends it; GTK4 sends none). Returns
+// the fn that stops watching.
 export function watchWindowState(): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const onResize = () => {
+  const onChange = () => {
     clearTimeout(timer);
     timer = setTimeout(() => void api.saveWindowState().catch(() => {}), WINDOW_STATE_DELAY_MS);
   };
-  window.addEventListener("resize", onResize);
+  window.addEventListener("resize", onChange);
+  const stopMoves = onEvent("common:WindowDidMove", onChange);
   return () => {
     clearTimeout(timer);
-    window.removeEventListener("resize", onResize);
+    window.removeEventListener("resize", onChange);
+    stopMoves();
   };
 }
