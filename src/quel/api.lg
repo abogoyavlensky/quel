@@ -209,16 +209,20 @@
 ;; The frontend calls this after the window resizes or moves. Saving at
 ;; shutdown cannot work: the window is gone by then and reads as not
 ;; maximised. A normal window's frame is saved too; a maximised or
-;; fullscreen one keeps the frame from before. Coming back to normal puts
-;; that frame back instead of saving the current one: in a session that
-;; started maximised, macOS restores the frame the window was created
-;; with, not the saved one.
+;; fullscreen one keeps the frame from before.
+;;
+;; Leaving fullscreen puts that frame back instead of saving the current
+;; one: in a session that started fullscreen, macOS restores the frame the
+;; window was created with, not the saved one. A fullscreen window cannot
+;; be resized by hand, so the change to normal is always an exit. Leaving
+;; maximised gets no such help: dragging the edge of a zoomed window also
+;; makes it read as normal, and putting the frame back would undo the drag.
 (defn save-window-state [{:keys [store window]}]
   (let [was (window/start-state store)
         now (window/state-of (w/maximised? window) (w/fullscreen? window))
         bounds (w/bounds window)]
     (cond
-      (and (not= :normal was) (= :normal now)) (apply-saved-frame! store window)
+      (and (= :fullscreen was) (= :normal now)) (apply-saved-frame! store window)
       (and (= :normal now) (pos? (:width bounds))) (window/save-window-frame! store bounds))
     (window/save-start-state! store now))
   nil)

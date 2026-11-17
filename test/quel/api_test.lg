@@ -114,9 +114,21 @@
       (is (nil? (api/save-window-state env)))
       (is (nil? (window/window-frame (:store env)))))))
 
-;; Leaving maximised puts the saved frame back rather than saving the
-;; window's current one.
-(deftest leaving-maximised-keeps-the-saved-frame
+;; Leaving fullscreen puts the saved frame back rather than saving the
+;; window's current one. The test window has no bounds, so it neither moves
+;; nor overwrites the row.
+(deftest leaving-fullscreen-keeps-the-saved-frame
+  (with-env
+    (fn [{:keys [store] :as env} _]
+      (window/save-start-state! store :fullscreen)
+      (window/save-window-frame! store frame)
+      (is (nil? (api/save-window-state env)))
+      (is (= :normal (window/start-state store)))
+      (is (= frame (window/window-frame store))))))
+
+;; Leaving maximised is an ordinary save: a drag on a zoomed window's edge
+;; also reads as normal, and must be kept.
+(deftest leaving-maximised-is-saved-like-a-normal-window
   (with-env
     (fn [{:keys [store] :as env} _]
       (window/save-start-state! store :maximised)

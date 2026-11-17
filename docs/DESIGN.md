@@ -681,10 +681,12 @@ at the bottom right.
   frame is fitted into that screen's work area (or the primary screen's,
   when its display is gone). This cannot happen at creation: Wails knows
   the screens only after launch, and creates the window slightly off the
-  size asked for. Coming back to normal from a saved maximised or
-  fullscreen state also puts the saved frame back: in a session that
-  started maximised, macOS would restore the frame the window was created
-  with.
+  size asked for. Coming back to normal from fullscreen also puts the
+  saved frame back: in a session that started fullscreen, macOS would
+  restore the frame the window was created with. Coming back from
+  maximised does not, since dragging a zoomed window's edge also reads as
+  normal and must be kept; after a maximised start, un-zooming returns to
+  the saved size, centred.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
   mix of a tag into the cool grey swings the hue through blue.
