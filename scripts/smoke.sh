@@ -221,11 +221,13 @@ else
 fi
 
 # The zoom level is saved across calls; server mode has no window to scale,
-# so the state check finds nothing to remember.
+# so the state check finds nothing to remember and the frame nothing to
+# restore.
 [[ "$(call zoom '["in"]')" == *'1.1'* ]] || fail "zoom in"
 [[ "$(call restore-zoom '[]')" == *'1.1'* ]] || fail "restore-zoom"
 [[ "$(call zoom '["reset"]')" == *'1'* ]] || fail "zoom reset"
 r="$(call save-window-state '[]')"; nothing "$r" || fail "save-window-state: $r"
+r="$(call restore-window-frame '[]')"; nothing "$r" || fail "restore-window-frame: $r"
 
 # Redefine a handler in the running app. It is registered by var, so the
 # next call runs the new definition. (alter-var-root is fine here: this is

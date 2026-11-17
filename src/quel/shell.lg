@@ -12,7 +12,10 @@
   (w/new-app opts))
 
 ;; :app is the application and :store the app database, read for the state
-;; the window was left in; the rest goes to w/new-window.
+;; and the frame the window was left in; the rest goes to w/new-window. The
+;; frame is fitted to the screens later, once the window runs (quel.api's
+;; restore-window-frame): Wails knows no screens before that.
 (defmethod ig/init-key ::window [_ {:keys [app store] :as opts}]
-  (w/new-window app (assoc (dissoc opts :app :store)
-                           :start-state (window/start-state store))))
+  (w/new-window app (merge (dissoc opts :app :store)
+                           (window/start-opts (window/start-state store)
+                                              (window/window-frame store)))))
