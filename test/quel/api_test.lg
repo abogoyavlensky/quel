@@ -53,7 +53,7 @@
            "export-begin" "export-append" "export-finish" "export-abort"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
            "structure-collapsed" "set-structure-collapsed"
-           "zoom" "restore-zoom" "save-window-state"
+           "zoom" "restore-zoom" "save-window-state" "restore-window-frame"
            "check-update" "skip-update" "download-update" "restart-to-update"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
@@ -103,6 +103,49 @@
       (window/save-start-state! (:store env) :maximised)
       (is (nil? (api/save-window-state env)))
       (is (= :normal (window/start-state (:store env)))))))
+
+(def ^:private frame {:x 100 :y 50 :width 1300 :height 900})
+
+;; The test window is never run, so its bounds read as zeros, as in server
+;; mode: there is no frame to save.
+(deftest save-window-state-saves-no-frame-from-a-window-without-bounds
+  (with-env
+    (fn [env _]
+      (is (nil? (api/save-window-state env)))
+      (is (nil? (window/window-frame (:store env)))))))
+
+;; Leaving fullscreen puts the saved frame back rather than saving the
+;; window's current one. The test window has no bounds, so it neither moves
+;; nor overwrites the row.
+(deftest leaving-fullscreen-keeps-the-saved-frame
+  (with-env
+    (fn [{:keys [store] :as env} _]
+      (window/save-start-state! store :fullscreen)
+      (window/save-window-frame! store frame)
+      (is (nil? (api/save-window-state env)))
+      (is (= :normal (window/start-state store)))
+      (is (= frame (window/window-frame store))))))
+
+;; Leaving maximised is an ordinary save: a drag on a zoomed window's edge
+;; also reads as normal, and must be kept.
+(deftest leaving-maximised-is-saved-like-a-normal-window
+  (with-env
+    (fn [{:keys [store] :as env} _]
+      (window/save-start-state! store :maximised)
+      (window/save-window-frame! store frame)
+      (is (nil? (api/save-window-state env)))
+      (is (= :normal (window/start-state store)))
+      (is (= frame (window/window-frame store))))))
+
+;; No work area is known for a window that never ran, so there is nothing
+;; to fit; the call is safe all the same.
+(deftest restore-window-frame-is-safe-without-a-screen
+  (with-env
+    (fn [{:keys [store] :as env} _]
+      (is (nil? (api/restore-window-frame env)))
+      (window/save-window-frame! store frame)
+      (is (nil? (api/restore-window-frame env)))
+      (is (= frame (window/window-frame store))))))
 
 (deftest open-run-close
   (with-env

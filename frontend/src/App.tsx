@@ -8,7 +8,7 @@ import { flushAll } from "@/state/persist";
 import { loadSidebar, loadStructure } from "@/state/layout";
 import { openPalette } from "@/state/palette";
 import { onPageKey } from "@/state/pageKeys";
-import { loadZoom, stepZoom, watchWindowState } from "@/state/window";
+import { loadZoom, restoreWindowFrame, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
 import { cancel, closeTab, newTab, reopenTab, runCurrent, selectedTabId } from "@/state/runner";
 
@@ -79,6 +79,7 @@ export default function App() {
     void loadSidebar();
     void loadStructure();
     void loadZoom();
+    void restoreWindowFrame();
   }, []);
   useEffect(() => {
     return watchWindowState();

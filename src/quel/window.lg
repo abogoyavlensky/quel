@@ -1,10 +1,12 @@
 (ns quel.window
-  (:require [sql.core :as sql]))
+  (:require [sql.core :as sql]
+            [string :as str]))
 
 ;; What Quel remembers about its window, in the settings table: the zoom
-;; level and whether it was left maximised or fullscreen. Each has a row
-;; only away from its default. Nothing here calls Wails; quel.api and
-;; quel.shell apply these to the window.
+;; level, whether it was left maximised or fullscreen, and the normal
+;; window's frame. Zoom and state have a row only away from their default.
+;; Nothing here calls Wails; quel.api and quel.shell apply these to the
+;; window.
 ;;
 ;; Quel keeps its own ladder of levels. Wails' ZoomIn and ZoomOut step
 ;; differently per platform, and GetZoom passes through a C float (1.1
@@ -79,3 +81,57 @@
     fullscreen? :fullscreen
     maximised? :maximised
     :else :normal))
+
+;; The normal window's frame: {:x :y :width :height}, in Wails' units (on
+;; macOS, points from the primary screen's top-left corner). It is saved
+;; only while the window is normal, so a maximised session keeps the frame
+;; it is restored to.
+
+(def default-size {:width 1200 :height 800})
+
+(def min-size {:width 720 :height 480})
+
+(defn- parse-frame [s]
+  (let [parts (some-> s (str/split #","))
+        [x y width height :as ns] (map #(parse-long (str/trim %)) parts)]
+    (when (and (= 4 (count parts)) (every? some? ns))
+      {:x x :y y :width width :height height})))
+
+(defn window-frame
+  "The normal window's saved frame, or nil when none is saved or it is
+   unreadable."
+  [db]
+  (parse-frame (setting db "window-frame")))
+
+(defn save-window-frame!
+  "Remember the normal window's frame."
+  [db {:keys [x y width height]}]
+  (put-setting! db "window-frame" (str/join "," [x y width height]))
+  nil)
+
+(defn start-opts
+  "The new-window options for the saved state and frame. A maximised or
+   fullscreen window gets the frame's size but no position: Wails applies
+   the start state before the position, and moving a zoomed window would
+   knock it off its zoomed frame. The size never goes below min-size."
+  [state frame]
+  (let [size (merge default-size (select-keys frame [:width :height]))]
+    (cond-> {:start-state state
+             :width (max (:width size) (:width min-size))
+             :height (max (:height size) (:height min-size))}
+      (and frame (= :normal state)) (assoc :x (:x frame) :y (:y frame)))))
+
+(defn fit-frame
+  "`frame` moved and shrunk to lie inside `area`, both {:x :y :width
+   :height}. The size shrinks to the area first, then the corner moves in.
+   A frame that already fits, or a nil area, comes back as it is."
+  [frame area]
+  (if-not area
+    frame
+    (let [{:keys [x y width height]} frame
+          w (min width (:width area))
+          h (min height (:height area))]
+      {:width w
+       :height h
+       :x (-> x (max (:x area)) (min (- (+ (:x area) (:width area)) w)))
+       :y (-> y (max (:y area)) (min (- (+ (:y area) (:height area)) h)))})))

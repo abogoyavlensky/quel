@@ -75,3 +75,76 @@
   (is (= :maximised (window/state-of true false)))
   (is (= :fullscreen (window/state-of false true)))
   (is (= :fullscreen (window/state-of true true))))
+
+;; The normal window's frame.
+
+(def ^:private frame {:x 100 :y 50 :width 1300 :height 900})
+
+(deftest a-fresh-database-has-no-frame
+  (with-store
+    (fn [db _]
+      (is (nil? (window/window-frame db))))))
+
+(deftest the-frame-round-trips
+  (with-store
+    (fn [db _]
+      (window/save-window-frame! db frame)
+      (is (= frame (window/window-frame db)))
+      (window/save-window-frame! db (assoc frame :x -1728))
+      (is (= (assoc frame :x -1728) (window/window-frame db)))
+      (is (= 1 (rows db "window-frame"))))))
+
+(deftest an-unreadable-frame-reads-as-none
+  (doseq [v ["1,2,3" "a,b,c,d" "" "1,2,3,4,5"]]
+    (with-store
+      (fn [db _]
+        (put! db "window-frame" v)
+        (is (nil? (window/window-frame db)) v)))))
+
+(deftest start-opts-without-a-frame-is-the-default-window
+  (is (= {:start-state :normal :width 1200 :height 800}
+         (window/start-opts :normal nil)))
+  (is (= {:start-state :maximised :width 1200 :height 800}
+         (window/start-opts :maximised nil))))
+
+(deftest start-opts-places-a-normal-window-at-its-frame
+  (is (= {:start-state :normal :x 100 :y 50 :width 1300 :height 900}
+         (window/start-opts :normal frame))))
+
+(deftest start-opts-gives-a-maximised-or-fullscreen-window-no-position
+  (doseq [state [:maximised :fullscreen]]
+    (is (= {:start-state state :width 1300 :height 900}
+           (window/start-opts state frame))
+        (str state))))
+
+(deftest start-opts-keeps-the-minimum-size
+  (is (= {:start-state :normal :x 100 :y 50 :width 720 :height 480}
+         (window/start-opts :normal (assoc frame :width 500 :height 300)))))
+
+(def ^:private area {:x 0 :y 25 :width 1728 :height 1050})
+
+(deftest a-frame-that-fits-is-left-alone
+  (is (= frame (window/fit-frame frame area)))
+  (is (= frame (window/fit-frame frame nil))))
+
+(deftest a-frame-off-the-right-or-bottom-moves-in
+  (is (= {:x 428 :y 50 :width 1300 :height 900}
+         (window/fit-frame (assoc frame :x 2000) area)))
+  (is (= {:x 100 :y 175 :width 1300 :height 900}
+         (window/fit-frame (assoc frame :y 3000) area))))
+
+(deftest a-frame-off-the-left-or-top-moves-in
+  (is (= {:x 0 :y 50 :width 1300 :height 900}
+         (window/fit-frame (assoc frame :x -500) area)))
+  (is (= {:x 100 :y 25 :width 1300 :height 900}
+         (window/fit-frame (assoc frame :y 0) area))))
+
+(deftest a-frame-larger-than-the-area-shrinks-to-it
+  (is (= area (window/fit-frame {:x -10 :y -10 :width 4000 :height 3000} area))))
+
+(deftest a-frame-fits-an-area-away-from-the-origin
+  (let [second {:x 1728 :y 0 :width 2560 :height 1415}]
+    (is (= {:x 1728 :y 50 :width 1300 :height 900}
+           (window/fit-frame frame second)))
+    (is (= {:x 2000 :y 50 :width 1300 :height 900}
+           (window/fit-frame (assoc frame :x 2000) second)))))

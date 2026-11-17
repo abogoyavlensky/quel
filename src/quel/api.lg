@@ -193,11 +193,46 @@
     (w/set-zoom! window level)
     level))
 
-;; The frontend calls this after the window resizes. Saving at shutdown
-;; cannot work: the window is gone by then and reads as not maximised.
+;; Put the window at its saved frame, fitted to its screen. It goes to the
+;; frame as saved first, so it lands on that frame's display: a session
+;; that started maximised sits on the main one. The work area is then that
+;; display's, or the primary screen's when the frame is on none (a display
+;; that was unplugged).
+(defn- apply-saved-frame! [store win]
+  (when-let [frame (window/window-frame store)]
+    (when (not= frame (w/bounds win))
+      (w/set-bounds! win frame))
+    (let [fitted (window/fit-frame frame (w/work-area win))]
+      (when (not= fitted frame)
+        (w/set-bounds! win fitted)))))
+
+;; The frontend calls this after the window resizes or moves. Saving at
+;; shutdown cannot work: the window is gone by then and reads as not
+;; maximised. A normal window's frame is saved too; a maximised or
+;; fullscreen one keeps the frame from before.
+;;
+;; Leaving fullscreen puts that frame back instead of saving the current
+;; one: in a session that started fullscreen, macOS restores the frame the
+;; window was created with, not the saved one. A fullscreen window cannot
+;; be resized by hand, so the change to normal is always an exit. Leaving
+;; maximised gets no such help: dragging the edge of a zoomed window also
+;; makes it read as normal, and putting the frame back would undo the drag.
 (defn save-window-state [{:keys [store window]}]
-  (window/save-start-state! store (window/state-of (w/maximised? window)
-                                                   (w/fullscreen? window)))
+  (let [was (window/start-state store)
+        now (window/state-of (w/maximised? window) (w/fullscreen? window))
+        bounds (w/bounds window)]
+    (cond
+      (and (= :fullscreen was) (= :normal now)) (apply-saved-frame! store window)
+      (and (= :normal now) (pos? (:width bounds))) (window/save-window-frame! store bounds))
+    (window/save-start-state! store now))
+  nil)
+
+;; The frontend calls this once at start, when the window runs: the saved
+;; frame is fitted to the screens then, which Wails knows only after launch,
+;; and the size Wails creates the window at is not quite the size asked for.
+(defn restore-window-frame [{:keys [store window]}]
+  (when (= :normal (window/start-state store))
+    (apply-saved-frame! store window))
   nil)
 
 (defn check-update [{:keys [updates]}]
@@ -253,6 +288,7 @@
    "zoom" #'zoom
    "restore-zoom" #'restore-zoom
    "save-window-state" #'save-window-state
+   "restore-window-frame" #'restore-window-frame
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update
