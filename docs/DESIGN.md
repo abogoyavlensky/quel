@@ -131,7 +131,7 @@ waiting on the network inside Go, not in bytecode.
 | `quel.shell` | The Wails app and window components. |
 | `quel.system` | The integrant config and the running system (`defonce`). |
 | `quel.store` | App database: connection profiles, query history, saved workspace. Migrations in `quel.migrations`. |
-| `quel.window` | The zoom ladder, and the zoom level and window state in the app database. Calls no Wails. |
+| `quel.window` | The zoom ladder; the zoom level, the window state and the normal window's frame in the app database; fitting a frame to a screen's work area. Calls no Wails. |
 | `quel.workspace` | Each profile's saved editor tabs and recently closed tabs, and the selected profile, in the app database. |
 | `quel.secrets` | Passwords in the macOS Keychain, keyed by profile id. Never in the app database. |
 | `quel.conn` | Opens a pool per connected profile, hands out sessions, tracks connection state. |
@@ -664,8 +664,27 @@ at the bottom right.
   window and writes the `window-state` row in `settings`, there only away
   from normal. A resize covers every way in and out. Saving at shutdown
   cannot work: the window is gone by then and reads as not maximised. The
-  state goes to `w/new-window` as `:start-state`. The normal window's
-  size and position are not remembered.
+  state goes to `w/new-window` as `:start-state`.
+- **Window frame.** A normal window opens at the size and position it was
+  left at, so one filled with macOS's Fill or tiling (which is not
+  "zoomed") opens filling the screen again. The `window-frame` row in
+  `settings` holds `x,y,width,height` in Wails' units (points from the
+  primary screen's top-left on macOS). `save-window-state` writes it only
+  while the window is normal, so a maximised session keeps the frame it
+  goes back to. A move fires no `resize`, so the same debounced listener
+  also hears Wails' `common:WindowDidMove` (GTK4 sends none). Restoring
+  takes two steps. `w/new-window` gets the frame's size, and its position
+  only for a normal start: Wails positions after applying the start
+  state, which would knock a zoomed window off its frame. Then, once the
+  window runs, the frontend calls `restore-window-frame`: the window goes
+  to the saved frame, which puts it on that frame's display, and then the
+  frame is fitted into that screen's work area (or the primary screen's,
+  when its display is gone). This cannot happen at creation: Wails knows
+  the screens only after launch, and creates the window slightly off the
+  size asked for. Coming back to normal from a saved maximised or
+  fullscreen state also puts the saved frame back: in a session that
+  started maximised, macOS would restore the frame the window was created
+  with.
 - **Light only**, for now; themes come later as a setting
   (`docs/backlog/themes-setting.md`). Mix colours in `oklab`: an `oklch`
   mix of a tag into the cool grey swings the hue through blue.
