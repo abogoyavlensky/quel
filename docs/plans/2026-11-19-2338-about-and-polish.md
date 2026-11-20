@@ -1,5 +1,7 @@
 # About Quel, Quel's Queries in Messages, and Polish Implementation Plan
 
+**Status: completed**
+
 > **For agentic workers:** Use executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give Quel its own macOS app menu with an About dialog and Settings…, show every catalog query Quel sends in Messages, let the row details filter search values (JSON first), keep the Run button clear of the editor's scrollbars, and use a copy icon for Copy row.
@@ -315,10 +317,49 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 **Files:**
 - Create: `docs/backlog/quel-queries-failure-paths.md`
 
-- [ ] **Step 1: Write the entry.** Start with `**Status: open**`. Problem: the `select 1` liveness check in `exec/dead?` after a failed run, and the ping of a failed connect, don't show in Messages. Both fail through paths that carry only a message. Possible fix: return the probe on the lost or failed result's ex-data, and log a failed connect's ping in the workspace.
-- [ ] **Step 2: Commit on its own.** `git add docs/backlog/quel-queries-failure-paths.md && git commit -m "Backlog: Quel's failure-path queries in Messages"`
+- [x] **Step 1: Write the entry.** Start with `**Status: open**`. Problem: the `select 1` liveness check in `exec/dead?` after a failed run, and the ping of a failed connect, don't show in Messages. Both fail through paths that carry only a message. Possible fix: return the probe on the lost or failed result's ex-data, and log a failed connect's ping in the workspace.
+- [x] **Step 2: Commit on its own.** `git add docs/backlog/quel-queries-failure-paths.md && git commit -m "Backlog: Quel's failure-path queries in Messages"`
 
 ### Task 11: Full verification
 
-- [ ] **Step 1:** `env $SRV lgx test && env $SRV lgx test-pg && npm --prefix frontend test && npm --prefix frontend run lint && env $SRV lgx e2e && env $SRV lgx smoke`. Expected: all PASS.
-- [ ] **Step 2:** `lgx build` builds the binary. It needs GTK/WebKit headers; if they're missing here, say so instead of skipping silently. The macOS-only menu items can't be checked on Linux. Note in the PR that "About Quel…", Settings… ⌘, and Hide/Show All should be checked on a Mac build (`lgx package-macos && lgx verify-macos`).
+- [x] **Step 1:** `env $SRV lgx test && env $SRV lgx test-pg && npm --prefix frontend test && npm --prefix frontend run lint && env $SRV lgx e2e && env $SRV lgx smoke`. Expected: all PASS.
+- [x] **Step 2:** `lgx build` builds the binary. It needs GTK/WebKit headers; if they're missing here, say so instead of skipping silently. The macOS-only menu items can't be checked on Linux. Note in the PR that "About Quel…", Settings… ⌘, and Hide/Show All should be checked on a Mac build (`lgx package-macos && lgx verify-macos`).
+
+> Deviation: `lgx build` failed at first. `lg compile` (the native build) cannot resolve an alias keyword (`::meta/queries` in `quel.api`), so the key is spelled `:quel.meta/queries` everywhere (commit 550ec7b). The macOS-only menu items still need checking on a Mac build.
+
+---
+
+## Status: completed (2026-11-20)
+
+**Implemented.** letgo-packages#23 added the `:services-menu`, `:hide`, `:hide-others` and `:show-all` menu roles, released as `wails-v0.11.0`. On top of that, Quel now has:
+- its own Quel menu (About Quel…, Check for Updates…, Settings… ⌘,, the macOS roles, Quit; no Help menu);
+- the About dialog (icon, version, Check for Updates, GitHub and release notes, Copy version info, license), also in the palette;
+- the Run button inset by the editor's scrollbar sizes;
+- the copy icon for Copy row as JSON;
+- the row details filter on values, which searches JSON as formatted and highlights matches inside the colored tokens;
+- Quel's own SQL in Messages: catalog reads and the connect ping, recorded by `quel.meta/execute!`, kept per workspace, shown by default, with a checkbox and a palette toggle saved app-wide.
+
+Docs: DESIGN.md is updated, `settings-in-app-menu.md` is marked done, and the new backlog entry `quel-queries-failure-paths.md` covers the queries not yet shown.
+
+**Verification.** `lgx test` and `lgx test-pg` (268 tests each), frontend unit tests (730), lint (only the two warnings that were already there), `lgx e2e` (72), `lgx smoke` and `lgx smoke-pg`, and `lgx build` all pass. Screenshots of Messages, row details and About in server mode were checked by eye. Not verified: the macOS menu itself (About, Settings… ⌘,, Services, Hide, Show All); it needs `lgx package-macos && lgx verify-macos` on a Mac.
+
+**Issues hit and fixed.**
+- Codex found highlighting was quadratic on large JSON with many matches; fixed with a binary search.
+- Playwright's headless Chromium hides scrollbars; the Run button spec opts out.
+- `beforeEach(() => mock.mockReset())` in `api.test.ts` returned the mock, which vitest ran as a teardown.
+- vitest only runs `*.test.ts`.
+- An empty tab showed only the run hint, which hid Quel's queries.
+- The native build can't resolve alias keywords.
+
+**Deviations (all above, per task).**
+- Task 1: `go vet` on the shim alone fails on go.sum, with or without this change.
+- Task 2: `menu:about` was wired one commit later.
+- Task 3: there is a key-less `about` registry entry, and the dialog is titled "Quel".
+- Task 4: the e2e drops `--hide-scrollbars`.
+- Task 6: the code is split into `markPieces.tsx` and `Marked.tsx`, and multi-token matches render as several marks.
+- Task 7: the frontend unwrap landed early, and the pg test and `open-db` replies changed.
+- Task 8: `startQuelLog()` registers the sink; Messages shows the hint on an empty tab; the outcome is in the `<details>` summary; the vitest teardown fix; the test rename.
+- Task 11: `:quel.meta/queries`.
+
+**What the plan could have specified better.** It should have said to run `lgx build` (the native compile) right after the first let-go change, not only at the end. It should also have checked the vitest include pattern and Playwright's headless defaults before naming test files and scrollbar assertions.
+
