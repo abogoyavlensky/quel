@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { Braces, Check, Copy, X } from "lucide-react";
+import { Check, Copy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JsonCode } from "@/grid/JsonCode";
@@ -116,7 +116,7 @@ export function RowDetails() {
           {result && row ? `Row ${(index! + 1).toLocaleString()} of ${result.rows.length.toLocaleString()}` : "Row details"}
         </span>
         {result && row ? (
-          <CopyButton label="Copy row as JSON" text={() => rowAsJson(result.columns, row)} icon={<Braces />} />
+          <CopyButton label="Copy row as JSON" text={() => rowAsJson(result.columns, row)} />
         ) : null}
         <Button variant="ghost" size="icon-xs" aria-label="Close row details" title="Close" onClick={toggleRowDetails}>
           <X />
