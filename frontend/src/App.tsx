@@ -9,6 +9,7 @@ import { loadSidebar, loadStructure } from "@/state/layout";
 import { openPalette } from "@/state/palette";
 import { openSettings } from "@/state/settings";
 import { openAbout } from "@/state/about";
+import { loadQuelQueriesHidden, startQuelLog } from "@/state/quelLog";
 import { onPageKey } from "@/state/pageKeys";
 import { loadZoom, restoreWindowFrame, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
@@ -82,6 +83,8 @@ export default function App() {
     void loadProfiles().then(restoreSelection);
     void loadSidebar();
     void loadStructure();
+    startQuelLog();
+    void loadQuelQueriesHidden();
     void loadZoom();
     void restoreWindowFrame();
   }, []);

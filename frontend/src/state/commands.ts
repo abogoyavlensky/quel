@@ -16,6 +16,7 @@ import {
 import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { type CommandId, keyLabel } from "./keymap";
 import { openAbout } from "./about";
+import { quelQueriesShown, toggleQuelQueries } from "./quelLog";
 import { openSettings } from "./settings";
 import { checkForUpdates } from "./updates";
 import { stepZoom } from "./window";
@@ -204,6 +205,13 @@ export function commands(s: AppState): Command[] {
       run: toggleResults,
     },
   );
+  add({
+    id: "quel-queries",
+    keepsFocus: true,
+    group: "View",
+    title: quelQueriesShown(s.quelQueriesHidden) ? "Hide Quel's Queries" : "Show Quel's Queries",
+    run: toggleQuelQueries,
+  });
   add({
     id: "zoom-in",
     keepsFocus: true,

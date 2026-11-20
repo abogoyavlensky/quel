@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const bridge = vi.hoisted(() => ({ call: vi.fn() }));
 vi.mock("@/lib/bridge", () => bridge);
 
-const { chooseFile, describeObject, describeSchema, exportBegin } = await import("./api");
+const { chooseFile, describeObject, describeSchema, exportBegin, listSchemas, setQuelQueriesSink } = await import("./api");
 
-beforeEach(() => bridge.call.mockReset());
+// Braces: a function returned from beforeEach is a teardown, and
+// mockReset returns the mock, which vitest would then call after the test.
+beforeEach(() => {
+  bridge.call.mockReset();
+});
 
 // A canceled dialog is nil on the let-go side, which the bridge may deliver
 // as {} or null; neither may pass for a path.
@@ -60,5 +64,35 @@ describe("structure calls", () => {
       sequences: [],
     });
     expect(bridge.call).toHaveBeenCalledWith("describe-object", "c1", "s", "t");
+  });
+});
+
+// The SQL Quel ran for a structure call goes to the sink, on success and
+// on failure; the call still resolves or rejects as before.
+describe("Quel's queries", () => {
+  const queries = [{ sql: "select 1", params: [], ms: 1, rows: 1 }];
+
+  it("go to the sink with the call's conn-id", async () => {
+    const sink = vi.fn();
+    setQuelQueriesSink(sink);
+    bridge.call.mockResolvedValue({ result: { objects: [] }, queries });
+    expect((await describeSchema("c1", "s")).objects).toEqual([]);
+    expect(sink).toHaveBeenCalledWith("c1", queries);
+    setQuelQueriesSink(null);
+  });
+
+  it("ride on a failure's cause, and the failure still rejects", async () => {
+    const sink = vi.fn();
+    setQuelQueriesSink(sink);
+    const err = Object.assign(new Error("no such table"), { cause: { queries } });
+    bridge.call.mockRejectedValue(err);
+    await expect(describeObject("c2", "s", "t")).rejects.toThrow("no such table");
+    expect(sink).toHaveBeenCalledWith("c2", queries);
+    setQuelQueriesSink(null);
+  });
+
+  it("need no sink", async () => {
+    bridge.call.mockResolvedValue({ result: [], queries });
+    expect(await listSchemas("c1")).toEqual([]);
   });
 });

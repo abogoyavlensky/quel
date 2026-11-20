@@ -38,6 +38,8 @@ export interface OpenResult {
   label: string;
   // Set when a profile was connected (`connect`).
   "profile-id"?: string;
+  // The SQL connecting sent (the ping), raw; state/quelLog.ts reads it.
+  queries?: unknown;
 }
 
 // The structure of an open database (quel.meta). "default" marks the

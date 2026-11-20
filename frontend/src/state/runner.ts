@@ -23,6 +23,7 @@ import {
   unmarkClosing,
 } from "./persist";
 import { showResults } from "./layout";
+import { appendQuelQueries } from "./quelLog";
 import {
   type EditorTab,
   type ExportProgress,
@@ -966,6 +967,9 @@ export async function connectProfile(id: string): Promise<void> {
       return;
     }
     updateWorkspace(id, (w) => ({ ...w, status: "connected", connId: opened["conn-id"], runRefused: false }));
+    // The ping that connected, for Messages; after the conn-id is set, as
+    // catalog replies find their workspace by it.
+    appendQuelQueries(id, opened.queries);
     notify.dismiss("not-connected");
   } catch (e) {
     if (!current()) return;

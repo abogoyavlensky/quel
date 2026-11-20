@@ -63,9 +63,27 @@ const strOrNull = (v: unknown): string | null => (typeof v === "string" ? v : nu
 type Raw = Record<string, unknown> | null | undefined;
 
 // The catalog calls reply {result, queries}: the queries are the SQL Quel
-// ran for the reply (quel.api logged).
-const catalog = async (name: string, ...args: unknown[]): Promise<unknown> => {
-  const r = await call<{ result?: unknown } | null>(name, ...args);
+// ran for the reply (quel.api logged). They go to the sink, raw, with the
+// call's conn-id; a failed call carries them on the error's cause and
+// still rejects with its message. A sink rather than an import, so lib/
+// does not depend on state/ (state/quelLog.ts sets it).
+type QueriesSink = (connId: string, queries: unknown) => void;
+let quelQueriesSink: QueriesSink | null = null;
+
+export function setQuelQueriesSink(sink: QueriesSink | null): void {
+  quelQueriesSink = sink;
+}
+
+const catalog = async (name: string, connId: string, ...args: unknown[]): Promise<unknown> => {
+  let r: { result?: unknown; queries?: unknown } | null;
+  try {
+    r = await call<{ result?: unknown; queries?: unknown } | null>(name, connId, ...args);
+  } catch (e) {
+    const cause = (e as { cause?: { queries?: unknown } } | null)?.cause;
+    if (cause?.queries !== undefined) quelQueriesSink?.(connId, cause.queries);
+    throw e;
+  }
+  if (r?.queries !== undefined) quelQueriesSink?.(connId, r.queries);
   return r?.result;
 };
 
@@ -159,6 +177,10 @@ export const setSidebarHidden = (hidden: boolean) => call<void>("set-sidebar-hid
 // Whether the user collapsed the sidebar's Structure section, saved app-wide.
 export const structureCollapsed = async () => (await call<unknown>("structure-collapsed")) === true;
 export const setStructureCollapsed = (collapsed: boolean) => call<void>("set-structure-collapsed", collapsed);
+
+// Whether Quel's own queries are hidden in Messages (state/quelLog.ts).
+export const quelQueriesHidden = async () => (await call<unknown>("quel-queries-hidden")) === true;
+export const setQuelQueriesHidden = (hidden: boolean) => call<void>("set-quel-queries-hidden", hidden);
 
 // One step on the backend's zoom ladder, or back to 100%. Both answer the
 // level now applied.

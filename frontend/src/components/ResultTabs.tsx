@@ -196,15 +196,19 @@ export function ResultTabs({ tab }: { tab: EditorTab }) {
         ))}
       </div>
       <div className="min-h-0 flex-1">
-        {empty ? (
-          offline ? (
-            <NotConnected banner={false} />
-          ) : (
-            <div className="flex flex-col gap-1 p-4 text-sm text-muted-foreground">
-              <p>Run the statement under the cursor with {keyLabelOf("run")}. Its rows show here.</p>
-              <p>All commands: {keyLabelOf("command-palette")}</p>
-            </div>
-          )
+        {empty && offline ? (
+          <NotConnected banner={false} />
+        ) : empty ? (
+          // Nothing run yet: the hint, over Quel's own queries if any.
+          <MessagesView
+            tab={tab}
+            hint={
+              <div className="flex flex-col gap-1 p-4 text-sm text-muted-foreground">
+                <p>Run the statement under the cursor with {keyLabelOf("run")}. Its rows show here.</p>
+                <p>All commands: {keyLabelOf("command-palette")}</p>
+              </div>
+            }
+          />
         ) : current?.kind === "rows" ? (
           <ResultGrid key={current.id} tabId={tab.id} result={current} />
         ) : current ? (

@@ -54,7 +54,7 @@ function state(status: ConnStatus = "disconnected", patch: (w: ReturnType<typeof
 }
 
 const ids = (s: AppState) => commands(s).map((c) => c.id);
-const ALWAYS = ["new-connection", "row-details", "zoom-in", "zoom-out", "zoom-reset", "settings", "check-updates", "about"];
+const ALWAYS = ["new-connection", "row-details", "quel-queries", "zoom-in", "zoom-out", "zoom-reset", "settings", "check-updates", "about"];
 
 beforeEach(() => {
   for (const f of [...Object.values(runner), ...Object.values(profiles), ...Object.values(updates)]) f.mockReset();
@@ -80,6 +80,7 @@ describe("commands", () => {
       "row-details",
       "sidebar",
       "results",
+      "quel-queries",
       "zoom-in",
       "zoom-out",
       "zoom-reset",
@@ -186,7 +187,7 @@ describe("focus", () => {
   it("keeps focus only for the entries that do not move it", () => {
     const w = state("connected", (w) => (w.closed = [{ id: "c1" } as (typeof w.closed)[number]]));
     const kept = commands(w).filter((c) => c.keepsFocus).map((c) => c.id);
-    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "zoom-in", "zoom-out", "zoom-reset"]);
+    expect(kept).toEqual(["close-tab", "reopen-tab", "run", "run-script", "disconnect", "row-details", "sidebar", "results", "quel-queries", "zoom-in", "zoom-out", "zoom-reset"]);
     const movers = commands(w).filter((c) => !c.keepsFocus).map((c) => c.id);
     expect(movers).toEqual(["new-tab", "focus-editor", "go-to-connection", "new-connection", "edit-connection", "settings", "check-updates", "about"]);
   });

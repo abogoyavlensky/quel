@@ -196,6 +196,12 @@
 (defn set-structure-collapsed [{:keys [store]} collapsed?]
   (workspace/set-structure-collapsed! store (true? collapsed?)))
 
+(defn quel-queries-hidden [{:keys [store]}]
+  (workspace/quel-queries-hidden store))
+
+(defn set-quel-queries-hidden [{:keys [store]} hidden?]
+  (workspace/set-quel-queries-hidden! store (true? hidden?)))
+
 ;; New versions (quel.updates).
 
 ;; Zoom. The level is applied here rather than when the window is created:
@@ -308,6 +314,8 @@
    "set-sidebar-hidden" #'set-sidebar-hidden
    "structure-collapsed" #'structure-collapsed
    "set-structure-collapsed" #'set-structure-collapsed
+   "quel-queries-hidden" #'quel-queries-hidden
+   "set-quel-queries-hidden" #'set-quel-queries-hidden
    "zoom" #'zoom
    "restore-zoom" #'restore-zoom
    "save-window-state" #'save-window-state
