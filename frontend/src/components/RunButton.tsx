@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { Play, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useScrollbarInset } from "@/editor/useScrollbarInset";
 import { useDelayed } from "@/lib/useDelayed";
 import { cancel, runCurrent } from "@/state/runner";
 import { type EditorTab, isRunning } from "@/state/store";
@@ -11,14 +13,17 @@ import { keyLabelOf } from "@/state/keymap";
 // in flight), and a quick query never flashes Stop. A page load is not a
 // run, so it never shows Stop. A press does not take focus, so the editor
 // keeps its caret. Keyed by tab in AppShell: switching tabs starts the
-// delay over.
+// delay over. It keeps 16px from the right and 12px from the bottom inside
+// the editor's scrollbars, so it never covers them (useScrollbarInset).
 
 export function RunButton({ tab }: { tab: EditorTab }) {
   const stop = useDelayed(isRunning(tab), 300);
   const keepFocus = (e: React.MouseEvent) => e.preventDefault();
+  const ref = useRef<HTMLDivElement>(null);
+  const inset = useScrollbarInset(ref);
 
   return (
-    <div className="absolute right-4 bottom-3 z-10">
+    <div ref={ref} className="absolute z-10" style={{ right: 16 + inset.right, bottom: 12 + inset.bottom }}>
       {stop ? (
         <Button
           size="sm"

@@ -235,10 +235,12 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - Create: `frontend/src/editor/useScrollbarInset.ts`, `frontend/e2e/run-button.spec.ts`
 - Modify: `frontend/src/components/RunButton.tsx`
 
-- [ ] **Step 1: Write the failing e2e.** Type 80 lines, each 400 characters long, into the editor. In Playwright's Chromium on Linux the scrollbars always show, so the editor now scrolls both ways. Read `.cm-scroller`'s box and its scrollbar sizes `vbar = offsetWidth − clientWidth` and `hbar = offsetHeight − clientHeight`. First assert both are > 0; if headless Chromium uses overlay scrollbars, the test is meaningless, so fail with that message rather than passing. Then assert the inset itself, not just clearance (the old 16px/12px offsets could clear a 15px bar by accident): the button's right edge is at `scroller right − vbar − 16` and its bottom edge at `scroller bottom − hbar − 12`, both ±1px. Run `env $SRV lgx e2e`. Expected: FAIL (it overlaps).
-- [ ] **Step 2: Implement.** Write the hook as in the Design: it takes a ref to the button's wrapper, finds `.cm-scroller` among the wrapper's siblings, and returns `{right, bottom}`. Observe both elements and disconnect on cleanup, with braces in the effect. Wire it into `RunButton` with an inline style.
-- [ ] **Step 3: Run the tests.** `env $SRV lgx e2e && npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 4: Commit.** `git add -A && git commit -m "Keep the Run button clear of the editor's scrollbars"`
+- [x] **Step 1: Write the failing e2e.** Type 80 lines, each 400 characters long, into the editor. In Playwright's Chromium on Linux the scrollbars always show, so the editor now scrolls both ways. Read `.cm-scroller`'s box and its scrollbar sizes `vbar = offsetWidth − clientWidth` and `hbar = offsetHeight − clientHeight`. First assert both are > 0; if headless Chromium uses overlay scrollbars, the test is meaningless, so fail with that message rather than passing. Then assert the inset itself, not just clearance (the old 16px/12px offsets could clear a 15px bar by accident): the button's right edge is at `scroller right − vbar − 16` and its bottom edge at `scroller bottom − hbar − 12`, both ±1px. Run `env $SRV lgx e2e`. Expected: FAIL (it overlaps).
+- [x] **Step 2: Implement.** Write the hook as in the Design: it takes a ref to the button's wrapper, finds `.cm-scroller` among the wrapper's siblings, and returns `{right, bottom}`. Observe both elements and disconnect on cleanup, with braces in the effect. Wire it into `RunButton` with an inline style.
+- [x] **Step 3: Run the tests.** `env $SRV lgx e2e && npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 4: Commit.** `git add -A && git commit -m "Keep the Run button clear of the editor's scrollbars"`
+
+> Deviation: Playwright's headless Chromium hides scrollbars (`--hide-scrollbars`), so the spec drops that default argument with `test.use({ launchOptions: { ignoreDefaultArgs: [...] } })`.
 
 ### Task 5: Copy icon for Copy row
 
