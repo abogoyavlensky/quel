@@ -266,6 +266,7 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - [x] **Step 7: Commit.** `git add -A && git commit -m "Filter row details by value, with highlights"`
 
 > Deviation: the `<mark>` helper lives in `grid/markPieces.tsx`, with the `MarkedText` component in `grid/Marked.tsx`, so each file exports only components or only helpers (fast-refresh lint). A match that spans several colored JSON tokens renders as several marks, so the e2e checks their joined text.
+> Review fix: codex found that highlighting rescanned every range for each JSON token (quadratic on large values with many matches). `markPieces` now binary-searches the first range that overlaps each token.
 
 ### Task 7: Backend: record Quel's own queries
 

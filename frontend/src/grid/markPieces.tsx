@@ -12,8 +12,18 @@ export function markPieces(text: string, start: number, ranges: ReadonlyArray<[n
   const end = start + text.length;
   const out: ReactNode[] = [];
   let at = start;
-  for (const [a, b] of ranges) {
-    if (b <= at) continue;
+  // JsonCode calls this once per token: start from the first range that
+  // ends past start, found by binary search, so many tokens times many
+  // matches stays cheap.
+  let lo = 0;
+  let hi = ranges.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (ranges[mid][1] <= start) lo = mid + 1;
+    else hi = mid;
+  }
+  for (let i = lo; i < ranges.length; i++) {
+    const [a, b] = ranges[i];
     if (a >= end) break;
     const from = Math.max(a, at);
     const to = Math.min(b, end);
