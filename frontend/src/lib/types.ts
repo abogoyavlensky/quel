@@ -38,6 +38,8 @@ export interface OpenResult {
   label: string;
   // Set when a profile was connected (`connect`).
   "profile-id"?: string;
+  // The SQL connecting sent (the ping), raw; state/quelLog.ts reads it.
+  queries?: unknown;
 }
 
 // The structure of an open database (quel.meta). "default" marks the
@@ -216,6 +218,13 @@ export interface UpdateRelease {
 
 // `check-update`'s reply. With checks off (QUEL_UPDATES=off) only
 // `current` and `enabled` come back.
+// This build, for the About dialog (quel.api app-info).
+export interface AppInfo {
+  version: string;
+  os: string; // Go's GOOS: "darwin", "linux"
+  arch: string; // Go's GOARCH: "arm64", "amd64"
+}
+
 export interface UpdateCheck {
   current: string;
   enabled: boolean;

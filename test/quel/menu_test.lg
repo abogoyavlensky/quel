@@ -20,17 +20,40 @@
   (mapcat (fn [item] (cons (:label item) (labels (:items item)))) items))
 
 (deftest every-item-with-a-click-has-one
-  (is (= 13 (count (on-clicks (menu/spec {:app nil}))))))
+  (is (= 15 (count (on-clicks (menu/spec {:app nil} "darwin")))))
+  (is (= 15 (count (on-clicks (menu/spec {:app nil} "linux"))))))
 
 (deftest the-tab-and-query-items-are-there
   (is (every? (set (labels (menu/spec {:app nil})))
               ["New Tab" "New Connection…" "Close Tab" "Reopen Closed Tab" "Query" "Run" "Run Script" "Cancel"
-               "Help" "Check for Updates…" "View" "Command Palette…" "Go to Connection…"
+               "Check for Updates…" "View" "Command Palette…" "Go to Connection…"
                "Zoom In" "Zoom Out" "Actual Size"])))
 
 (deftest wails-accepts-the-spec
   @app
-  (is (true? (w/check-menu (menu/spec {:app nil})))))
+  (is (true? (w/check-menu (menu/spec {:app nil}))))
+  (is (true? (w/check-menu (menu/spec {:app nil} "darwin"))))
+  (is (true? (w/check-menu (menu/spec {:app nil} "linux")))))
+
+(defn- roles [items] (set (keep :role items)))
+
+(deftest the-app-menu-is-quels-own
+  (doseq [os ["darwin" "linux"]]
+    (let [[app-menu & more] (menu/spec {:app nil} os)
+          item (fn [label] (first (filter #(= label (:label %)) (:items app-menu))))]
+      (is (= "Quel" (:label app-menu)))
+      (is (some? (:on-click (item "About Quel…"))))
+      (is (some? (:on-click (item "Check for Updates…"))))
+      (is (= "CmdOrCtrl+," (:accelerator (item "Settings…"))))
+      (is (contains? (roles (:items app-menu)) :quit))
+      (is (not-any? #(= "Help" (:label %)) more))
+      (is (not (contains? (roles (:items (first (filter #(= "File" (:label %)) more)))) :quit))))))
+
+(deftest the-macos-roles-are-on-macos-only
+  (let [mac-only #{:services-menu :hide :hide-others :show-all}
+        app-roles (fn [os] (roles (:items (first (menu/spec {:app nil} os)))))]
+    (is (every? (app-roles "darwin") mac-only))
+    (is (not-any? (app-roles "linux") mac-only))))
 
 (deftest reopen-closed-tab-has-its-key
   (let [item (->> (menu/spec {:app nil}) (mapcat :items) (filter #(= "Reopen Closed Tab" (:label %))) first)]

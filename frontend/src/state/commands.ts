@@ -15,6 +15,8 @@ import {
 } from "./runner";
 import { type AppState, activeTabOf, selectedWorkspace, showsResult } from "./store";
 import { type CommandId, keyLabel } from "./keymap";
+import { openAbout } from "./about";
+import { quelQueriesShown, toggleQuelQueries } from "./quelLog";
 import { openSettings } from "./settings";
 import { checkForUpdates } from "./updates";
 import { stepZoom } from "./window";
@@ -204,6 +206,13 @@ export function commands(s: AppState): Command[] {
     },
   );
   add({
+    id: "quel-queries",
+    keepsFocus: true,
+    group: "View",
+    title: quelQueriesShown(s.quelQueriesHidden) ? "Hide Quel's Queries" : "Show Quel's Queries",
+    run: toggleQuelQueries,
+  });
+  add({
     id: "zoom-in",
     keepsFocus: true,
     group: "View",
@@ -237,6 +246,13 @@ export function commands(s: AppState): Command[] {
     group: "Help",
     title: "Check for Updates…",
     run: () => checkForUpdates({ manual: true }),
+  });
+  // Not keepsFocus, as Settings…: the dialog takes focus and gives it back.
+  add({
+    id: "about",
+    group: "Help",
+    title: "About Quel",
+    run: openAbout,
   });
 
   return list;

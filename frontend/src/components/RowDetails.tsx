@@ -1,9 +1,11 @@
-import { memo, useEffect, useState } from "react";
-import { Braces, Check, Copy, X } from "lucide-react";
+import { memo, useEffect, useMemo, useState } from "react";
+import { Check, Copy, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JsonCode } from "@/grid/JsonCode";
 import { jsonText, rowAsJson } from "@/grid/json";
+import { MarkedText } from "@/grid/Marked";
+import { hasMatch, matchRanges } from "@/grid/marks";
 import { copyText } from "@/lib/clipboard";
 import { notify } from "@/lib/notify";
 import type { Cell, Engine } from "@/lib/types";
@@ -14,6 +16,12 @@ import { activeTabOf, selectedWorkspace, useApp } from "@/state/store";
 // read-only, one block per column. JSON values are formatted and
 // highlighted; each value copies as stored. It follows the selection, the
 // result tab, the editor tab and the profile.
+//
+// The filter keeps a field whose column name or shown value contains the
+// text, ignoring case, and highlights the matches inside values. It
+// searches what the panel shows: a JSON value as formatted (so
+// `"status": "x"` finds {"status":"x"}), anything else as its text. NULL
+// never matches.
 
 const COPIED_MS = 1500;
 
@@ -59,18 +67,34 @@ function CopyButton({
   );
 }
 
+const NO_RANGES: ReadonlyArray<[number, number]> = [];
+
+// What the panel shows for a value: formatted JSON, or the value as text;
+// null for NULL. json says which.
+interface Shown {
+  text: string | null;
+  json: boolean;
+}
+
+function shownOf(cell: Cell, type: string, engine: Engine | null): Shown {
+  if (cell === null) return { text: null, json: false };
+  const json = jsonText(cell, type, engine);
+  return json !== null ? { text: json, json: true } : { text: String(cell), json: false };
+}
+
 const Field = memo(function Field({
   name,
   type,
   cell,
-  engine,
+  shown,
+  ranges,
 }: {
   name: string;
   type: string;
   cell: Cell;
-  engine: Engine | null;
+  shown: Shown;
+  ranges: ReadonlyArray<[number, number]>;
 }) {
-  const json = jsonText(cell, type, engine);
   return (
     <div role="group" aria-label={name} className="group border-b border-border/50 px-3 py-2">
       <div className="flex items-center gap-2">
@@ -83,12 +107,14 @@ const Field = memo(function Field({
         </span>
       </div>
       <div className="mt-0.5 font-mono text-xs">
-        {json !== null ? (
-          <JsonCode text={json} />
-        ) : cell === null ? (
+        {shown.text === null ? (
           <span className="text-muted-foreground/70 italic">NULL</span>
+        ) : shown.json ? (
+          <JsonCode text={shown.text} ranges={ranges} />
         ) : (
-          <span className="block break-words whitespace-pre-wrap">{String(cell)}</span>
+          <span className="block break-words whitespace-pre-wrap">
+            <MarkedText text={shown.text} ranges={ranges} />
+          </span>
         )}
       </div>
     </div>
@@ -107,7 +133,23 @@ export function RowDetails() {
 
   const index = result?.selectedRow ?? null;
   const row = result && index !== null ? result.rows[index] : undefined;
-  const needle = filter.trim().toLowerCase();
+  const needle = filter.trim();
+  const columns = result?.columns;
+  // Worked out once per row: the filter and the fields read the same text.
+  const shown = useMemo(
+    () => (row && columns ? columns.map((c, i) => shownOf(row[i], c.type, engine)) : []),
+    [row, columns, engine],
+  );
+  const fields =
+    result && row
+      ? result.columns.flatMap((c, i) => {
+          const text = shown[i]?.text ?? null;
+          const valueHit = needle !== "" && text !== null && hasMatch(text, needle);
+          if (needle !== "" && !valueHit && !hasMatch(c.name, needle)) return [];
+          const ranges = valueHit && text !== null ? matchRanges(text, needle) : NO_RANGES;
+          return [<Field key={i} name={c.name} type={c.type} cell={row[i]} shown={shown[i]} ranges={ranges} />];
+        })
+      : [];
 
   return (
     <aside aria-label="Row details" className="flex h-full min-h-0 flex-col">
@@ -116,7 +158,7 @@ export function RowDetails() {
           {result && row ? `Row ${(index! + 1).toLocaleString()} of ${result.rows.length.toLocaleString()}` : "Row details"}
         </span>
         {result && row ? (
-          <CopyButton label="Copy row as JSON" text={() => rowAsJson(result.columns, row)} icon={<Braces />} />
+          <CopyButton label="Copy row as JSON" text={() => rowAsJson(result.columns, row)} />
         ) : null}
         <Button variant="ghost" size="icon-xs" aria-label="Close row details" title="Close" onClick={toggleRowDetails}>
           <X />
@@ -126,18 +168,18 @@ export function RowDetails() {
         <>
           <div className="shrink-0 border-b p-2">
             <Input
-              aria-label="Filter columns"
-              placeholder="Filter columns"
+              aria-label="Filter columns and values"
+              placeholder="Filter columns and values"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="h-7 text-xs md:text-xs"
             />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {result.columns.map((c, i) =>
-              needle === "" || c.name.toLowerCase().includes(needle) ? (
-                <Field key={i} name={c.name} type={c.type} cell={row[i]} engine={engine} />
-              ) : null,
+            {fields.length > 0 ? (
+              fields
+            ) : (
+              <p className="p-4 text-sm text-muted-foreground">No columns or values match.</p>
             )}
           </div>
         </>

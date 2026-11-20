@@ -100,6 +100,20 @@ export interface Message {
   rerun?: Statement[];
 }
 
+// A query Quel itself sent on the connection's shared pool (a catalog read
+// for the structure tree or completion, the ping on connect), recorded by
+// the backend (quel.meta/execute!) and shown in Messages
+// (state/quelLog.ts). In memory only.
+export interface QuelQuery {
+  id: string;
+  sql: string;
+  params: string[];
+  ms: number;
+  rows: number | null; // null on error
+  error: string | null;
+  at: number; // Date.now() when the reply arrived
+}
+
 // An export in progress. rows is null until rows are moving: while the rest
 // of the result loads and while the save dialog is open.
 export interface ExportProgress {
@@ -152,6 +166,10 @@ export interface Workspace {
   // A run was refused while disconnected: the results say so until a
   // connect. In memory only.
   runRefused: boolean;
+  // The queries Quel itself sent on this connection (state/quelLog.ts),
+  // newest last, at most MAX_MESSAGES; in memory only, kept across
+  // reconnects like the tabs' messages.
+  quelLog: QuelQuery[];
 }
 
 // The profile dialog: closed, a new profile, or editing one.
@@ -184,6 +202,10 @@ export interface AppState {
   // (saved in the app database); null until read at start-up, which shows
   // it expanded. state/layout.ts.
   structureCollapsed: boolean | null;
+  // The user hid Quel's own queries in Messages (saved in the app
+  // database); null until read at start-up, which shows them.
+  // state/quelLog.ts.
+  quelQueriesHidden: boolean | null;
   resultsHidden: boolean; // the results pane is hidden; in memory only
   export: { format: ExportFormat; separator: CsvSeparator }; // the Export popover's choice; in memory only
   update: UpdateState; // a newer version, if found (state/updates.ts)
@@ -192,6 +214,7 @@ export interface AppState {
   // (state/palette.ts); in memory only.
   palette: "commands" | "connections" | null;
   settingsOpen: boolean; // the Settings dialog (state/settings.ts); in memory only
+  aboutOpen: boolean; // the About dialog (state/about.ts); in memory only
   runConfirm: RunConfirm | null; // RunConfirmDialog
 }
 
@@ -229,6 +252,7 @@ export function newWorkspace(profileId: string): Workspace {
     treeExpanded: null,
     treeFilter: "",
     runRefused: false,
+    quelLog: [],
   };
 }
 
@@ -242,12 +266,14 @@ export function initialState(): AppState {
     rowDetails: false,
     sidebarHidden: null,
     structureCollapsed: null,
+    quelQueriesHidden: null,
     resultsHidden: false,
     export: { format: "csv", separator: "," },
     update: { phase: "idle" },
     updateDialogOpen: false,
     palette: null,
     settingsOpen: false,
+    aboutOpen: false,
     runConfirm: null,
   };
 }

@@ -357,7 +357,8 @@
                        " password=" (conn/dsn-quote password) " sslmode='disable'")
               t {:engine :postgres :dsn dsn :label "Local" :secret password}
               {:keys [conn-id] :as r} (conn/open-target! registry t)]
-          (is (= {:engine :postgres :label "Local"} (dissoc r :conn-id)))
+          (is (= {:engine :postgres :label "Local"} (dissoc r :conn-id :queries)))
+          (is (= ["select 1"] (mapv :sql (:queries r))))
           (is (= [{:one 1}] (sql/execute! (conn/db registry conn-id) ["select 1 as one"])))
           (is (nil? (conn/check! t)))
           (conn/close! registry conn-id))))))

@@ -1,6 +1,5 @@
 (ns quel.meta.duckdb
   (:require [quel.meta :as meta]
-            [sql.core :as sql]
             [string :as str]))
 
 ;; DuckDB's catalog, through its duckdb_*() table functions, for the
@@ -20,7 +19,7 @@
 
 (defmethod meta/schemas :duckdb [_ db]
   (mapv (fn [{:keys [name default]}] {:name name :default default})
-        (sql/execute! db [(str "select schema_name as name, schema_name = current_schema() as \"default\""
+        (meta/execute! db [(str "select schema_name as name, schema_name = current_schema() as \"default\""
                                " from duckdb_schemas() where " in-db
                                " and schema_name not in ('information_schema', 'pg_catalog')"
                                " order by schema_name")])))
@@ -35,11 +34,11 @@
        ") order by name"))
 
 (defmethod meta/objects :duckdb [_ db schema]
-  (mapv #(select-keys % [:name :kind]) (sql/execute! db [objects-sql schema schema])))
+  (mapv #(select-keys % [:name :kind]) (meta/execute! db [objects-sql schema schema])))
 
 (defmethod meta/columns :duckdb [_ db schema name]
   (mapv #(select-keys % [:name :type])
-        (sql/execute! db [(str "select column_name as name, data_type as type from duckdb_columns()"
+        (meta/execute! db [(str "select column_name as name, data_type as type from duckdb_columns()"
                                " where " in-db " and schema_name = ? and table_name = ? and not internal"
                                " order by column_index")
                           schema name])))
@@ -47,7 +46,7 @@
 ;; One query: duckdb_columns() lists the columns of tables and views alike.
 (defmethod meta/completion-rows :duckdb [_ db]
   (mapv #(select-keys % [:schema :tbl :col])
-        (sql/execute! db [(str "select schema_name as schema, table_name as tbl, column_name as col"
+        (meta/execute! db [(str "select schema_name as schema, table_name as tbl, column_name as col"
                                " from duckdb_columns() where " in-db " and not internal"
                                " and schema_name not in ('information_schema', 'pg_catalog')"
                                " order by schema_name, table_name, column_index"
@@ -56,7 +55,7 @@
 ;; Macros, scalar and table: the functions a user makes. :args are their
 ;; parameter names (macros have no declared types).
 (defmethod meta/functions :duckdb [_ db schema]
-  (->> (sql/execute! db [(str "select function_name as name, parameters from duckdb_functions()"
+  (->> (meta/execute! db [(str "select function_name as name, parameters from duckdb_functions()"
                               " where " in-db " and schema_name = ? and not internal"
                               " and function_type in ('macro', 'table_macro')")
                          schema])
@@ -69,14 +68,14 @@
 ;; alias) have nothing the tree shows beyond the name.
 (defmethod meta/types :duckdb [_ db schema]
   (mapv (fn [{:keys [name labels]}] {:name name :kind "enum" :detail nil :values (vec (or labels []))})
-        (sql/execute! db [(str "select type_name as name, labels from duckdb_types()"
+        (meta/execute! db [(str "select type_name as name, labels from duckdb_types()"
                                " where " in-db " and schema_name = ? and not internal"
                                " and logical_type = 'ENUM' order by type_name")
                           schema])))
 
 (defmethod meta/sequences :duckdb [_ db schema]
   (mapv #(select-keys % [:name])
-        (sql/execute! db [(str "select sequence_name as name from duckdb_sequences()"
+        (meta/execute! db [(str "select sequence_name as name from duckdb_sequences()"
                                " where " in-db " and schema_name = ? and not temporary"
                                " order by sequence_name")
                           schema])))
@@ -93,7 +92,7 @@
   (mapv (fn [{:keys [index_name expressions is_unique is_primary]}]
           {:name index_name :definition (index-definition expressions)
            :unique (true? is_unique) :primary (true? is_primary)})
-        (sql/execute! db [(str "select index_name, expressions, is_unique, is_primary from duckdb_indexes()"
+        (meta/execute! db [(str "select index_name, expressions, is_unique, is_primary from duckdb_indexes()"
                                " where " in-db " and schema_name = ? and table_name = ?"
                                " order by index_name")
                           schema name])))
@@ -106,7 +105,7 @@
 (def ^:private kind-order {"primary-key" 0 "unique" 1 "foreign-key" 2 "check" 3})
 
 (defmethod meta/constraints :duckdb [_ db schema name]
-  (->> (sql/execute! db [(str "select constraint_name, constraint_type, constraint_column_names, constraint_text"
+  (->> (meta/execute! db [(str "select constraint_name, constraint_type, constraint_column_names, constraint_text"
                               " from duckdb_constraints()"
                               " where " in-db " and schema_name = ? and table_name = ?"
                               " and constraint_type in ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY', 'CHECK')")

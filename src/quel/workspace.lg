@@ -235,3 +235,14 @@
   "Remember whether the Structure section is collapsed."
   [db collapsed?]
   (set-flag! db "structure-collapsed" collapsed?))
+
+(defn quel-queries-hidden
+  "Whether the user hid Quel's own queries in Messages: a settings row
+   while hidden, none while shown (shown is the default)."
+  [db]
+  (flag? db "quel-queries-hidden"))
+
+(defn set-quel-queries-hidden!
+  "Remember whether Quel's own queries are hidden in Messages."
+  [db hidden?]
+  (set-flag! db "quel-queries-hidden" hidden?))

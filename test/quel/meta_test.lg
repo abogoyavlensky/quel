@@ -218,3 +218,43 @@
         (is (= [false true] ((juxt :pk :fk) (by "pid"))))
         (is (= [false false] ((juxt :pk :fk) (by "code"))))
         (is (= [] (:sequences d)))))))
+
+;; What Quel sends, recorded for the frontend's Messages: execute! adds an
+;; entry to the atom at :quel.meta/queries when the db carries one.
+(deftest execute-records-what-it-ran
+  (with-db
+    (fn [db]
+      (let [log (atom [])
+            db' (assoc db :quel.meta/queries log)]
+        (is (= [{:n 1}] (meta/execute! db' ["select ? as n" 1])))
+        (let [[e & more] @log]
+          (is (nil? more))
+          (is (= "select ? as n" (:sql e)))
+          (is (= ["1"] (:params e)))
+          (is (= 1 (:rows e)))
+          (is (int? (:ms e)))
+          (is (nil? (:error e))))))))
+
+(deftest execute-records-a-failure-and-rethrows
+  (with-db
+    (fn [db]
+      (let [log (atom [])
+            msg (try (meta/execute! (assoc db :quel.meta/queries log) ["select * from nope"]) nil
+                     (catch e (ex-message e)))]
+        (is (some? msg))
+        (is (= 1 (count @log)))
+        (is (= msg (:error (first @log))))
+        (is (nil? (:rows (first @log))))))))
+
+(deftest execute-records-nothing-without-a-log
+  (with-db
+    (fn [db]
+      (is (= [{:n 1}] (meta/execute! db ["select 1 as n"]))))))
+
+(deftest the-catalog-reads-are-recorded
+  (with-db
+    (fn [db]
+      (let [log (atom [])]
+        (meta/describe-object :sqlite (assoc db :quel.meta/queries log) "main" "t")
+        (is (seq @log))
+        (is (every? #(string? (:sql %)) @log))))))

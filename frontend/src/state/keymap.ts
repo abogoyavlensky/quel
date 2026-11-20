@@ -114,7 +114,7 @@ export const KEYMAP = [
     keys: { mac: ["Cmd-Shift-p"], other: ["Ctrl-Shift-p"] },
     caught: ["menu", "page"],
   },
-  { id: "settings", group: "View", name: "Settings…", keys: { mac: ["Cmd-,"], other: ["Ctrl-,"] }, caught: ["page"] },
+  { id: "settings", group: "View", name: "Settings…", keys: { mac: ["Cmd-,"], other: ["Ctrl-,"] }, caught: ["menu", "page"] },
   {
     id: "row-details",
     group: "View",
@@ -124,6 +124,7 @@ export const KEYMAP = [
   },
   { id: "sidebar", group: "View", name: "Toggle Sidebar", keys: { mac: ["Cmd-b"], other: ["Ctrl-b"] }, caught: ["page"] },
   { id: "results", group: "View", name: "Toggle Results", keys: { mac: ["Cmd-j"], other: ["Ctrl-j"] }, caught: ["page"] },
+  { id: "quel-queries", group: "View", name: "Toggle Quel's Queries in Messages", keys: none, caught: [] },
   { id: "zoom-in", group: "View", name: "Zoom In", keys: { mac: ["Cmd-="], other: ["Ctrl-="] }, caught: ["menu"] },
   { id: "zoom-out", group: "View", name: "Zoom Out", keys: { mac: ["Cmd--"], other: ["Ctrl--"] }, caught: ["menu"] },
   { id: "zoom-reset", group: "View", name: "Actual Size", keys: { mac: ["Cmd-0"], other: ["Ctrl-0"] }, caught: ["menu"] },
@@ -154,6 +155,7 @@ export const KEYMAP = [
   },
 
   { id: "check-updates", group: "Help", name: "Check for Updates…", keys: none, caught: [] },
+  { id: "about", group: "Help", name: "About Quel", keys: none, caught: [] },
 ] as const satisfies readonly KeyEntry[];
 
 export type CommandId = (typeof KEYMAP)[number]["id"];

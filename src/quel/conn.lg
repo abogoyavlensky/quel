@@ -177,50 +177,58 @@
     :duckdb (duckdb/close! db)
     (pg/close! db)))
 
+(defn- now-ms [] (quot (System/nanoTime) 1000000))
+
 (defn- ping!
   "Make a connection on db under ctx (a select 1, which works on Postgres,
-   Redshift and DuckDB). Throws \"Connecting canceled.\" when ctx was cancelled,
-   else the redacted error."
+   Redshift and DuckDB). Returns the query as the frontend's Messages show
+   it, {:sql :params :ms :rows}. Throws \"Connecting canceled.\" when ctx
+   was cancelled, else the redacted error."
   [t db ctx]
-  (try
-    (shim/ExecCtx (:sql/handle db) ctx "select 1" [])
-    nil
-    (catch e
-      (if (.Canceled ctx)
-        (throw (ex-info "Connecting canceled." {:canceled true}))
-        (throw (ex-info (redact t (ex-message e)) {}))))))
+  (let [start (now-ms)]
+    (try
+      (shim/ExecCtx (:sql/handle db) ctx "select 1" [])
+      {:sql "select 1" :params [] :ms (- (now-ms) start) :rows 1}
+      (catch e
+        (if (.Canceled ctx)
+          (throw (ex-info "Connecting canceled." {:canceled true}))
+          (throw (ex-info (redact t (ex-message e)) {})))))))
 
 (defn- connect
   "The shared pool and the session pool for target. A Postgres pool is
    pinged under ctx, so a wrong password or host fails here, not at the
    first run, and a cancel stops the dial. So is a DuckDB pool, so a file
    that is locked by another process or is not a DuckDB database fails
-   here too; it is the one pool for both (see the top of the file)."
+   here too; it is the one pool for both (see the top of the file).
+   :queries is the ping, [] for SQLite."
   [{:keys [engine] :as t} ctx]
-  (let [db (open-pool t)]
-    (when (not= :sqlite engine)
-      (try (ping! t db ctx)
-           (catch e (close-pool! engine db) (throw e))))
+  (let [db (open-pool t)
+        queries (if (= :sqlite engine)
+                  []
+                  [(try (ping! t db ctx)
+                        (catch e (close-pool! engine db) (throw e)))])]
     (if (= :duckdb engine)
       (do (.SetMaxIdleConns (:sql/handle db) 0)
-          {:db db :sessions-db db})
+          {:db db :sessions-db db :queries queries})
       (let [sessions-db (try (open-pool t)
                            (catch e (close-pool! engine db) (throw e)))]
         (.SetMaxIdleConns (:sql/handle sessions-db) 0)
-        {:db db :sessions-db sessions-db}))))
+        {:db db :sessions-db sessions-db :queries queries}))))
 
 (defn open-target!
   "Open target t: {:engine (:path | :url | :dsn) :label [:secret]}, where
    :secret is the password a :dsn carries, for redact. Returns
-   {:conn-id :engine :label}. Connecting runs under ctx, a shim Ctx; a
-   cancel throws \"Connecting canceled.\" and keeps nothing."
+   {:conn-id :engine :label :queries}, :queries the SQL connecting sent
+   (the ping) for the frontend's Messages. Connecting runs under ctx, a
+   shim Ctx; a cancel throws \"Connecting canceled.\" and keeps nothing."
   ([registry t] (open-target! registry t (shim/NewCtx)))
   ([registry t ctx]
   (let [id (new-id)
-        e (merge (connect t ctx)
+        {:keys [queries] :as pools} (connect t ctx)
+        e (merge (dissoc pools :queries)
                  {:engine (:engine t) :label (:label t) :sessions {} :retired #{}})]
     (swap! registry assoc id e)
-    {:conn-id id :engine (:engine e) :label (:label e)})))
+    {:conn-id id :engine (:engine e) :label (:label e) :queries queries})))
 
 (defn open!
   "Open what `s` names (see `target`). Returns {:conn-id :engine :label}."

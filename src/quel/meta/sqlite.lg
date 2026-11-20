@@ -1,6 +1,5 @@
 (ns quel.meta.sqlite
   (:require [quel.meta :as meta]
-            [sql.core :as sql]
             [string :as str]))
 
 ;; SQLite's catalog, through its table-valued pragma functions (modernc
@@ -14,7 +13,7 @@
 
 (defmethod meta/schemas :sqlite [_ db]
   (mapv (fn [{:keys [name]}] {:name name :default (= "main" name)})
-        (sql/execute! db ["select name from pragma_database_list where name <> 'temp' order by seq"])))
+        (meta/execute! db ["select name from pragma_database_list where name <> 'temp' order by seq"])))
 
 (def ^:private objects-sql
   (str "select name, type from pragma_table_list"
@@ -24,11 +23,11 @@
 
 (defmethod meta/objects :sqlite [_ db schema]
   (mapv (fn [{:keys [name type]}] {:name name :kind (if (= "view" type) "view" "table")})
-        (sql/execute! db [objects-sql schema])))
+        (meta/execute! db [objects-sql schema])))
 
 (defmethod meta/columns :sqlite [_ db schema name]
   (mapv (fn [{:keys [name type]}] {:name name :type type})
-        (sql/execute! db ["select name, type from pragma_table_xinfo(?, ?) where hidden <> 1 order by cid"
+        (meta/execute! db ["select name, type from pragma_table_xinfo(?, ?) where hidden <> 1 order by cid"
                           name schema])))
 
 ;; Per object, catching errors one by one: a view over a dropped table
@@ -52,12 +51,12 @@
 
 (defn- index-columns [db schema index]
   (mapv (fn [{:keys [name]}] (or name "<expr>"))
-        (sql/execute! db ["select name from pragma_index_info(?, ?) order by seqno" index schema])))
+        (meta/execute! db ["select name from pragma_index_info(?, ?) order by seqno" index schema])))
 
 (defn- column-list [cols] (str "(" (str/join ", " cols) ")"))
 
 (defn- index-list [db schema name]
-  (sql/execute! db [(str "select name, \"unique\" as is_unique, origin, partial"
+  (meta/execute! db [(str "select name, \"unique\" as is_unique, origin, partial"
                          " from pragma_index_list(?, ?) order by name")
                     name schema]))
 
@@ -71,7 +70,7 @@
         (index-list db schema name)))
 
 (defn- primary-key [db schema name]
-  (let [cols (mapv :name (sql/execute! db ["select name from pragma_table_xinfo(?, ?) where pk > 0 order by pk"
+  (let [cols (mapv :name (meta/execute! db ["select name from pragma_table_xinfo(?, ?) where pk > 0 order by pk"
                                            name schema]))]
     (when (seq cols)
       [{:name nil :kind "primary-key" :columns cols :definition (str "PRIMARY KEY " (column-list cols))}])))
@@ -85,7 +84,7 @@
 ;; One row per column of each key, grouped by the key's id. A null "to" is
 ;; the parent's primary key.
 (defn- foreign-keys [db schema name]
-  (->> (sql/execute! db [(str "select id, \"table\" as parent, \"from\" as src, \"to\" as dst"
+  (->> (meta/execute! db [(str "select id, \"table\" as parent, \"from\" as src, \"to\" as dst"
                               " from pragma_foreign_key_list(?, ?) order by id, seq")
                          name schema])
        (partition-by :id)

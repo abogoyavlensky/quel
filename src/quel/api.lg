@@ -10,6 +10,7 @@
             [quel.meta.sqlite]
             [quel.profiles :as profiles]
             [quel.updates :as updates]
+            [quel.version :as version]
             [quel.window :as window]
             [quel.workspace :as workspace]
             [wails.core :as w]))
@@ -43,19 +44,37 @@
 (defn close-session [{:keys [conns execs]} conn-id session-id]
   (exec/close-session! execs conns conn-id session-id))
 
-;; The structure of an open database (quel.meta), read on its pool.
+;; The structure of an open database (quel.meta), read on its pool. Each
+;; reply is {:result r :queries [...]}: the catalog queries Quel ran for it
+;; (quel.meta/execute!), which the frontend shows in Messages. A failure
+;; keeps its message and carries them as the ex-info's data, which the
+;; bridge hands the frontend as the error's cause. The connection is looked
+;; up first, so an unknown one fails as before.
+
+(defn- logged
+  "Call (f db) with a query log on db; {:result r :queries [...]}."
+  [db f]
+  (let [log (atom [])]
+    (try
+      {:result (f (assoc db :quel.meta/queries log)) :queries @log}
+      (catch e
+        (throw (ex-info (ex-message e) {:queries @log}))))))
 
 (defn list-schemas [{:keys [conns]} conn-id]
-  (meta/schemas (conn/engine conns conn-id) (conn/db conns conn-id)))
+  (let [engine (conn/engine conns conn-id)]
+    (logged (conn/db conns conn-id) #(vec (meta/schemas engine %)))))
 
 (defn describe-schema [{:keys [conns]} conn-id schema]
-  (meta/describe-schema (conn/engine conns conn-id) (conn/db conns conn-id) schema))
+  (let [engine (conn/engine conns conn-id)]
+    (logged (conn/db conns conn-id) #(meta/describe-schema engine % schema))))
 
 (defn describe-object [{:keys [conns]} conn-id schema name]
-  (meta/describe-object (conn/engine conns conn-id) (conn/db conns conn-id) schema name))
+  (let [engine (conn/engine conns conn-id)]
+    (logged (conn/db conns conn-id) #(meta/describe-object engine % schema name))))
 
 (defn completion-schema [{:keys [conns]} conn-id]
-  (meta/completion-schema (conn/engine conns conn-id) (conn/db conns conn-id)))
+  (let [engine (conn/engine conns conn-id)]
+    (logged (conn/db conns conn-id) #(meta/completion-schema engine %))))
 
 ;; Profiles. None of these returns a password.
 
@@ -177,6 +196,12 @@
 (defn set-structure-collapsed [{:keys [store]} collapsed?]
   (workspace/set-structure-collapsed! store (true? collapsed?)))
 
+(defn quel-queries-hidden [{:keys [store]}]
+  (workspace/quel-queries-hidden store))
+
+(defn set-quel-queries-hidden [{:keys [store]} hidden?]
+  (workspace/set-quel-queries-hidden! store (true? hidden?)))
+
 ;; New versions (quel.updates).
 
 ;; Zoom. The level is applied here rather than when the window is created:
@@ -248,6 +273,10 @@
 (defn restart-to-update [{:keys [updates]}]
   (updates/restart! updates))
 
+;; For the About dialog: this build's version and where it runs.
+(defn app-info [_env]
+  {:version version/version :os (os/os-name) :arch (os/arch)})
+
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
@@ -285,6 +314,8 @@
    "set-sidebar-hidden" #'set-sidebar-hidden
    "structure-collapsed" #'structure-collapsed
    "set-structure-collapsed" #'set-structure-collapsed
+   "quel-queries-hidden" #'quel-queries-hidden
+   "set-quel-queries-hidden" #'set-quel-queries-hidden
    "zoom" #'zoom
    "restore-zoom" #'restore-zoom
    "save-window-state" #'save-window-state
@@ -292,7 +323,8 @@
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update
-   "restart-to-update" #'restart-to-update})
+   "restart-to-update" #'restart-to-update
+   "app-info" #'app-info})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

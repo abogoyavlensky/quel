@@ -3,7 +3,7 @@ import { connectFixture } from "./connect";
 
 // The row details panel: select a row in the grid, open the panel three
 // ways, read the values (JSON formatted from its own text), copy them, and
-// filter the columns. On the fixture's table t (scripts/e2e.sh).
+// filter the columns and values. On the fixture's table t (scripts/e2e.sh).
 
 const db = process.env.QUEL_E2E_DB ?? "/tmp/quel-e2e.db";
 const doc = '{"n":1.10,"big":12345678901234567890,"tags":["x","y"]}';
@@ -58,10 +58,30 @@ test("shows, copies and filters the selected row's values", async ({ page, conte
     .toEqual({ id: 3, name: "customer 3", doc, gone: null });
 
   // The filter matches column names.
-  await details(page).getByLabel("Filter columns").fill("na");
+  const filter = details(page).getByLabel("Filter columns and values");
+  await filter.fill("na");
   await expect(details(page).getByRole("group")).toHaveCount(1);
   await expect(field(page, "name")).toBeVisible();
-  await details(page).getByLabel("Filter columns").fill("");
+  await expect(field(page, "name").locator("mark")).toHaveCount(0);
+
+  // And values, JSON as the panel shows it: formatted, so "n": 1.1 finds
+  // the stored "n":1.10. The match is highlighted inside the JSON.
+  await filter.fill("TAGS");
+  await expect(details(page).getByRole("group")).toHaveCount(1);
+  await expect(field(page, "doc").locator("mark")).toHaveText("tags");
+  await filter.fill('"n": 1.1');
+  await expect(details(page).getByRole("group")).toHaveCount(1);
+  // It spans several colored tokens, so it is several marks.
+  await expect.poll(async () => (await field(page, "doc").locator("mark").allInnerTexts()).join("")).toBe('"n": 1.1');
+
+  // A plain value matches too; NULL never does.
+  await filter.fill("customer 3");
+  await expect(details(page).getByRole("group")).toHaveCount(1);
+  await expect(field(page, "name").locator("mark")).toHaveText("customer 3");
+  await filter.fill("null");
+  await expect(details(page).getByRole("group")).toHaveCount(0);
+  await expect(details(page)).toContainText("No columns or values match.");
+  await filter.fill("");
 
   // The key closes it, even from the editor, and leaves the text alone.
   const sql = await page.getByLabel("SQL editor").innerText();

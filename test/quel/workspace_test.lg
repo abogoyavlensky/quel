@@ -203,3 +203,13 @@
       (workspace/set-structure-collapsed! db false)
       (is (false? (workspace/structure-collapsed db)))
       (is (= 0 (:n (sql/execute-one! db ["select count(*) as n from settings where key = 'structure-collapsed'"])))))))
+
+(deftest quel-queries-hidden-is-a-saved-flag
+  (with-store
+    (fn [db _]
+      (is (false? (workspace/quel-queries-hidden db)))
+      (workspace/set-quel-queries-hidden! db true)
+      (is (true? (workspace/quel-queries-hidden db)))
+      (workspace/set-quel-queries-hidden! db false)
+      (is (false? (workspace/quel-queries-hidden db)))
+      (is (= 0 (:n (sql/execute-one! db ["select count(*) as n from settings where key = 'quel-queries-hidden'"])))))))

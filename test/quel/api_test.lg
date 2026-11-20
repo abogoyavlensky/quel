@@ -1,10 +1,12 @@
 (ns quel.api-test
   (:require [integrant.core :as ig]
             [quel.api :as api]
+            [quel.conn :as conn]
             [quel.conn-test :refer [temp-path with-silent-port ms-since]]
             [quel.export :as export]
             [quel.secrets :as secrets]
             [quel.store-test :refer [temp-dir]]
+            [quel.version :as version]
             [quel.window :as window]
             [string :as str]
             [wails.core :as w]
@@ -46,15 +48,21 @@
 (deftest ping-answers
   (is (= {:ok true} (api/ping {}))))
 
+(deftest app-info-names-this-build
+  (let [info (api/app-info {})]
+    (is (= version/version (:version info)))
+    (is (not (str/blank? (:os info))))
+    (is (not (str/blank? (:arch info))))))
+
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
            "list-profiles" "save-profile" "delete-profile" "test-connection" "connect" "cancel-connect" "choose-file"
            "export-begin" "export-append" "export-finish" "export-abort"
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
-           "structure-collapsed" "set-structure-collapsed"
+           "structure-collapsed" "set-structure-collapsed" "quel-queries-hidden" "set-quel-queries-hidden"
            "zoom" "restore-zoom" "save-window-state" "restore-window-frame"
-           "check-update" "skip-update" "download-update" "restart-to-update"}
+           "check-update" "skip-update" "download-update" "restart-to-update" "app-info"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 
@@ -161,19 +169,35 @@
 (deftest structure-of-an-open-database
   (with-env
     (fn [env path]
-      (let [{:keys [conn-id]} (api/open-db env path)]
+      (let [{:keys [conn-id]} (api/open-db env path)
+            result (fn [r]
+                     ;; Each reply carries the catalog queries Quel ran for it.
+                     (is (vector? (:queries r)))
+                     (is (seq (:queries r)))
+                     (:result r))]
         (api/run env conn-id "s1" "q1" "create table t (id integer, name text)")
-        (is (= [{:name "main" :default true}] (api/list-schemas env conn-id)))
+        (is (= [{:name "main" :default true}] (result (api/list-schemas env conn-id))))
         (is (= {:objects [{:name "t" :kind "table"}] :functions [] :types [] :sequences []}
-               (api/describe-schema env conn-id "main")))
+               (result (api/describe-schema env conn-id "main"))))
         (is (= {:columns [{:name "id" :type "INTEGER" :pk false :fk false}
                           {:name "name" :type "TEXT" :pk false :fk false}]
                 :indexes [] :keys [] :sequences []}
-               (api/describe-object env conn-id "main" "t")))
+               (result (api/describe-object env conn-id "main" "t"))))
         (is (= {:default-schema "main" :schemas {"main" {"t" ["id" "name"]}}}
-               (api/completion-schema env conn-id)))
+               (result (api/completion-schema env conn-id))))
         (is (str/includes? (try (api/list-schemas env "nope") "" (catch e (ex-message e)))
                            "No open database"))))))
+
+(deftest a-failed-catalog-read-carries-its-queries
+  (with-env
+    (fn [env path]
+      (let [{:keys [conn-id]} (api/open-db env path)
+            ;; A closed pool fails the first catalog query.
+            _ (.Close (:sql/handle (conn/db (:conns env) conn-id)))
+            e (try (api/describe-schema env conn-id "main") nil (catch e e))]
+        (is (some? e))
+        (is (seq (:queries (ex-data e))))
+        (is (string? (:error (first (:queries (ex-data e))))))))))
 
 (deftest cancel-of-an-unknown-query
   (with-env
@@ -218,7 +242,7 @@
         (is (= [p] (api/list-profiles env)))
         (is (= {:ok true :label "Local file"} (api/test-connection env form)))
         (let [{:keys [conn-id] :as c} (api/connect env (:id p))]
-          (is (= {:engine :sqlite :label "Local file" :profile-id (:id p)} (dissoc c :conn-id)))
+          (is (= {:engine :sqlite :label "Local file" :profile-id (:id p) :queries []} (dissoc c :conn-id)))
           (is (= [[1]] (:rows (api/run env conn-id "s1" "q1" "select 1"))))
           (api/close-db env conn-id))
         (is (nil? (api/delete-profile env (:id p))))
