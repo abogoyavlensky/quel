@@ -56,7 +56,7 @@
   [db f]
   (let [log (atom [])]
     (try
-      {:result (f (assoc db ::meta/queries log)) :queries @log}
+      {:result (f (assoc db :quel.meta/queries log)) :queries @log}
       (catch e
         (throw (ex-info (ex-message e) {:queries @log}))))))
 

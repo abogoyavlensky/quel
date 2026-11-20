@@ -220,12 +220,12 @@
         (is (= [] (:sequences d)))))))
 
 ;; What Quel sends, recorded for the frontend's Messages: execute! adds an
-;; entry to the atom at ::meta/queries when the db carries one.
+;; entry to the atom at :quel.meta/queries when the db carries one.
 (deftest execute-records-what-it-ran
   (with-db
     (fn [db]
       (let [log (atom [])
-            db' (assoc db ::meta/queries log)]
+            db' (assoc db :quel.meta/queries log)]
         (is (= [{:n 1}] (meta/execute! db' ["select ? as n" 1])))
         (let [[e & more] @log]
           (is (nil? more))
@@ -239,7 +239,7 @@
   (with-db
     (fn [db]
       (let [log (atom [])
-            msg (try (meta/execute! (assoc db ::meta/queries log) ["select * from nope"]) nil
+            msg (try (meta/execute! (assoc db :quel.meta/queries log) ["select * from nope"]) nil
                      (catch e (ex-message e)))]
         (is (some? msg))
         (is (= 1 (count @log)))
@@ -255,6 +255,6 @@
   (with-db
     (fn [db]
       (let [log (atom [])]
-        (meta/describe-object :sqlite (assoc db ::meta/queries log) "main" "t")
+        (meta/describe-object :sqlite (assoc db :quel.meta/queries log) "main" "t")
         (is (seq @log))
         (is (every? #(string? (:sql %)) @log))))))
