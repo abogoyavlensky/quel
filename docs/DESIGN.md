@@ -280,7 +280,9 @@ of a run.
 
 Find (`Cmd+F`, with replace behind a chevron) and Go to Line
 (`Cmd+Alt+G`) are CodeMirror panels docked at the top of the editor, clear
-of the Run button. CodeMirror owns their lifecycle, and React draws their
+of the Run button. The Run button keeps 16px from the right and 12px
+from the bottom inside the editor's scrollbars (`useScrollbarInset`), so
+it never covers them. CodeMirror owns their lifecycle, and React draws their
 controls into them through portals (`editor/panels.ts`,
 `editor/EditorPanels.tsx`). Only one is open at a time. Each tab keeps its
 own query and open panel, which a tab switch restores without taking the
@@ -412,7 +414,9 @@ A run's first statement takes focus, from a pinned tab too. A later one
 takes it only from the statement before it, so a user who picked another
 tab mid-script stays there, until an error or a cancel takes focus. Every
 statement's outcome also goes to the tab's Messages log, the history of
-what ran there. An update count shows only for statements that write rows:
+what ran there. Messages also shows, merged in by time, the queries Quel
+itself sent on the connection (see [Quel's own queries](#quel-s-own-queries)).
+An update count shows only for statements that write rows:
 SQLite leaves its change counter alone for DDL, and Postgres answers 0.
 Others say "Done". The first error, or a cancel, stops a script. A result
 loads at most 100,000 rows; past that, its cursor is closed and the result
@@ -449,6 +453,29 @@ The grid receives arrays, not maps:
 - anything opaque falls back to its string form, never an error.
 
 ## Introspection
+
+### Quel's own queries
+
+For transparency, Messages shows every query Quel itself sends on the
+connection: the catalog reads behind the structure tree and completion,
+and the `select 1` that opens a Postgres, Redshift or DuckDB connection.
+Every catalog query goes through `quel.meta/execute!`, which records
+`{:sql :params :ms :rows}` (or `:error`) when the db value carries a log
+at `::meta/queries`. `quel.api` attaches one per catalog call and replies
+`{:result r :queries [...]}`; a failed call keeps its message and carries
+the queries as ex-info data, which the bridge hands the frontend as the
+error's cause. `connect` returns the ping as `:queries`. In the frontend,
+`lib/api.ts` hands catalog queries to a sink (`state/quelLog.ts`), which
+appends them to the workspace with that conn-id; `connect` appends the
+ping once the conn-id is set. Each workspace keeps its own log in memory
+(at most 500, across reconnects), and every tab's Messages merges it in
+with a muted Quel label; an entry opens to its full SQL. They show by
+default: someone who never finds the toggle should still see what Quel
+sends, and since catalog reads never refetch on their own they stay few.
+The Messages header's checkbox or the palette hides them, saved app-wide
+as the `quel-queries-hidden` settings row. Not shown yet: the liveness
+`select 1` after a failed run and the ping of a failed connect
+(`docs/backlog/quel-queries-failure-paths.md`).
 
 `quel.meta` defines operations as multimethods on the profile's
 `:engine`: `schemas`, `objects` (tables, views, materialized views,
@@ -788,6 +815,12 @@ rewrite `1.10` as `1.1`; `JSON.parse` only checks validity. Values over
 as plain text. Highlighting is `@lezer/json` through `highlightCode`
 with the SQL editor's colour variables.
 
+The filter ("Filter columns and values") keeps a field whose column name
+or shown value contains the text, ignoring case, and highlights the
+matches inside values, inside the coloured JSON tokens too. It searches
+what the panel shows: a JSON value as formatted, so `"status": "x"` finds
+a stored `{"status":"x"}`; anything else as its text. NULL never matches.
+
 Each value's copy button copies it as stored (never the formatted
 JSON) and is disabled for NULL. "Copy row as JSON" maps column names to
 cells, with a suffix on repeated names (`id`, `id_2`). Copying tries
@@ -983,15 +1016,25 @@ entry by group, with its key label or a dash, read-only. The sections
 are a list, so a side navigation comes with the second one; the backlog
 has rebinding (`custom-keybindings.md`), an editor font size
 (`editor-font-size.md`) and themes (`themes-setting.md`). Zoom is not a
-setting: View and the palette have it. ⌘, is the page's key; a Quel >
-Settings… item in the macOS app menu needs the wails shim
-(`settings-in-app-menu.md`). On close, focus goes back to where it was,
+setting: View and the palette have it. ⌘, is caught by both the page and
+Quel > Settings…; opening twice is harmless. On close, focus goes back to where it was,
 or to the editor when that is gone or was the body (after a pick from the
 palette).
 
+**The app menu.** Quel builds its own first menu (on macOS the app menu,
+whatever its label) instead of Wails' fixed `:app-menu`, which takes no
+items: About Quel…, Check for Updates…, Settings… ⌘,, then on macOS only
+Services, Hide Quel, Hide Others and Show All (roles from
+`wails-v0.11.0`; elsewhere they would do nothing), then Quit. There is no
+Help menu. About Quel opens a dialog (`AboutDialog.tsx`,
+`state/about.ts`): the icon, the version, OS and architecture from
+`app-info`, Check for Updates (which closes it first), GitHub and release
+notes links, Copy version info, and the license. The palette's About Quel
+opens it too, so server mode and e2e reach it.
+
 **Pointing to the palette.** The empty results pane of a connected tab
 says, under "Run the statement under the cursor with ⌘↵", "All commands:
-⇧⌘P".
+⇧⌘P", above Quel's own queries when there are any.
 
 ### Workspaces
 
@@ -1160,7 +1203,7 @@ Intel or universal build, DMG or App Store.
 ### Updates
 
 Quel checks GitHub Releases for a newer version 10 s after the window
-opens and every 6 hours, and on Help → Check for Updates…. A newer one
+opens and every 6 hours, and on Quel → Check for Updates…. A newer one
 shows as a button at the right end of the top strip; its dialog skips
 the version, leaves it for later, or downloads it and restarts into it.
 The tabs are saved first; a failed save stops the restart unless the
@@ -1231,6 +1274,7 @@ package feature, not app glue.
 | `letgo-packages/sql` | Not needed: let-go keeps a `[]byte` as a string with the same bytes; `quel.cells` hex-encodes it | the bytea / BLOB values |
 | `letgo-packages/wails` | Done in `wails-v0.3.0`: the asset handler proxies `FRONTEND_DEVSERVER_URL` (dev builds only) | Vite HMR in the dev loop |
 | `letgo-packages/wails` | Done in `wails-v0.6.0`: in-app updates over Wails' updater, with a signer check, a required checksum and helper mode in the shim's `init()` | in-app updates |
+| `letgo-packages/wails` | Done in `wails-v0.11.0`: the `:services-menu`, `:hide`, `:hide-others` and `:show-all` menu roles | Quel's own app menu (About, Settings…) |
 | `letgo-packages/keyring` | Done in `keyring-v0.1.0`: `put!`, `get`, `delete!` over `zalando/go-keyring` (macOS Keychain, Secret Service), and `use-memory!` for tests | saved passwords |
 | new `letgo-packages/ssh` | SSH tunnels over `x/crypto/ssh` (shim-only: struct config and callbacks) | later |
 | `lgx` | Done in lgx 0.5.2: `:target :native` embeds `:resource-paths`, lowers only project namespaces, and takes `:go/build-tags` under `:targets :bin` | the native build |

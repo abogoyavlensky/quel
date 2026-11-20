@@ -1,6 +1,10 @@
 # No Settings item in the macOS app menu
 
-**Status: open**
+**Status: done**
+
+Landed in Quel's own app menu (Quel > Settings… ⌘,), built from the
+roles letgo-packages added in `wails-v0.11.0`; see
+`docs/plans/2026-11-19-2338-about-and-polish.md`.
 
 ## Problem
 

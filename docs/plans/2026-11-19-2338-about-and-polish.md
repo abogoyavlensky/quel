@@ -306,9 +306,9 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 **Files:**
 - Modify: `docs/DESIGN.md`, `docs/backlog/settings-in-app-menu.md`
 
-- [ ] **Step 1: DESIGN.md.** Describe the app menu (Quel menu items, Help gone), the About dialog, the row details filter on values, Quel's queries in Messages with the toggle, and the Run button inset. Replace the line near 987 about Settings… needing the shim.
-- [ ] **Step 2: Backlog.** `settings-in-app-menu.md` → `**Status: done**` with a line saying it landed in Quel's own app menu with wails-v0.11.0 (this plan).
-- [ ] **Step 3: Commit.** `git commit -am "Docs: app menu, About, row filter, Quel's queries"`
+- [x] **Step 1: DESIGN.md.** Describe the app menu (Quel menu items, Help gone), the About dialog, the row details filter on values, Quel's queries in Messages with the toggle, and the Run button inset. Replace the line near 987 about Settings… needing the shim.
+- [x] **Step 2: Backlog.** `settings-in-app-menu.md` → `**Status: done**` with a line saying it landed in Quel's own app menu with wails-v0.11.0 (this plan).
+- [x] **Step 3: Commit.** `git commit -am "Docs: app menu, About, row filter, Quel's queries"`
 
 ### Task 10: Backlog the failure-path SQL
 
