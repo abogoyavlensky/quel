@@ -35,63 +35,84 @@
 (def run-script! (emitter "Run Script" "menu:run-script"))
 (def cancel! (emitter "Cancel" "menu:cancel"))
 (def check-updates! (emitter "Check for Updates" "menu:check-updates"))
+(def about! (emitter "About Quel" "menu:about"))
+(def settings! (emitter "Settings" "menu:settings"))
 (def command-palette! (emitter "Command Palette" "menu:command-palette"))
 (def go-to-connection! (emitter "Go to Connection" "menu:go-to-connection"))
 (def zoom-in! (emitter "Zoom In" "menu:zoom-in"))
 (def zoom-out! (emitter "Zoom Out" "menu:zoom-out"))
 (def zoom-reset! (emitter "Actual Size" "menu:zoom-reset"))
 
+;; Quel builds its own app menu (the first top-level menu is the app menu on
+;; macOS, whatever its label) rather than Wails' fixed {:role :app-menu},
+;; which takes no items: so About and Settings… are ours, and Check for
+;; Updates sits under About. Services, Hide, Hide Others and Show All are
+;; macOS roles (they do nothing elsewhere), so the spec adds them on macOS
+;; only; on Linux the Quel menu is About, Check for Updates, Settings, Quit.
 ;; Cmd+W closes the editor tab: on macOS Wails' window menu has no Close
 ;; item, so the key is free. If the native menu and the editor's own keymap
 ;; both see Cmd+Enter, the frontend drops the second run (one in flight
-;; per tab). Opening a palette tolerates the same double delivery: it sets
-;; the state, it does not toggle it. Check for Updates sits in Help: the shim builds the app menu
-;; from its role, which takes no items of ours.
+;; per tab). Opening a palette, Settings or About tolerates the same double
+;; delivery: it sets the state, it does not toggle it.
 ;; The zoom keys are here alone, with nothing on the page: a zoom step
 ;; cannot take the double delivery. The key is = rather than Plus so the
 ;; unshifted key works.
 ;; The accelerators mirror the "menu" keys of the frontend's key registry
 ;; (frontend/src/state/keymap.ts); its test reads this file and checks that
 ;; both have the same set. Change one, change the other.
-(defn spec [env]
-  [{:role :app-menu}
-   {:label "File"
-    :items [{:label "New Tab" :accelerator "CmdOrCtrl+T"
-             :on-click (partial #'new-tab! env)}
-            {:label "New Connection…"
-             :on-click (partial #'new-connection! env)}
-            {:separator true}
-            {:label "Close Tab" :accelerator "CmdOrCtrl+W"
-             :on-click (partial #'close-tab! env)}
-            {:label "Reopen Closed Tab" :accelerator "CmdOrCtrl+Shift+T"
-             :on-click (partial #'reopen-tab! env)}
-            {:separator true}
-            {:role :quit}]}
-   {:role :edit-menu}
-   {:label "View"
-    :items [{:label "Command Palette…" :accelerator "CmdOrCtrl+Shift+P"
-             :on-click (partial #'command-palette! env)}
-            {:label "Go to Connection…" :accelerator "CmdOrCtrl+P"
-             :on-click (partial #'go-to-connection! env)}
-            {:separator true}
-            {:label "Zoom In" :accelerator "CmdOrCtrl+="
-             :on-click (partial #'zoom-in! env)}
-            {:label "Zoom Out" :accelerator "CmdOrCtrl+-"
-             :on-click (partial #'zoom-out! env)}
-            {:label "Actual Size" :accelerator "CmdOrCtrl+0"
-             :on-click (partial #'zoom-reset! env)}]}
-   {:label "Query"
-    :items [{:label "Run" :accelerator "CmdOrCtrl+Enter"
-             :on-click (partial #'run! env)}
-            {:label "Run Script" :accelerator "CmdOrCtrl+Shift+Enter"
-             :on-click (partial #'run-script! env)}
-            {:separator true}
-            {:label "Cancel" :accelerator "CmdOrCtrl+."
-             :on-click (partial #'cancel! env)}]}
-   {:role :window-menu}
-   {:label "Help"
-    :items [{:label "Check for Updates…"
-             :on-click (partial #'check-updates! env)}]}])
+(defn spec
+  ([env] (spec env (os/os-name)))
+  ([env os-name]
+   [{:label "Quel"
+     :items (vec (concat
+                  [{:label "About Quel…"
+                    :on-click (partial #'about! env)}
+                   {:label "Check for Updates…"
+                    :on-click (partial #'check-updates! env)}
+                   {:separator true}
+                   {:label "Settings…" :accelerator "CmdOrCtrl+,"
+                    :on-click (partial #'settings! env)}]
+                  (when (= "darwin" os-name)
+                    [{:separator true}
+                     {:role :services-menu}
+                     {:separator true}
+                     {:role :hide}
+                     {:role :hide-others}
+                     {:role :show-all}])
+                  [{:separator true}
+                   {:role :quit}]))}
+    {:label "File"
+     :items [{:label "New Tab" :accelerator "CmdOrCtrl+T"
+              :on-click (partial #'new-tab! env)}
+             {:label "New Connection…"
+              :on-click (partial #'new-connection! env)}
+             {:separator true}
+             {:label "Close Tab" :accelerator "CmdOrCtrl+W"
+              :on-click (partial #'close-tab! env)}
+             {:label "Reopen Closed Tab" :accelerator "CmdOrCtrl+Shift+T"
+              :on-click (partial #'reopen-tab! env)}]}
+    {:role :edit-menu}
+    {:label "View"
+     :items [{:label "Command Palette…" :accelerator "CmdOrCtrl+Shift+P"
+              :on-click (partial #'command-palette! env)}
+             {:label "Go to Connection…" :accelerator "CmdOrCtrl+P"
+              :on-click (partial #'go-to-connection! env)}
+             {:separator true}
+             {:label "Zoom In" :accelerator "CmdOrCtrl+="
+              :on-click (partial #'zoom-in! env)}
+             {:label "Zoom Out" :accelerator "CmdOrCtrl+-"
+              :on-click (partial #'zoom-out! env)}
+             {:label "Actual Size" :accelerator "CmdOrCtrl+0"
+              :on-click (partial #'zoom-reset! env)}]}
+    {:label "Query"
+     :items [{:label "Run" :accelerator "CmdOrCtrl+Enter"
+              :on-click (partial #'run! env)}
+             {:label "Run Script" :accelerator "CmdOrCtrl+Shift+Enter"
+              :on-click (partial #'run-script! env)}
+             {:separator true}
+             {:label "Cancel" :accelerator "CmdOrCtrl+."
+              :on-click (partial #'cancel! env)}]}
+    {:role :window-menu}]))
 
 (defn install!
   "Install (or rebuild) the application menu. Returns env."

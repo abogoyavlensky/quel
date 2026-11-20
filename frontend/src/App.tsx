@@ -7,6 +7,7 @@ import { loadProfiles, openProfileDialog, restoreSelection } from "@/state/profi
 import { flushAll } from "@/state/persist";
 import { loadSidebar, loadStructure } from "@/state/layout";
 import { openPalette } from "@/state/palette";
+import { openSettings } from "@/state/settings";
 import { onPageKey } from "@/state/pageKeys";
 import { loadZoom, restoreWindowFrame, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
@@ -37,6 +38,7 @@ function useMenu() {
       onEvent("menu:zoom-in", () => stepZoom("in")),
       onEvent("menu:zoom-out", () => stepZoom("out")),
       onEvent("menu:zoom-reset", () => stepZoom("reset")),
+      onEvent("menu:settings", openSettings),
     ];
     return () => offs.forEach((off) => off());
   }, []);

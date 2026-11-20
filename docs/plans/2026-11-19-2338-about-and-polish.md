@@ -187,13 +187,15 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - Modify: `/home/agent/Projects/letgo-packages/wails/README.md`
 - Test: `/home/agent/Projects/letgo-packages/wails/test/wails/menu_test.lg`
 
-- [ ] **Step 1: Branch.** `cd /home/agent/Projects/letgo-packages && git checkout master && git pull --ff-only && git checkout -b wails-app-menu-roles`
-- [ ] **Step 2: Write the failing test.** In `menu_test.lg`, `check-menu` accepts `[{:label "App" :items [{:label "About"} {:separator true} {:role :services-menu} {:separator true} {:role :hide} {:role :hide-others} {:role :show-all} {:separator true} {:role :quit}]}]`. The unknown-role error message lists `:services-menu :hide :hide-others :show-all`.
-- [ ] **Step 3: Run it and watch it fail.** `cd wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: the new test fails with `unknown role :services-menu`.
-- [ ] **Step 4: Implement.** Add the four `menuRoles` entries from the Design table (`ShowAll`, not `UnHide`, with a comment saying why), and extend `knownRoles`. In the README's menu section, list the roles and say these four are macOS-only (elsewhere Wails makes items that do nothing). Show an own-app-menu example.
-- [ ] **Step 5: Run the tests.** Same command. Expected: PASS. Also `cd shim && go vet ./...`.
-- [ ] **Step 6: Commit, push, PR, merge, tag.**
+- [x] **Step 1: Branch.** `cd /home/agent/Projects/letgo-packages && git checkout master && git pull --ff-only && git checkout -b wails-app-menu-roles`
+- [x] **Step 2: Write the failing test.** In `menu_test.lg`, `check-menu` accepts `[{:label "App" :items [{:label "About"} {:separator true} {:role :services-menu} {:separator true} {:role :hide} {:role :hide-others} {:role :show-all} {:separator true} {:role :quit}]}]`. The unknown-role error message lists `:services-menu :hide :hide-others :show-all`.
+- [x] **Step 3: Run it and watch it fail.** `cd wails && CGO_ENABLED=0 GOFLAGS=-tags=server lgx test`. Expected: the new test fails with `unknown role :services-menu`.
+- [x] **Step 4: Implement.** Add the four `menuRoles` entries from the Design table (`ShowAll`, not `UnHide`, with a comment saying why), and extend `knownRoles`. In the README's menu section, list the roles and say these four are macOS-only (elsewhere Wails makes items that do nothing). Show an own-app-menu example.
+- [x] **Step 5: Run the tests.** Same command. Expected: PASS. Also `cd shim && go vet ./...`.
+- [x] **Step 6: Commit, push, PR, merge, tag.**
   `git commit -am "wails: services, hide, hide-others and show-all menu roles"`, `git push -u origin wails-app-menu-roles`, `gh pr create --fill`, link the PR (`link_pull_request`) and wait for CI with `watch_pull_request` (no polling or `gh pr checks --watch`), then `gh pr merge --merge` and `unwatch_pull_request`. Then `git checkout master && git pull --ff-only && git tag wails-v0.11.0 && git push origin wails-v0.11.0`. Push that one tag by name.
+
+> Deviation: `go vet ./...` in `wails/shim` fails on a missing go.sum entry (the updater provider) with or without this change, because the shim is built only through lgx. The lgx tests are the check. Released: letgo-packages#23, tag `wails-v0.11.0` on 1e1ef84.
 
 ### Task 2: Quel's own app menu
 

@@ -114,7 +114,7 @@ export const KEYMAP = [
     keys: { mac: ["Cmd-Shift-p"], other: ["Ctrl-Shift-p"] },
     caught: ["menu", "page"],
   },
-  { id: "settings", group: "View", name: "Settings…", keys: { mac: ["Cmd-,"], other: ["Ctrl-,"] }, caught: ["page"] },
+  { id: "settings", group: "View", name: "Settings…", keys: { mac: ["Cmd-,"], other: ["Ctrl-,"] }, caught: ["menu", "page"] },
   {
     id: "row-details",
     group: "View",
