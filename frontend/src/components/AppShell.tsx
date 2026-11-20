@@ -21,6 +21,7 @@ import { RowDetails } from "./RowDetails";
 import { StructureHeader, StructureTree } from "./StructureTree";
 import { TitleBar } from "./TitleBar";
 import { RunConfirmDialog } from "./RunConfirmDialog";
+import { AboutDialog } from "./AboutDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { UpdateDialog } from "./UpdateDialog";
 
@@ -140,6 +141,7 @@ export function AppShell() {
       <ProfileDialog />
       <UpdateDialog />
       <SettingsDialog />
+      <AboutDialog />
       <RunConfirmDialog />
     </div>
   );

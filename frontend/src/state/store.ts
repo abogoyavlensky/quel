@@ -192,6 +192,7 @@ export interface AppState {
   // (state/palette.ts); in memory only.
   palette: "commands" | "connections" | null;
   settingsOpen: boolean; // the Settings dialog (state/settings.ts); in memory only
+  aboutOpen: boolean; // the About dialog (state/about.ts); in memory only
   runConfirm: RunConfirm | null; // RunConfirmDialog
 }
 
@@ -248,6 +249,7 @@ export function initialState(): AppState {
     updateDialogOpen: false,
     palette: null,
     settingsOpen: false,
+    aboutOpen: false,
     runConfirm: null,
   };
 }

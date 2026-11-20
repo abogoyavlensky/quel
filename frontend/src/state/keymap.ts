@@ -154,6 +154,7 @@ export const KEYMAP = [
   },
 
   { id: "check-updates", group: "Help", name: "Check for Updates…", keys: none, caught: [] },
+  { id: "about", group: "Help", name: "About Quel", keys: none, caught: [] },
 ] as const satisfies readonly KeyEntry[];
 
 export type CommandId = (typeof KEYMAP)[number]["id"];

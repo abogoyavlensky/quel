@@ -5,6 +5,7 @@
             [quel.export :as export]
             [quel.secrets :as secrets]
             [quel.store-test :refer [temp-dir]]
+            [quel.version :as version]
             [quel.window :as window]
             [string :as str]
             [wails.core :as w]
@@ -46,6 +47,12 @@
 (deftest ping-answers
   (is (= {:ok true} (api/ping {}))))
 
+(deftest app-info-names-this-build
+  (let [info (api/app-info {})]
+    (is (= version/version (:version info)))
+    (is (not (str/blank? (:os info))))
+    (is (not (str/blank? (:arch info))))))
+
 (deftest every-handler-is-a-var
   (is (= #{"ping" "open-db" "close-db" "run" "fetch-page" "cancel" "close-result" "close-session"
            "list-schemas" "describe-schema" "describe-object" "completion-schema"
@@ -54,7 +61,7 @@
            "load-workspace" "save-workspace" "close-tab" "reopen-tab" "selected-profile" "select-profile" "sidebar-hidden" "set-sidebar-hidden"
            "structure-collapsed" "set-structure-collapsed"
            "zoom" "restore-zoom" "save-window-state" "restore-window-frame"
-           "check-update" "skip-update" "download-update" "restart-to-update"}
+           "check-update" "skip-update" "download-update" "restart-to-update" "app-info"}
          (set (keys api/handlers))))
   (is (every? var? (vals api/handlers))))
 

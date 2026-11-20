@@ -9,7 +9,8 @@ import { MESSAGES, activeTabOf, store, selectedWorkspace, showsResult, type AppS
 // A dialog has the keyboard: the editor and tab keys leave it alone.
 export function modalOpen(s: AppState): boolean {
   return (
-    s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null || s.palette !== null || s.settingsOpen
+    s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null || s.palette !== null || s.settingsOpen ||
+    s.aboutOpen
   );
 }
 
@@ -18,11 +19,11 @@ export function modalOpen(s: AppState): boolean {
 let before: HTMLElement | null = null;
 
 // Opens a palette, or switches to the other one. Refused under the profile,
-// update, run-confirm and Settings dialogs, whether the key or the native
+// update, run-confirm, Settings and About dialogs, whether the key or the native
 // menu asks.
 export function openPalette(kind: "commands" | "connections"): void {
   const s = store.getState();
-  if (s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null || s.settingsOpen) return;
+  if (s.profileDialog !== null || s.updateDialogOpen || s.runConfirm !== null || s.settingsOpen || s.aboutOpen) return;
   if (s.palette === null) {
     before = document.activeElement as HTMLElement | null;
   }

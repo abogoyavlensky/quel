@@ -10,6 +10,7 @@
             [quel.meta.sqlite]
             [quel.profiles :as profiles]
             [quel.updates :as updates]
+            [quel.version :as version]
             [quel.window :as window]
             [quel.workspace :as workspace]
             [wails.core :as w]))
@@ -248,6 +249,10 @@
 (defn restart-to-update [{:keys [updates]}]
   (updates/restart! updates))
 
+;; For the About dialog: this build's version and where it runs.
+(defn app-info [_env]
+  {:version version/version :os (os/os-name) :arch (os/arch)})
+
 ;; By var, not by fn value: a var reads its current definition on every
 ;; call, so redefining any of these from the nREPL changes what the next
 ;; frontend call runs, with no restart and no re-registration.
@@ -292,7 +297,8 @@
    "check-update" #'check-update
    "skip-update" #'skip-update
    "download-update" #'download-update
-   "restart-to-update" #'restart-to-update})
+   "restart-to-update" #'restart-to-update
+   "app-info" #'app-info})
 
 ;; Registers every handler over the env. (partial #'f env) keeps the var,
 ;; so it stays hot. Wails has no way to unregister; a halted system leaves

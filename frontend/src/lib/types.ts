@@ -216,6 +216,13 @@ export interface UpdateRelease {
 
 // `check-update`'s reply. With checks off (QUEL_UPDATES=off) only
 // `current` and `enabled` come back.
+// This build, for the About dialog (quel.api app-info).
+export interface AppInfo {
+  version: string;
+  os: string; // Go's GOOS: "darwin", "linux"
+  arch: string; // Go's GOARCH: "arm64", "amd64"
+}
+
 export interface UpdateCheck {
   current: string;
   enabled: boolean;

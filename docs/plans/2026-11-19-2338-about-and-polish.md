@@ -203,13 +203,15 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - Modify: `lgx.edn`, `src/quel/menu.lg`, `frontend/src/state/keymap.ts`, `frontend/src/App.tsx`
 - Test: `test/quel/menu_test.lg`, `frontend/src/state/keymap.test.ts` (unchanged, must pass)
 
-- [ ] **Step 1: Bump the dep.** In `lgx.edn`, `wails-v0.10.0` → `wails-v0.11.0`. Run `env $SRV lgx test` once to fetch and build. Expected: PASS.
-- [ ] **Step 2: Update the tests first.** `menu_test.lg`: the `"darwin"` spec's first menu is labeled "Quel" and has About Quel…, Check for Updates…, Settings… (`CmdOrCtrl+,`), `:services-menu`, `:hide`, `:hide-others`, `:show-all` and `:quit`. The `"linux"` spec's first menu has none of the four macOS roles. No menu is labeled "Help", and File has no `:quit`. `wails-accepts-the-spec` checks both OS variants. The click count goes from 13 to 15 (about and settings added; check-updates moved).
-- [ ] **Step 3: Run them and watch them fail.** `env $SRV lgx test`. Expected: menu tests FAIL.
-- [ ] **Step 4: Implement `menu.lg`.** Add `about!` (`"menu:about"`) and `settings!` (`"menu:settings"`) emitters and an OS-aware `spec` as in the Design. Replace the comment about the app menu taking no items with one describing the own app menu.
-- [ ] **Step 5: Keymap and events.** `keymap.ts`: `settings` gets `caught: ["menu", "page"]`. `App.tsx`: `onEvent("menu:settings", openSettings)`; `menu:about` is wired in Task 3.
-- [ ] **Step 6: Run the tests.** `env $SRV lgx test && npm --prefix frontend test`. Expected: PASS, including the keymap drift test.
-- [ ] **Step 7: Commit.** `git commit -am "Build Quel's own app menu with Settings"`
+- [x] **Step 1: Bump the dep.** In `lgx.edn`, `wails-v0.10.0` → `wails-v0.11.0`. Run `env $SRV lgx test` once to fetch and build. Expected: PASS.
+- [x] **Step 2: Update the tests first.** `menu_test.lg`: the `"darwin"` spec's first menu is labeled "Quel" and has About Quel…, Check for Updates…, Settings… (`CmdOrCtrl+,`), `:services-menu`, `:hide`, `:hide-others`, `:show-all` and `:quit`. The `"linux"` spec's first menu has none of the four macOS roles. No menu is labeled "Help", and File has no `:quit`. `wails-accepts-the-spec` checks both OS variants. The click count goes from 13 to 15 (about and settings added; check-updates moved).
+- [x] **Step 3: Run them and watch them fail.** `env $SRV lgx test`. Expected: menu tests FAIL.
+- [x] **Step 4: Implement `menu.lg`.** Add `about!` (`"menu:about"`) and `settings!` (`"menu:settings"`) emitters and an OS-aware `spec` as in the Design. Replace the comment about the app menu taking no items with one describing the own app menu.
+- [x] **Step 5: Keymap and events.** `keymap.ts`: `settings` gets `caught: ["menu", "page"]`. `App.tsx`: `onEvent("menu:settings", openSettings)`; `menu:about` is wired in Task 3.
+- [x] **Step 6: Run the tests.** `env $SRV lgx test && npm --prefix frontend test`. Expected: PASS, including the keymap drift test.
+- [x] **Step 7: Commit.** `git commit -am "Build Quel's own app menu with Settings"`
+
+> Deviation: the codex review of this commit flagged that `menu:about` had no listener yet. Task 3 wires it (next commit, same PR).
 
 ### Task 3: About dialog
 
@@ -218,12 +220,14 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - Modify: `src/quel/api.lg`, `frontend/src/lib/api.ts`, `frontend/src/lib/types.ts`, `frontend/src/state/store.ts`, `frontend/src/state/palette.ts`, `frontend/src/state/commands.ts`, `frontend/src/App.tsx`
 - Test: `test/quel/api_test.lg`
 
-- [ ] **Step 1: The icon.** Downscale `build/macos/icon.png` (1024²) to 256². There's no ImageMagick or PIL here, so use a throwaway Go program in the scratchpad (not the repo): standard library `image/png`, averaging each 4×4 block, including alpha. Write it to `frontend/src/assets/quel-icon.png` and check it with `file` (expect `256 x 256`).
-- [ ] **Step 2: Backend `app-info`.** Test in `api_test.lg`: `(api/app-info env)` returns `quel.version/version`, a non-blank `:os` and `:arch`. Implement it and register `"app-info"`. Run `env $SRV lgx test`. Expected: PASS.
-- [ ] **Step 3: State.** `store.ts`: `aboutOpen: false`. `about.ts`: `openAbout` / `closeAbout` / `restoreAboutFocus`, modeled on `state/settings.ts`. `palette.ts`: `modalOpen` includes `s.aboutOpen`. Tests in `about.test.ts`: it opens, and it doesn't open while another modal is open. Run `npm --prefix frontend test`. Expected: PASS.
-- [ ] **Step 4: Dialog.** `AboutDialog.tsx` as described in the Design. `api.appInfo()` loads once when the dialog opens; until it answers, the version line shows nothing. Check for Updates calls `closeAbout()` and then `checkForUpdates({ manual: true })`. Mount it in `App.tsx` next to the other dialogs, add `onEvent("menu:about", openAbout)`, and add an "About Quel" palette command in `commands.ts`.
-- [ ] **Step 5: e2e.** `about.spec.ts`: open About from the palette. It shows "Version " plus the version from `VERSION`, a GitHub link, and the Copy version info and Check for Updates buttons. Escape closes it. Run `env $SRV lgx e2e`. Expected: PASS.
-- [ ] **Step 6: Commit.** `git add -A && git commit -m "Add the About Quel dialog"`
+- [x] **Step 1: The icon.** Downscale `build/macos/icon.png` (1024²) to 256². There's no ImageMagick or PIL here, so use a throwaway Go program in the scratchpad (not the repo): standard library `image/png`, averaging each 4×4 block, including alpha. Write it to `frontend/src/assets/quel-icon.png` and check it with `file` (expect `256 x 256`).
+- [x] **Step 2: Backend `app-info`.** Test in `api_test.lg`: `(api/app-info env)` returns `quel.version/version`, a non-blank `:os` and `:arch`. Implement it and register `"app-info"`. Run `env $SRV lgx test`. Expected: PASS.
+- [x] **Step 3: State.** `store.ts`: `aboutOpen: false`. `about.ts`: `openAbout` / `closeAbout` / `restoreAboutFocus`, modeled on `state/settings.ts`. `palette.ts`: `modalOpen` includes `s.aboutOpen`. Tests in `about.test.ts`: it opens, and it doesn't open while another modal is open. Run `npm --prefix frontend test`. Expected: PASS.
+- [x] **Step 4: Dialog.** `AboutDialog.tsx` as described in the Design. `api.appInfo()` loads once when the dialog opens; until it answers, the version line shows nothing. Check for Updates calls `closeAbout()` and then `checkForUpdates({ manual: true })`. Mount it in `App.tsx` next to the other dialogs, add `onEvent("menu:about", openAbout)`, and add an "About Quel" palette command in `commands.ts`.
+- [x] **Step 5: e2e.** `about.spec.ts`: open About from the palette. It shows "Version " plus the version from `VERSION`, a GitHub link, and the Copy version info and Check for Updates buttons. Escape closes it. Run `env $SRV lgx e2e`. Expected: PASS.
+- [x] **Step 6: Commit.** `git add -A && git commit -m "Add the About Quel dialog"`
+
+> Deviation: the palette's command ids come from the key registry, so `about` also got a key-less registry entry (Help group). The About dialog's title is "Quel" (the e2e finds it by that name).
 
 ### Task 4: Run button clear of the scrollbars
 

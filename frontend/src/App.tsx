@@ -8,6 +8,7 @@ import { flushAll } from "@/state/persist";
 import { loadSidebar, loadStructure } from "@/state/layout";
 import { openPalette } from "@/state/palette";
 import { openSettings } from "@/state/settings";
+import { openAbout } from "@/state/about";
 import { onPageKey } from "@/state/pageKeys";
 import { loadZoom, restoreWindowFrame, stepZoom, watchWindowState } from "@/state/window";
 import { checkForUpdates, startUpdateChecks } from "@/state/updates";
@@ -39,6 +40,7 @@ function useMenu() {
       onEvent("menu:zoom-out", () => stepZoom("out")),
       onEvent("menu:zoom-reset", () => stepZoom("reset")),
       onEvent("menu:settings", openSettings),
+      onEvent("menu:about", openAbout),
     ];
     return () => offs.forEach((off) => off());
   }, []);

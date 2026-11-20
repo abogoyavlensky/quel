@@ -15,6 +15,7 @@ import type {
   SchemaContents,
   SchemaInfo,
   UpdateCheck,
+  AppInfo,
   WorkspaceInput,
 } from "@/lib/types";
 
@@ -174,3 +175,6 @@ export const skipUpdate = (version: string) => call<void>("skip-update", version
 export const downloadUpdate = () => call<void>("download-update");
 
 export const restartToUpdate = () => call<void>("restart-to-update");
+
+// This build: its version, OS and architecture (the About dialog).
+export const appInfo = () => call<AppInfo>("app-info");
