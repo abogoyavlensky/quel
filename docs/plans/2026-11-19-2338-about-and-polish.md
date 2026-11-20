@@ -341,7 +341,7 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 
 Docs: DESIGN.md is updated, `settings-in-app-menu.md` is marked done, and the new backlog entry `quel-queries-failure-paths.md` covers the queries not yet shown.
 
-**Verification.** `lgx test` and `lgx test-pg` (268 tests each), frontend unit tests (730), lint (only the two warnings that were already there), `lgx e2e` (72), `lgx smoke` and `lgx smoke-pg`, and `lgx build` all pass. Screenshots of Messages, row details and About in server mode were checked by eye. Not verified: the macOS menu itself (About, Settings… ⌘,, Services, Hide, Show All); it needs `lgx package-macos && lgx verify-macos` on a Mac.
+**Verification.** `lgx test` and `lgx test-pg` (268 tests each), frontend unit tests (730), lint (only the two warnings that were already there), `lgx e2e` (72), `lgx smoke` and `lgx smoke-pg`, and `lgx build` all pass. Screenshots of Messages, row details and About in server mode were checked by eye. The native binary, built in server mode, passed `scripts/smoke.sh` (through an `LGX` wrapper that runs it) and answered `app-info` and `describe-object` with its queries. Not verified: the macOS menu itself (About, Settings… ⌘,, Services, Hide, Show All); it needs `lgx package-macos && lgx verify-macos` on a Mac.
 
 **Issues hit and fixed.**
 - Codex found highlighting was quadratic on large JSON with many matches; fixed with a binary search.
