@@ -216,7 +216,7 @@
     (fn [registry path]
       (spit path "")
       (let [r (conn/open-target! registry {:engine :sqlite :path path :label "My file"})]
-        (is (= {:engine :sqlite :label "My file"} (dissoc r :conn-id)))
+        (is (= {:engine :sqlite :label "My file" :queries []} (dissoc r :conn-id)))
         (is (= "My file" (:label (get @registry (:conn-id r)))))))))
 
 ;; A password with a quote, a backslash and spaces, as the profile's DSN
@@ -397,7 +397,10 @@
     (fn [registry _]
       (let [r (conn/open-target! registry duck-mem)]
         (is (= :duckdb (:engine r)))
-        (is (= "m" (:label r)))))))
+        (is (= "m" (:label r)))
+        ;; The ping that opened it, for the frontend's Messages.
+        (is (= ["select 1"] (mapv :sql (:queries r))))
+        (is (= 1 (:rows (first (:queries r)))))))))
 
 ;; One pool, so every connection shares the one in-memory instance, and the
 ;; instance outlives its connections even with no idle ones.

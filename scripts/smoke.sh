@@ -80,7 +80,7 @@ objs="$(call describe-schema "[\"$conn\",\"main\"]")"
 details="$(call describe-object "[\"$conn\",\"main\",\"t\"]")"
 [[ "$details" == *'"name":"id"'* ]] || fail "describe-object misses id: $details"
 completion="$(call completion-schema "[\"$conn\"]")"
-[[ "$(json "$completion" "['schemas']['main']['t']")" == "['id']" ]] || fail "completion-schema: $completion"
+[[ "$(json "$completion" "['result']['schemas']['main']['t']")" == "['id']" ]] || fail "completion-schema: $completion"
 # A nil reply comes back as {} (the bridge lowers nil that way).
 nothing() { [[ -z "$1" || "$1" == null || "$1" == "{}" ]]; }
 r="$(call close-result '["nope"]')"; nothing "$r" || fail "close-result of an unknown id: $r"

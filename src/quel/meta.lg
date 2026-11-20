@@ -1,4 +1,5 @@
-(ns quel.meta)
+(ns quel.meta
+  (:require [sql.core :as sql]))
 
 ;; Introspection: what a database holds, for the structure tree and the
 ;; editor's completion. describe-schema and describe-object gather what
@@ -11,6 +12,36 @@
 ;; Every query runs on the pool, never on a tab's session: browsing must
 ;; not wait behind a running query. So objects that live in one connection
 ;; only (temp tables, an ATTACH made in a tab) do not show.
+;;
+;; Every query goes through execute!, which records what it ran when the db
+;; carries a log at ::queries (an atom of a vector): quel.api's catalog
+;; handlers attach one, so the frontend can show Quel's own SQL in
+;; Messages. The log travels on the db value: no dynamic vars.
+
+(defn- now-ms [] (quot (System/nanoTime) 1000000))
+
+(defn- param-text [p] (if (nil? p) "NULL" (str p)))
+
+(defn execute!
+  "sql.core/execute! [sql & params] on db, recording the query in the atom
+   at (::queries db), if any: {:sql :params :ms :rows} on success,
+   {:sql :params :ms :error} on failure, which is rethrown. :params are
+   the parameters as text."
+  [db sqlv]
+  (let [log (::queries db)
+        start (now-ms)
+        entry (fn [m] (when log
+                        (swap! log conj (merge {:sql (first sqlv)
+                                                :params (mapv param-text (rest sqlv))
+                                                :ms (- (now-ms) start)}
+                                               m))))]
+    (try
+      (let [rows (sql/execute! db sqlv)]
+        (entry {:rows (count rows)})
+        rows)
+      (catch e
+        (entry {:error (ex-message e)})
+        (throw e)))))
 
 (defmulti schemas
   "[{:name :default}], :default true for the schema unqualified names

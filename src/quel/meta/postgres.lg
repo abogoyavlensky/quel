@@ -1,6 +1,5 @@
 (ns quel.meta.postgres
   (:require [quel.meta :as meta]
-            [sql.core :as sql]
             [string :as str]))
 
 ;; Postgres and Redshift through pg_catalog (pg_namespace, pg_class,
@@ -26,7 +25,7 @@
 
 (defn- schemas* [_ db]
   (mapv (fn [{:keys [name is_default]}] {:name name :default (true? is_default)})
-        (sql/execute! db [schemas-sql])))
+        (meta/execute! db [schemas-sql])))
 
 (defmethod meta/schemas :postgres [engine db] (schemas* engine db))
 (defmethod meta/schemas :redshift [engine db] (schemas* engine db))
@@ -47,10 +46,10 @@
 (def ^:private redshift-objects-sql (objects-sql true))
 
 (defmethod meta/objects :postgres [_ db schema]
-  (mapv #(select-keys % [:name :kind]) (sql/execute! db [postgres-objects-sql schema])))
+  (mapv #(select-keys % [:name :kind]) (meta/execute! db [postgres-objects-sql schema])))
 
 (defmethod meta/objects :redshift [_ db schema]
-  (mapv #(select-keys % [:name :kind]) (sql/execute! db [redshift-objects-sql schema])))
+  (mapv #(select-keys % [:name :kind]) (meta/execute! db [redshift-objects-sql schema])))
 
 (def ^:private columns-sql
   (str "select a.attname as name, format_type(a.atttypid, a.atttypmod) as type"
@@ -61,7 +60,7 @@
        " order by a.attnum"))
 
 (defn- columns* [_ db schema name]
-  (mapv #(select-keys % [:name :type]) (sql/execute! db [columns-sql schema name])))
+  (mapv #(select-keys % [:name :type]) (meta/execute! db [columns-sql schema name])))
 
 (defmethod meta/columns :postgres [engine db schema name] (columns* engine db schema name))
 (defmethod meta/columns :redshift [engine db schema name] (columns* engine db schema name))
@@ -82,10 +81,10 @@
 (def ^:private redshift-completion-sql (completion-sql true))
 
 (defmethod meta/completion-rows :postgres [_ db]
-  (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [postgres-completion-sql])))
+  (mapv #(select-keys % [:schema :tbl :col]) (meta/execute! db [postgres-completion-sql])))
 
 (defmethod meta/completion-rows :redshift [_ db]
-  (mapv #(select-keys % [:schema :tbl :col]) (sql/execute! db [redshift-completion-sql])))
+  (mapv #(select-keys % [:schema :tbl :col]) (meta/execute! db [redshift-completion-sql])))
 
 ;; Schema contents beyond tables and views: functions, types, standalone
 ;; sequences. Postgres only, except functions (Redshift's below). Whatever
@@ -105,7 +104,7 @@
        " order by p.proname, args"))
 
 (defmethod meta/functions :postgres [_ db schema]
-  (mapv #(select-keys % [:name :kind :args]) (sql/execute! db [postgres-functions-sql schema])))
+  (mapv #(select-keys % [:name :kind :args]) (meta/execute! db [postgres-functions-sql schema])))
 
 ;; Enums, domains, and composite types made with CREATE TYPE (relkind 'c');
 ;; every table, view and sequence has a composite row type too, which stays
@@ -128,10 +127,10 @@
 
 (defmethod meta/types :postgres [_ db schema]
   (let [values (reduce (fn [m {:keys [name label]}] (update m name (fnil conj []) label))
-                       {} (sql/execute! db [enum-values-sql schema]))]
+                       {} (meta/execute! db [enum-values-sql schema]))]
     (mapv (fn [{:keys [name kind detail]}]
             {:name name :kind kind :detail detail :values (get values name [])})
-          (sql/execute! db [types-sql schema]))))
+          (meta/execute! db [types-sql schema]))))
 
 ;; Sequences a column owns (serial: deptype 'a', identity: 'i') show under
 ;; their table, not here.
@@ -145,7 +144,7 @@
        " order by c.relname"))
 
 (defmethod meta/sequences :postgres [_ db schema]
-  (mapv #(select-keys % [:name]) (sql/execute! db [sequences-sql schema])))
+  (mapv #(select-keys % [:name]) (meta/execute! db [sequences-sql schema])))
 
 ;; Under a table: indexes, keys, owned sequences. The object is found by
 ;; schema and name ($1, $2).
@@ -170,7 +169,7 @@
   (mapv (fn [{:keys [name def is_unique is_primary]}]
           {:name name :definition (index-definition def)
            :unique (true? is_unique) :primary (true? is_primary)})
-        (sql/execute! db [indexes-sql schema name])))
+        (meta/execute! db [indexes-sql schema name])))
 
 ;; One row per key column (none for a check over no column), grouped here:
 ;; no array_agg on Redshift, and no arrays through the driver.
@@ -187,7 +186,7 @@
 (def ^:private kind-order {"primary-key" 0 "unique" 1 "foreign-key" 2 "check" 3})
 
 (defn- constraints* [_ db schema name]
-  (->> (sql/execute! db [constraints-sql schema name])
+  (->> (meta/execute! db [constraints-sql schema name])
        (partition-by :name)
        (map (fn [rows]
               (let [{:keys [name kind definition]} (first rows)]
@@ -208,7 +207,7 @@
 
 (defmethod meta/owned-sequences :postgres [_ db schema name]
   (mapv (fn [{:keys [name col]}] {:name name :column col})
-        (sql/execute! db [owned-sequences-sql schema name])))
+        (meta/execute! db [owned-sequences-sql schema name])))
 
 ;; Redshift, unverified against Redshift: functions without prokind
 ;; (Postgres 11+) or the extension filter (Redshift has no extensions),
@@ -225,6 +224,6 @@
 
 (defmethod meta/functions :redshift [_ db schema]
   (mapv (fn [{:keys [name args]}] {:name name :kind "function" :args args})
-        (sql/execute! db [redshift-functions-sql schema])))
+        (meta/execute! db [redshift-functions-sql schema])))
 
 (defmethod meta/constraints :redshift [engine db schema name] (constraints* engine db schema name))

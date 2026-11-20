@@ -62,10 +62,17 @@ const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 const strOrNull = (v: unknown): string | null => (typeof v === "string" ? v : null);
 type Raw = Record<string, unknown> | null | undefined;
 
-export const listSchemas = async (connId: string) => arr<SchemaInfo>(await call("list-schemas", connId));
+// The catalog calls reply {result, queries}: the queries are the SQL Quel
+// ran for the reply (quel.api logged).
+const catalog = async (name: string, ...args: unknown[]): Promise<unknown> => {
+  const r = await call<{ result?: unknown } | null>(name, ...args);
+  return r?.result;
+};
+
+export const listSchemas = async (connId: string) => arr<SchemaInfo>(await catalog("list-schemas", connId));
 
 export const describeSchema = async (connId: string, schema: string): Promise<SchemaContents> => {
-  const r = (await call<Raw>("describe-schema", connId, schema)) ?? {};
+  const r = ((await catalog("describe-schema", connId, schema)) as Raw) ?? {};
   return {
     objects: arr(r.objects),
     functions: arr(r.functions),
@@ -79,7 +86,7 @@ export const describeSchema = async (connId: string, schema: string): Promise<Sc
 };
 
 export const describeObject = async (connId: string, schema: string, name: string): Promise<ObjectDetails> => {
-  const r = (await call<Raw>("describe-object", connId, schema, name)) ?? {};
+  const r = ((await catalog("describe-object", connId, schema, name)) as Raw) ?? {};
   return {
     columns: arr(r.columns),
     indexes: arr(r.indexes),
@@ -93,7 +100,7 @@ export const describeObject = async (connId: string, schema: string, name: strin
 };
 
 export const completionSchema = async (connId: string): Promise<CompletionSchema> => {
-  const r = await call<Partial<CompletionSchema> | null>("completion-schema", connId);
+  const r = (await catalog("completion-schema", connId)) as Partial<CompletionSchema> | null | undefined;
   return { "default-schema": r?.["default-schema"] ?? null, schemas: r?.schemas ?? {} };
 };
 
