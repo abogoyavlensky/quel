@@ -247,9 +247,9 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 **Files:**
 - Modify: `frontend/src/components/RowDetails.tsx`
 
-- [ ] **Step 1: Implement.** Drop the `icon={<Braces />}` prop on the "Copy row as JSON" button and the `Braces` import.
-- [ ] **Step 2: Verify.** `npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: no errors. The row-details e2e still finds the button by its label.
-- [ ] **Step 3: Commit.** `git commit -am "Use the copy icon for Copy row as JSON"`
+- [x] **Step 1: Implement.** Drop the `icon={<Braces />}` prop on the "Copy row as JSON" button and the `Braces` import.
+- [x] **Step 2: Verify.** `npm --prefix frontend run lint && npm --prefix frontend run build`. Expected: no errors. The row-details e2e still finds the button by its label.
+- [x] **Step 3: Commit.** `git commit -am "Use the copy icon for Copy row as JSON"`
 
 ### Task 6: Row details: filter by value, JSON first
 
@@ -257,13 +257,15 @@ Commands below run from `/home/agent/Projects/quel` unless they say otherwise. T
 - Create: `frontend/src/grid/marks.ts`, `frontend/src/grid/marks.test.ts`
 - Modify: `frontend/src/components/RowDetails.tsx`, `frontend/src/grid/JsonCode.tsx`, `frontend/e2e/row-details.spec.ts`
 
-- [ ] **Step 1: Write the failing tests for `matchRanges`.** Case is ignored; ranges don't overlap (`"aaaa"`, `"aa"` → `[[0,2],[2,4]]`); an empty needle gives `[]`; no match gives `[]`; a match at the very end works.
-- [ ] **Step 2: Run them and watch them fail.** `npm --prefix frontend test -- marks`. Expected: FAIL (module missing).
-- [ ] **Step 3: Implement `matchRanges`.** Run the tests again. Expected: PASS.
-- [ ] **Step 4: Highlight in `JsonCode`.** Add the optional `ranges` prop and split tokens by a running offset, as in the Design. Add `MarkedText` for plain values in the same file or in `marks.tsx`, whichever keeps `marks.ts` free of JSX.
-- [ ] **Step 5: Filter in `RowDetails`.** Work out the shown texts once per row (memoized); filter on name or text, with NULL never matching; pass ranges only for value matches; set the placeholder and `aria-label` to "Filter columns and values"; show the empty line when nothing matches.
-- [ ] **Step 6: e2e.** Update `row-details.spec.ts` for the new label. Add a case for a JSON value: typing a key that's only inside the JSON (not a column name) keeps that field, hides the others, and shows a `mark` with the key's text. Typing a plain value keeps its field. Typing `null` does not keep a NULL field. Reuse the spec's existing `doc` JSON literal (SQLite reformats text that starts with `{`, `grid/json.ts` `jsonText`) and search for one of its keys. Run `env $SRV lgx e2e`. Expected: PASS.
-- [ ] **Step 7: Commit.** `git add -A && git commit -m "Filter row details by value, with highlights"`
+- [x] **Step 1: Write the failing tests for `matchRanges`.** Case is ignored; ranges don't overlap (`"aaaa"`, `"aa"` → `[[0,2],[2,4]]`); an empty needle gives `[]`; no match gives `[]`; a match at the very end works.
+- [x] **Step 2: Run them and watch them fail.** `npm --prefix frontend test -- marks`. Expected: FAIL (module missing).
+- [x] **Step 3: Implement `matchRanges`.** Run the tests again. Expected: PASS.
+- [x] **Step 4: Highlight in `JsonCode`.** Add the optional `ranges` prop and split tokens by a running offset, as in the Design. Add `MarkedText` for plain values in the same file or in `marks.tsx`, whichever keeps `marks.ts` free of JSX.
+- [x] **Step 5: Filter in `RowDetails`.** Work out the shown texts once per row (memoized); filter on name or text, with NULL never matching; pass ranges only for value matches; set the placeholder and `aria-label` to "Filter columns and values"; show the empty line when nothing matches.
+- [x] **Step 6: e2e.** Update `row-details.spec.ts` for the new label. Add a case for a JSON value: typing a key that's only inside the JSON (not a column name) keeps that field, hides the others, and shows a `mark` with the key's text. Typing a plain value keeps its field. Typing `null` does not keep a NULL field. Reuse the spec's existing `doc` JSON literal (SQLite reformats text that starts with `{`, `grid/json.ts` `jsonText`) and search for one of its keys. Run `env $SRV lgx e2e`. Expected: PASS.
+- [x] **Step 7: Commit.** `git add -A && git commit -m "Filter row details by value, with highlights"`
+
+> Deviation: the `<mark>` helper lives in `grid/markPieces.tsx`, with the `MarkedText` component in `grid/Marked.tsx`, so each file exports only components or only helpers (fast-refresh lint). A match that spans several colored JSON tokens renders as several marks, so the e2e checks their joined text.
 
 ### Task 7: Backend: record Quel's own queries
 
